@@ -10,9 +10,15 @@ const MOD_START_MARKER = '// === TWFOXTETRIO MOD START ===';
 const MOD_END_MARKER = '// === TWFOXTETRIO MOD END ===';
 
 const SOURCE_FILES = [
+  'src/features/loading-credit.js',
   'src/features/blitz-logic.js',
+  'src/features/forty-lines-logic.js',
+  'src/features/multiplayer-logic.js',
+  'src/core/top-hud.js',
   'src/core/runtime.js',
-  'src/features/blitz-pb-tracker.js'
+  'src/features/blitz-pb-tracker.js',
+  'src/features/forty-lines-pb-tracker.js',
+  'src/features/multiplayer-vs-leaderboard.js'
 ];
 
 /**

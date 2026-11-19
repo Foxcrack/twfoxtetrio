@@ -10,25 +10,39 @@
     return;
   }
 
-  const logic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.blitzLogic;
-  if (!logic) {
+  const blitzLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.blitzLogic;
+  const fortyLinesLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.fortyLinesLogic;
+  const multiplayerLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.multiplayerLogic;
+  if (!blitzLogic || !fortyLinesLogic || !multiplayerLogic) {
     return;
   }
 
   const CONFIG_STORAGE_KEY = 'twfoxtetrio_config_v1';
   const ANON_BLITZ_PB_KEY = 'twfoxtetrio_anon_blitz_pb_v1';
+  const ANON_40L_PB_KEY = 'twfoxtetrio_anon_40l_pb_v1';
 
   const DEFAULT_CONFIG = {
     blitzTracker: {
       enabled: true,
       showSubtitle: true,
       signedBehind: false
+    },
+    fortyLinesTracker: {
+      enabled: true,
+      showSubtitle: true
+    },
+    multiplayerLeaderboard: {
+      enabled: true,
+      maxRows: 12,
+      includeQuickPlay: false
     }
   };
 
   function cloneDefaults() {
     return {
-      blitzTracker: { ...DEFAULT_CONFIG.blitzTracker }
+      blitzTracker: { ...DEFAULT_CONFIG.blitzTracker },
+      fortyLinesTracker: { ...DEFAULT_CONFIG.fortyLinesTracker },
+      multiplayerLeaderboard: { ...DEFAULT_CONFIG.multiplayerLeaderboard }
     };
   }
 
@@ -38,8 +52,16 @@
       const raw = root.localStorage ? root.localStorage.getItem(CONFIG_STORAGE_KEY) : null;
       if (!raw) return base;
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && parsed.blitzTracker && typeof parsed.blitzTracker === 'object') {
-        Object.assign(base.blitzTracker, parsed.blitzTracker);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.blitzTracker && typeof parsed.blitzTracker === 'object') {
+          Object.assign(base.blitzTracker, parsed.blitzTracker);
+        }
+        if (parsed.fortyLinesTracker && typeof parsed.fortyLinesTracker === 'object') {
+          Object.assign(base.fortyLinesTracker, parsed.fortyLinesTracker);
+        }
+        if (parsed.multiplayerLeaderboard && typeof parsed.multiplayerLeaderboard === 'object') {
+          Object.assign(base.multiplayerLeaderboard, parsed.multiplayerLeaderboard);
+        }
       }
     } catch (_) {}
     return base;
@@ -60,15 +82,25 @@
     inGame: false,
     currentScore: 0,
     bestScore: 0,
+    currentTimeMs: 0,
+    bestTimeMs: 0,
+    inMultiplayer: false,
+    inZenith: false,
+    selfUsername: '',
+    leaderboard: [],
     isAnonymous: false
   };
 
   const listeners = new Set();
   const features = new Map();
   let domInitialized = false;
+  let leaderboardTimer = null;
 
   function emitState() {
-    const snapshot = { ...state };
+    const snapshot = {
+      ...state,
+      leaderboard: state.leaderboard.slice()
+    };
     for (const listener of listeners) {
       try {
         listener(snapshot, config);
@@ -78,60 +110,98 @@
     }
   }
 
-  function readBlitzPBFromDOM() {
-    const pbEl = document.getElementById('pbdisplay_blitz_inner');
+  function readPbValue(elementId, anonStorageKey, parser) {
+    const pbEl = document.getElementById(elementId);
     const isAnon = document.body ? document.body.classList.contains('anon') : false;
     state.isAnonymous = isAnon;
 
     if (pbEl && !pbEl.classList.contains('hidden')) {
-      return logic.parseScoreText(pbEl.textContent);
+      return parser(pbEl.textContent);
     }
 
     if (isAnon) {
       try {
-        const stored = root.localStorage ? root.localStorage.getItem(ANON_BLITZ_PB_KEY) : null;
-        return logic.parseScoreText(stored);
+        const stored = root.localStorage ? root.localStorage.getItem(anonStorageKey) : null;
+        return parser(stored);
       } catch (_) {}
     }
 
     return 0;
   }
 
-  function refreshPB() {
-    const nextPB = readBlitzPBFromDOM();
-    if (nextPB !== state.bestScore) {
-      state.bestScore = nextPB;
-      return true;
-    }
-    return false;
+  function refreshPBs() {
+    const nextScorePB = readPbValue('pbdisplay_blitz_inner', ANON_BLITZ_PB_KEY, blitzLogic.parseScoreText);
+    const nextTimePB = readPbValue('pbdisplay_40l_inner', ANON_40L_PB_KEY, fortyLinesLogic.parseTimeText);
+    const changed = nextScorePB !== state.bestScore || nextTimePB !== state.bestTimeMs;
+    state.bestScore = nextScorePB;
+    state.bestTimeMs = nextTimePB;
+    return changed;
   }
 
-  function maybePersistAnonBlitzResult(menusEl) {
+  function maybePersistAnonResult(menusEl, endedMode) {
     if (!menusEl) return;
     if (menusEl.getAttribute('data-menu-type') !== 'results') return;
     if (!document.body || !document.body.classList.contains('anon')) return;
 
-    const pbEl = document.getElementById('pbdisplay_blitz_inner');
-    if (pbEl && !pbEl.classList.contains('hidden')) return;
-
     const headerEl = document.getElementById('result_header');
     const resultEl = document.getElementById('result_result');
     if (!headerEl || !resultEl) return;
-    if (!/FINAL SCORE/i.test(headerEl.textContent || '')) return;
 
-    const finalScore = logic.parseScoreText(resultEl.textContent);
-    const prevAnonPB = readBlitzPBFromDOM();
-    if (finalScore > prevAnonPB) {
-      try {
-        if (root.localStorage) {
-          root.localStorage.setItem(ANON_BLITZ_PB_KEY, String(finalScore));
-        }
-      } catch (_) {}
-      state.bestScore = finalScore;
+    const headerText = headerEl.textContent || '';
+
+    if (endedMode === 'blitz') {
+      const pbEl = document.getElementById('pbdisplay_blitz_inner');
+      if (pbEl && !pbEl.classList.contains('hidden')) return;
+      if (!/FINAL SCORE/i.test(headerText)) return;
+
+      const finalScore = blitzLogic.parseScoreText(resultEl.textContent);
+      const prevAnonPB = readPbValue('pbdisplay_blitz_inner', ANON_BLITZ_PB_KEY, blitzLogic.parseScoreText);
+      if (finalScore > prevAnonPB) {
+        try {
+          if (root.localStorage) {
+            root.localStorage.setItem(ANON_BLITZ_PB_KEY, String(finalScore));
+          }
+        } catch (_) {}
+        state.bestScore = finalScore;
+      }
+      return;
+    }
+
+    if (endedMode === '40l') {
+      const pbEl = document.getElementById('pbdisplay_40l_inner');
+      if (pbEl && !pbEl.classList.contains('hidden')) return;
+      if (!/FINAL TIME/i.test(headerText)) return;
+
+      const finalMs = fortyLinesLogic.parseTimeText(resultEl.textContent);
+      const prevAnonPB = readPbValue('pbdisplay_40l_inner', ANON_40L_PB_KEY, fortyLinesLogic.parseTimeText);
+      if (finalMs > 0 && (prevAnonPB === 0 || finalMs < prevAnonPB)) {
+        try {
+          if (root.localStorage) {
+            root.localStorage.setItem(ANON_40L_PB_KEY, fortyLinesLogic.formatTimeMs(finalMs));
+          }
+        } catch (_) {}
+        state.bestTimeMs = finalMs;
+      }
     }
   }
 
-  const scoreDetector = logic.createDoubleCallScoreDetector({ maxGapMs: 2.5 });
+  const scoreDetector = blitzLogic.createDoubleCallScoreDetector({ maxGapMs: 2.5 });
+  const timerDetector = fortyLinesLogic.createFortyLinesTimerDetector({ maxPairGapMs: 1.5, maxTickGapMs: 2.0 });
+  const rosterTracker = multiplayerLogic.createMultiplayerRosterTracker();
+
+  function refreshSelfUsername() {
+    const meEl = document.getElementById('me_username');
+    if (meEl && typeof meEl.textContent === 'string') {
+      state.selfUsername = meEl.textContent.trim();
+    }
+  }
+
+  function sampleLeaderboard() {
+    refreshSelfUsername();
+    state.leaderboard = rosterTracker.sample(state.selfUsername, {
+      useScoreboard: Boolean(state.inZenith && config.multiplayerLeaderboard.includeQuickPlay)
+    });
+  }
 
   function handlePaqEntry(entry) {
     if (!Array.isArray(entry)) return;
@@ -141,19 +211,29 @@
 
     const modeName = entry[3];
     scoreDetector.reset();
+    timerDetector.reset();
 
     if (modeName === 'Blitz') {
       state.mode = 'blitz';
       state.inGame = true;
       state.currentScore = 0;
-      refreshPB();
+      state.currentTimeMs = 0;
+      refreshPBs();
+      emitState();
+    } else if (modeName === '40 Lines') {
+      state.mode = '40l';
+      state.inGame = true;
+      state.currentScore = 0;
+      state.currentTimeMs = 0;
+      refreshPBs();
       emitState();
     } else {
-      const wasActive = state.mode === 'blitz' || state.inGame;
+      const wasTracked = state.inGame && (state.mode === 'blitz' || state.mode === '40l');
       state.mode = typeof modeName === 'string' ? modeName : 'other';
       state.inGame = true;
       state.currentScore = 0;
-      if (wasActive) {
+      state.currentTimeMs = 0;
+      if (wasTracked) {
         emitState();
       }
     }
@@ -255,14 +335,124 @@
     Number.prototype.toLocaleString = wrappedToLocaleString;
   }
 
+  function installPadStartHook() {
+    const origPadStart = String.prototype.padStart;
+    if (origPadStart.__twfoxWrapped) return;
+
+    function wrappedPadStart(maxLength, fillString) {
+      if (
+        state.inGame &&
+        state.mode === '40l' &&
+        arguments.length === 2 &&
+        fillString === '0' &&
+        (maxLength === 3 || maxLength === 2)
+      ) {
+        const strVal = typeof this === 'string' ? this : String(this);
+        const confirmedMs = timerDetector.observe(strVal, maxLength, fillString, performance.now());
+        if (confirmedMs !== null && confirmedMs !== state.currentTimeMs) {
+          state.currentTimeMs = confirmedMs;
+          emitState();
+        }
+      }
+      return origPadStart.apply(this, arguments);
+    }
+
+    try {
+      Object.defineProperty(wrappedPadStart, '__twfoxWrapped', {
+        value: true,
+        enumerable: false
+      });
+    } catch (_) {}
+
+    String.prototype.padStart = wrappedPadStart;
+  }
+
+  function installMapHook() {
+    const origMapSet = Map.prototype.set;
+    if (origMapSet.__twfoxWrapped) return;
+
+    function wrappedMapSet(key, value) {
+      const result = origMapSet.call(this, key, value);
+      if (value !== null && typeof value === 'object') {
+        rosterTracker.observeMapSet(this, key, value);
+      }
+      return result;
+    }
+
+    try {
+      Object.defineProperty(wrappedMapSet, '__twfoxWrapped', {
+        value: true,
+        enumerable: false
+      });
+    } catch (_) {}
+
+    Map.prototype.set = wrappedMapSet;
+  }
+
+  function observePbElement(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const observer = new MutationObserver(() => {
+      if (refreshPBs()) {
+        emitState();
+      }
+    });
+    observer.observe(el, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  }
+
+  function startLeaderboardPolling() {
+    if (leaderboardTimer !== null) return;
+    sampleLeaderboard();
+    emitState();
+    leaderboardTimer = setInterval(() => {
+      if (!state.inMultiplayer) return;
+      sampleLeaderboard();
+      emitState();
+    }, 200);
+  }
+
+  function stopLeaderboardPolling() {
+    if (leaderboardTimer !== null) {
+      clearInterval(leaderboardTimer);
+      leaderboardTimer = null;
+    }
+    rosterTracker.reset();
+    state.leaderboard = [];
+  }
+
+  function syncBodyState() {
+    const bodyEl = document.body;
+    if (!bodyEl) return;
+
+    const nextMulti = bodyEl.classList.contains('multiplexed');
+    const nextZenith = bodyEl.classList.contains('inzenith');
+
+    if (nextMulti !== state.inMultiplayer || nextZenith !== state.inZenith) {
+      state.inMultiplayer = nextMulti;
+      state.inZenith = nextZenith;
+      if (nextMulti) {
+        startLeaderboardPolling();
+      } else {
+        stopLeaderboardPolling();
+        emitState();
+      }
+    }
+  }
+
   function initDomObservers() {
     if (domInitialized) return;
     domInitialized = true;
 
     const menusEl = document.getElementById('menus');
-    const pbEl = document.getElementById('pbdisplay_blitz_inner');
+    refreshSelfUsername();
 
-    if (refreshPB()) {
+    if (refreshPBs()) {
       emitState();
     }
 
@@ -270,15 +460,17 @@
       const syncMenusState = () => {
         const menusHidden = menusEl.classList.contains('hidden');
         if (!menusHidden && state.inGame) {
-          const wasBlitz = state.mode === 'blitz';
-          if (wasBlitz) {
-            maybePersistAnonBlitzResult(menusEl);
+          const prevMode = state.mode;
+          if (prevMode === 'blitz' || prevMode === '40l') {
+            maybePersistAnonResult(menusEl, prevMode);
           }
           state.inGame = false;
           state.mode = null;
           state.currentScore = 0;
+          state.currentTimeMs = 0;
           scoreDetector.reset();
-          if (wasBlitz) {
+          timerDetector.reset();
+          if (prevMode === 'blitz' || prevMode === '40l') {
             emitState();
           }
         }
@@ -291,20 +483,17 @@
       });
     }
 
-    if (pbEl) {
-      const pbObserver = new MutationObserver(() => {
-        if (refreshPB()) {
-          emitState();
-        }
-      });
-      pbObserver.observe(pbEl, {
-        childList: true,
-        characterData: true,
-        subtree: true,
+    if (document.body) {
+      syncBodyState();
+      const bodyObserver = new MutationObserver(syncBodyState);
+      bodyObserver.observe(document.body, {
         attributes: true,
         attributeFilter: ['class']
       });
     }
+
+    observePbElement('pbdisplay_blitz_inner');
+    observePbElement('pbdisplay_40l_inner');
 
     for (const [name, featureInit] of features.entries()) {
       try {
@@ -316,18 +505,31 @@
   }
 
   const api = {
-    version: '0.1.0',
+    version: '0.3.0',
     getState() {
-      return { ...state };
+      return {
+        ...state,
+        leaderboard: state.leaderboard.slice()
+      };
     },
     getConfig() {
       return {
-        blitzTracker: { ...config.blitzTracker }
+        blitzTracker: { ...config.blitzTracker },
+        fortyLinesTracker: { ...config.fortyLinesTracker },
+        multiplayerLeaderboard: { ...config.multiplayerLeaderboard }
       };
     },
     updateConfig(patch) {
-      if (patch && typeof patch === 'object' && patch.blitzTracker && typeof patch.blitzTracker === 'object') {
-        Object.assign(config.blitzTracker, patch.blitzTracker);
+      if (patch && typeof patch === 'object') {
+        if (patch.blitzTracker && typeof patch.blitzTracker === 'object') {
+          Object.assign(config.blitzTracker, patch.blitzTracker);
+        }
+        if (patch.fortyLinesTracker && typeof patch.fortyLinesTracker === 'object') {
+          Object.assign(config.fortyLinesTracker, patch.fortyLinesTracker);
+        }
+        if (patch.multiplayerLeaderboard && typeof patch.multiplayerLeaderboard === 'object') {
+          Object.assign(config.multiplayerLeaderboard, patch.multiplayerLeaderboard);
+        }
         saveConfig(config);
         emitState();
       }
@@ -336,7 +538,7 @@
     subscribe(listener) {
       if (typeof listener !== 'function') return function () {};
       listeners.add(listener);
-      listener({ ...state }, config);
+      listener(this.getState(), config);
       return function () {
         listeners.delete(listener);
       };
@@ -357,6 +559,8 @@
 
   installPaqHook();
   installLocaleHook();
+  installPadStartHook();
+  installMapHook();
 
   root.__TWFOX_TETRIO__ = api;
 

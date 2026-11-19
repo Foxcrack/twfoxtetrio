@@ -16,6 +16,22 @@ En la modalidad **BLITZ**, muestra un indicador flotante en la parte superior ce
 - 🔄 **Compatible con Quick Retry (`R`):** Si reinicias rápido con `R`, el contador vuelve automáticamente a `0` puntos y recalcula la diferencia en rojo.
 - 👤 **Funciona con cuenta o en modo anónimo:** Lee tu PB oficial de TETR.IO automáticamente al iniciar sesión (y si juegas sin cuenta, guarda un PB local en el cliente).
 
+### 2. 40 Lines PB Pace Tracker (`forty-lines-pb-tracker`)
+En la modalidad **40 LINES**, muestra en la parte superior central el tiempo restante respecto a tu mejor marca:
+
+- 🟢 **Verde (vas dentro de tu PB):** Empieza desde tu mejor tiempo (ej. `0:45.320`) y va bajando en tiempo real hacia `0:00.000`.
+- 🔴 **Rojo (se acabó el tiempo de tu PB):** Apenas llega a `0:00.000`, cambia a **rojo** y empieza a aumentar (`+0:00.017`, `+0:01.250`, ...).
+- 🔄 **Compatible con Quick Retry (`R`):** Al reiniciar rápido con `R`, vuelve a empezar en verde desde tu mejor tiempo.
+
+### 3. Multiplayer Live VS Leaderboard (`multiplayer-vs-leaderboard`)
+En modos **multijugador** (Tetra League, Public Rooms, Private Rooms y Royale — jugando o espectando), muestra una leaderboard fija en el borde derecho (`top-right`):
+
+- 🏆 **Ordenada en tiempo real por VS:** Muestra los nombres de usuario y su VS en vivo, colocando arriba al jugador con mayor VS.
+- ✨ **Resaltado claro:** Destaca al líder actual (`#1`) en dorado, tu propio usuario en azul y conserva a los jugadores eliminados (`[KO]`) con su VS final durante la ronda.
+
+### 4. Crédito en pantalla de carga (`loading-credit`)
+Al iniciar TETR.IO Desktop y durante la pantalla de carga inicial (`preload`), muestra `Modded By: TWFoxcrack` debajo del título/logo.
+
 ---
 
 ## 📦 Instalación (Windows - TETR.IO Desktop)
@@ -62,10 +78,16 @@ node scripts/install.js --path "C:\Ruta\A\tetrio-desktop"
 twfoxtetrio/
 ├── src/
 │   ├── core/
-│   │   └── runtime.js             # Ciclo de vida, detección de modo, score y registro de features
+│   │   ├── runtime.js                 # Ciclo de vida, detección de modo, score/timer y registro
+│   │   └── top-hud.js                 # Componente visual compartido en la parte superior
 │   └── features/
-│       ├── blitz-logic.js         # Lógica pura del cálculo (PB - actual) y detector de score
-│       └── blitz-pb-tracker.js    # HUD superior en BLITZ (rojo / verde)
+│       ├── blitz-logic.js                 # Lógica pura del delta de Blitz
+│       ├── blitz-pb-tracker.js            # HUD superior para BLITZ (rojo -> verde)
+│       ├── forty-lines-logic.js           # Lógica pura del pace de 40 Lines
+│       ├── forty-lines-pb-tracker.js      # HUD superior para 40 LINES (verde -> rojo)
+│       ├── loading-credit.js              # Texto "Modded By: TWFoxcrack" al iniciar/cargar
+│       ├── multiplayer-logic.js           # Cálculo de VS y roster en vivo para multijugador
+│       └── multiplayer-vs-leaderboard.js  # Leaderboard lateral derecha de VS en tiempo real
 ├── scripts/
 │   ├── asar.js                    # Lector, empaquetador y verificador ASAR sin dependencias externas
 │   ├── build.js                   # Compila el bundle en un único script para preload.js

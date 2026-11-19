@@ -105,6 +105,27 @@ function isTetrioRunning() {
   }
 }
 
+function replaceFileSafe(srcPath, destPath) {
+  try {
+    fs.renameSync(srcPath, destPath);
+  } catch (err) {
+    if (err && (err.code === 'EPERM' || err.code === 'EBUSY')) {
+      fs.copyFileSync(srcPath, destPath);
+      fs.unlinkSync(srcPath);
+    } else {
+      throw err;
+    }
+  }
+}
+
+function cleanupFile(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (_) {}
+}
+
 function printHelp() {
   console.log([
     'twfoxtetrio installer',
@@ -124,39 +145,44 @@ function installMod(asarPath) {
   const backupPath = asarPath + '.bak';
   const tempPath = asarPath + '.tmp';
 
-  const currentPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
-  const alreadyPatched = hasModSnippet(currentPreload);
+  try {
+    const currentPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
+    const alreadyPatched = hasModSnippet(currentPreload);
 
-  let sourceAsar = asarPath;
-  if (!alreadyPatched) {
-    fs.copyFileSync(asarPath, backupPath);
-    console.log('[twfoxtetrio] Backup created: ' + backupPath);
-  } else if (fs.existsSync(backupPath)) {
-    const bakPreload = readAsarFile(backupPath, 'preload.js').toString('utf8');
-    if (!hasModSnippet(bakPreload)) {
-      sourceAsar = backupPath;
+    let sourceAsar = asarPath;
+    if (!alreadyPatched) {
+      fs.copyFileSync(asarPath, backupPath);
+      console.log('[twfoxtetrio] Backup created: ' + backupPath);
+    } else if (fs.existsSync(backupPath)) {
+      const bakPreload = readAsarFile(backupPath, 'preload.js').toString('utf8');
+      if (!hasModSnippet(bakPreload)) {
+        sourceAsar = backupPath;
+      }
     }
+
+    const basePreload = readAsarFile(sourceAsar, 'preload.js').toString('utf8');
+    const modSnippet = buildModSnippet();
+    const nextPreload = injectModIntoPreload(basePreload, modSnippet);
+
+    writePatchedAsar(
+      sourceAsar,
+      { 'preload.js': Buffer.from(nextPreload, 'utf8') },
+      tempPath
+    );
+
+    const check = verifyAsar(tempPath);
+    if (!check.ok) {
+      throw new Error('Verification of patched app.asar failed');
+    }
+
+    replaceFileSafe(tempPath, asarPath);
+    const finalCheck = verifyAsar(asarPath);
+    console.log('[twfoxtetrio] Mod installed cleanly into: ' + asarPath);
+    console.log('[twfoxtetrio] Verified ' + finalCheck.fileCount + ' files (' + finalCheck.totalPackedBytes + ' packed bytes).');
+    console.log('[twfoxtetrio] Launch TETR.IO Desktop and play BLITZ or 40 LINES to see the live HUD tracker!');
+  } finally {
+    cleanupFile(tempPath);
   }
-
-  const basePreload = readAsarFile(sourceAsar, 'preload.js').toString('utf8');
-  const modSnippet = buildModSnippet();
-  const nextPreload = injectModIntoPreload(basePreload, modSnippet);
-
-  writePatchedAsar(
-    sourceAsar,
-    { 'preload.js': Buffer.from(nextPreload, 'utf8') },
-    tempPath
-  );
-
-  const check = verifyAsar(tempPath);
-  if (!check.ok) {
-    throw new Error('Verification of patched app.asar failed');
-  }
-
-  fs.renameSync(tempPath, asarPath);
-  console.log('[twfoxtetrio] Mod installed cleanly into: ' + asarPath);
-  console.log('[twfoxtetrio] Verified ' + check.fileCount + ' files (' + check.totalPackedBytes + ' packed bytes).');
-  console.log('[twfoxtetrio] Launch TETR.IO Desktop and start BLITZ mode to see the live PB delta tracker!');
 }
 
 function uninstallMod(asarPath) {
@@ -167,33 +193,39 @@ function uninstallMod(asarPath) {
   const backupPath = asarPath + '.bak';
   const tempPath = asarPath + '.tmp';
 
-  if (fs.existsSync(backupPath)) {
-    const bakPreload = readAsarFile(backupPath, 'preload.js').toString('utf8');
-    if (!hasModSnippet(bakPreload)) {
-      verifyAsar(backupPath);
-      fs.copyFileSync(backupPath, tempPath);
-      fs.renameSync(tempPath, asarPath);
-      fs.unlinkSync(backupPath);
-      console.log('[twfoxtetrio] Restored original vanilla app.asar from backup.');
+  try {
+    if (fs.existsSync(backupPath)) {
+      const bakPreload = readAsarFile(backupPath, 'preload.js').toString('utf8');
+      if (!hasModSnippet(bakPreload)) {
+        verifyAsar(backupPath);
+        fs.copyFileSync(backupPath, tempPath);
+        replaceFileSafe(tempPath, asarPath);
+        verifyAsar(asarPath);
+        fs.unlinkSync(backupPath);
+        console.log('[twfoxtetrio] Restored original vanilla app.asar from backup.');
+        return;
+      }
+    }
+
+    const currentPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
+    if (!hasModSnippet(currentPreload)) {
+      console.log('[twfoxtetrio] Mod is not installed in: ' + asarPath);
       return;
     }
-  }
 
-  const currentPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
-  if (!hasModSnippet(currentPreload)) {
-    console.log('[twfoxtetrio] Mod is not installed in: ' + asarPath);
-    return;
+    const cleanPreload = stripModSnippet(currentPreload);
+    writePatchedAsar(
+      asarPath,
+      { 'preload.js': Buffer.from(cleanPreload, 'utf8') },
+      tempPath
+    );
+    verifyAsar(tempPath);
+    replaceFileSafe(tempPath, asarPath);
+    verifyAsar(asarPath);
+    console.log('[twfoxtetrio] Mod removed cleanly from: ' + asarPath);
+  } finally {
+    cleanupFile(tempPath);
   }
-
-  const cleanPreload = stripModSnippet(currentPreload);
-  writePatchedAsar(
-    asarPath,
-    { 'preload.js': Buffer.from(cleanPreload, 'utf8') },
-    tempPath
-  );
-  verifyAsar(tempPath);
-  fs.renameSync(tempPath, asarPath);
-  console.log('[twfoxtetrio] Mod removed cleanly from: ' + asarPath);
 }
 
 function showStatus(asarPath) {
