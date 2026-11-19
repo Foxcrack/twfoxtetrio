@@ -1,0 +1,21 @@
+{
+  "name": "twfoxtetrio",
+  "version": "0.1.0",
+  "description": "Community HUD & QoL mod for TETR.IO Desktop (starting with live Blitz PB delta tracker)",
+  "main": "scripts/install.js",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "install-mod": "node scripts/install.js",
+    "uninstall-mod": "node scripts/install.js --uninstall",
+    "status": "node scripts/install.js --status",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "tetrio",
+    "tetrio-mod",
+    "blitz",
+    "electron",
+    "hud"
+  ],
+  "license": "MIT"
+}
