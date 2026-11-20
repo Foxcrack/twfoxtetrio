@@ -20,6 +20,7 @@
   z-index: 999998;
   pointer-events: none;
   user-select: none;
+  box-sizing: border-box;
   width: clamp(178px, 14vw, 206px);
   max-width: 22vw;
   padding: 6px 8px 7px;
@@ -39,10 +40,10 @@ body.spectating #${PANEL_ID} {
   top: calc(3em + 10px);
 }
 body.${ACTIVE_BODY_CLASS} #killfeed {
-  right: calc(clamp(178px, 14vw, 206px) + 22px);
+  right: calc(clamp(178px, 14vw, 206px) + 28px);
 }
 body.${ACTIVE_BODY_CLASS}.igceriad-mounted_right #killfeed {
-  right: calc(clamp(178px, 14vw, 206px) + 222px);
+  right: calc(clamp(178px, 14vw, 206px) + 228px);
 }
 #${PANEL_ID}.is-visible {
   opacity: 1;
