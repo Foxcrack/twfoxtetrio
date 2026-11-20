@@ -405,11 +405,14 @@
 .twfox-stage-scroller {
   padding-left: 0 !important;
   background: transparent !important;
+  text-align: center;
+}
+.twfox-stage-inner {
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
 }
 .twfox-stage-bar {
   display: flex;
@@ -578,7 +581,21 @@
   border: 1px solid rgba(255, 140, 66, 0.42);
   color: #ffbe8e;
 }
-.hidden { display: none; }
+#menus[data-menu-type^='foxmod'] #header_text {
+  color: #ffbe8e;
+  transition: .5s color;
+}
+#menus[data-menu-type^='foxmod'] #footer {
+  background: linear-gradient(to bottom, #1e1510 0, #362218 100%);
+  border-top: 2px solid #4d2c1b;
+}
+#menus[data-menu-type^='foxmod'] #footer_text {
+  color: #ffbe8e;
+}
+.twfox-native-scroller .hidden,
+.twfox-stage-scroller .hidden {
+  display: none;
+}
 `;
 
   function setClass(el, className, active) {
@@ -780,6 +797,10 @@
           const viewName = el.getAttribute('data-menuview');
           if (viewName === targetView) {
             el.classList.remove('thidden');
+            if (typeof root.getComputedStyle === 'function') {
+              void root.getComputedStyle(el).transform;
+              void root.getComputedStyle(el).opacity;
+            }
             if (typeof el.getBoundingClientRect === 'function') {
               el.getBoundingClientRect();
             }
@@ -1006,8 +1027,10 @@
           attrs: { 'data-menuview': 'foxmod_pentomino' }
         },
         [
-          createEl('div', { className: 'twfox-stage-bar' }, [pieceSelect, modeSelect, restartBtn]),
-          practiceCanvas
+          createEl('div', { className: 'twfox-stage-inner' }, [
+            createEl('div', { className: 'twfox-stage-bar' }, [pieceSelect, modeSelect, restartBtn]),
+            practiceCanvas
+          ])
         ]
       );
     }

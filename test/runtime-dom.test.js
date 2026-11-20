@@ -630,6 +630,10 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   );
   env.triggerDOMContentLoaded();
 
+  const foxStyle = env.elements.get('twfoxtetrio-foxmod-style');
+  assert.ok(foxStyle);
+  assert.equal(/^\s*\.hidden\s*\{/m.test(foxStyle.textContent), false, 'Must never override global TETR.IO .hidden transitions');
+
   const foxmodBtn = env.elements.get('twfoxtetrio-home-foxmod');
   assert.ok(foxmodBtn, 'FOXMOD button should be injected into #home_menu');
   assert.equal(env.homeMenu.children[env.homeMenu.children.length - 1], foxmodBtn);
