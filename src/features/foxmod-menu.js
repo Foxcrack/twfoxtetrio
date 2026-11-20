@@ -13,90 +13,163 @@
 
   const STYLE_ID = 'twfoxtetrio-foxmod-style';
   const MENU_BTN_ID = 'twfoxtetrio-home-foxmod';
-  const OVERLAY_ID = 'twfoxtetrio-foxmod-overlay';
-  const PANEL_ID = 'twfoxtetrio-foxmod-panel';
   const REPO_URL = 'https://github.com/Foxcrack/twfoxtetrio';
 
-  const FOX_ICON_SVG = [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 19 12" shape-rendering="crispEdges" aria-hidden="true">',
-    '<rect x="1" y="2" width="4" height="2" fill="#ffb87a"/>',
-    '<rect x="1" y="4" width="2" height="7" fill="#ff7d2e"/>',
-    '<rect x="3" y="6" width="2" height="2" fill="#ff7d2e"/>',
-    '<rect x="2" y="7" width="1" height="4" fill="#bd4711"/>',
-    '<rect x="4" y="3" width="1" height="1" fill="#bd4711"/>',
-    '<rect x="4" y="7" width="1" height="1" fill="#bd4711"/>',
-    '<rect x="7" y="1" width="1" height="1" fill="#ffd4a8"/>',
-    '<rect x="11" y="1" width="1" height="1" fill="#ffd4a8"/>',
-    '<rect x="7" y="2" width="5" height="2" fill="#ffb87a"/>',
-    '<rect x="7" y="4" width="2" height="5" fill="#ff7d2e"/>',
-    '<rect x="10" y="4" width="2" height="5" fill="#ff7d2e"/>',
-    '<rect x="7" y="9" width="5" height="2" fill="#d95618"/>',
-    '<rect x="8" y="4" width="1" height="5" fill="#bd4711"/>',
-    '<rect x="11" y="4" width="1" height="7" fill="#bd4711"/>',
-    '<rect x="13" y="2" width="2" height="3" fill="#ffb87a"/>',
-    '<rect x="16" y="2" width="2" height="3" fill="#ffb87a"/>',
-    '<rect x="14" y="5" width="3" height="3" fill="#ff7d2e"/>',
-    '<rect x="13" y="8" width="2" height="3" fill="#d95618"/>',
-    '<rect x="16" y="8" width="2" height="3" fill="#d95618"/>',
-    '<rect x="14" y="7" width="3" height="1" fill="#bd4711"/>',
-    '<rect x="17" y="8" width="1" height="3" fill="#bd4711"/>',
-    '</svg>'
-  ].join('');
+  function buildPixelBadgeSvg(rows, palette) {
+    const height = rows.length;
+    const width = rows[0] ? rows[0].length : 1;
+    const rects = [];
+    for (let y = 0; y < height; y++) {
+      const row = rows[y];
+      for (let x = 0; x < row.length; x++) {
+        const ch = row[x];
+        if (ch === '.') continue;
+        const fill = palette[Number(ch) - 1] || palette[1];
+        rects.push(`<rect x="${x}" y="${y}" width="1" height="1" fill="${fill}"/>`);
+      }
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" shape-rendering="crispEdges" aria-hidden="true">${rects.join('')}</svg>`;
+  }
 
-  const HUB_SECTIONS = [
+  const ICONS = {
+    fox: buildPixelBadgeSvg(
+      [
+        '......1...1......',
+        '1111..11111..1.1.',
+        '2222..2...2..2.2.',
+        '211...2...2...2..',
+        '222...2...2..2.2.',
+        '3.....2...2..3.3.',
+        '3.....33333..3.3.'
+      ],
+      ['#ffca96', '#ff8234', '#c24812']
+    ),
+    practice: buildPixelBadgeSvg(
+      [
+        '..1111...11111..',
+        '..2...2..2......',
+        '..2...2..2222...',
+        '..2222.......2..',
+        '..2..........2..',
+        '..3......3333...',
+        '..3.............'
+      ],
+      ['#ffe580', '#f5a623', '#b36b0c']
+    ),
+    multi: buildPixelBadgeSvg(
+      [
+        '1111...1111..1111',
+        '2...2.....2..2..2',
+        '2222...111...2222',
+        '2......2.....2...',
+        '3......3333..3...',
+        '.................'
+      ],
+      ['#ff99aa', '#e84863', '#a32238']
+    ),
+    config: buildPixelBadgeSvg(
+      [
+        '.1111..11111..1111',
+        '2......2.....2....',
+        '2......2222..2..11',
+        '2......2.....2...2',
+        '3......3.....3...3',
+        '.3333..3......333.'
+      ],
+      ['#99ccff', '#4b8aff', '#2351b8']
+    ),
+    credits: buildPixelBadgeSvg(
+      [
+        '.1111..1111..1111.',
+        '2......2...2.2...2',
+        '2......2222..2...2',
+        '2......2..2..2...2',
+        '3......3...3.3...3',
+        '.3333..3...3.3333.'
+      ],
+      ['#eab0ff', '#a855ff', '#6a23bd']
+    )
+  };
+
+  const HUB_CARDS = [
     {
-      view: 'practice',
+      view: 'foxmod_practice',
       cardId: 'twfoxtetrio-card-practice',
-      tag: 'P5',
+      icon: ICONS.practice,
       title: 'PRACTICA',
-      subtitle: 'solo pentominoes (12 pieces), 40 lines, blitz & chaos mix',
-      bg: '#1c3a29',
-      top: '#2d7a4f',
-      left: '#215437',
-      bottom: '#0b1710',
-      titleColor: '#98ffbf',
-      descColor: '#61c889'
+      subtitle: 'pentominoes (12 pieces), 40 lines, blitz & chaos mix',
+      bg: '#382a18',
+      top: '#705226',
+      left: '#4f3a1d',
+      bottom: '#1a120a',
+      titleColor: '#ffd28c',
+      descColor: '#c9954c'
     },
     {
-      view: 'multi',
+      view: 'foxmod_multi',
       cardId: 'twfoxtetrio-card-multi',
-      tag: 'P2P',
+      icon: ICONS.multi,
       title: 'MULTIJUGADOR',
-      subtitle: 'host custom rooms (your PC is the server) or join a friend',
-      bg: '#34222d',
-      top: '#7a355d',
-      left: '#532741',
-      bottom: '#1c1218',
-      titleColor: '#f5bce0',
-      descColor: '#cf8fb6'
+      subtitle: 'create P2P custom rooms (you are the server) or join friends',
+      bg: '#3b1c23',
+      top: '#752d3c',
+      left: '#52212c',
+      bottom: '#1c0c10',
+      titleColor: '#ffb5c2',
+      descColor: '#c96b7c'
     },
     {
-      view: 'config',
+      view: 'foxmod_config',
       cardId: 'twfoxtetrio-card-config',
-      tag: 'CFG',
+      icon: ICONS.config,
       title: 'CONFIG',
-      subtitle: 'configure Blitz, 40 Lines & Multiplayer VS HUD trackers',
+      subtitle: 'tweak Blitz, 40 Lines & Multiplayer VS HUD settings',
       bg: '#1c263e',
-      top: '#2b4a91',
-      left: '#223561',
-      bottom: '#0c101a',
-      titleColor: '#8cb3ff',
-      descColor: '#6283cc'
+      top: '#1d3164',
+      left: '#1e2a48',
+      bottom: '#0e0f13',
+      titleColor: '#88afff',
+      descColor: '#5169c0'
     },
     {
-      view: 'credits',
+      view: 'foxmod_credits',
       cardId: 'twfoxtetrio-card-credits',
-      tag: 'CRD',
+      icon: ICONS.credits,
       title: 'CREDITS',
-      subtitle: 'Modded By TWFoxcrack, features & GitHub repository',
-      bg: '#2a211b',
-      top: '#8c4b22',
-      left: '#5e351c',
-      bottom: '#120d0a',
-      titleColor: '#ffbe8e',
-      descColor: '#d98c5b'
+      subtitle: 'modded by TWFoxcrack & twfoxtetrio repository',
+      bg: '#2c1c3e',
+      top: '#52267a',
+      left: '#3b1e54',
+      bottom: '#120b1a',
+      titleColor: '#dfadff',
+      descColor: '#9f66c9'
     }
   ];
+
+  const VIEW_META = {
+    home: { header: 'HOME', footer: 'WELCOME TO TETR.IO!', back: null },
+    foxmod: { header: 'FOXMOD', footer: 'pick a foxmod mode', back: 'home' },
+    foxmod_practice: {
+      header: 'PRACTICA',
+      footer: 'pentominoes & custom solo practice',
+      back: 'foxmod'
+    },
+    foxmod_multi: {
+      header: 'MULTIJUGADOR',
+      footer: 'custom P2P rooms — host acts as server',
+      back: 'foxmod'
+    },
+    foxmod_config: {
+      header: 'FOXMOD CONFIG',
+      footer: 'tweak your twfoxtetrio HUD settings',
+      back: 'foxmod'
+    },
+    foxmod_credits: {
+      header: 'FOXMOD CREDITS',
+      footer: 'modded by twfoxcrack',
+      back: 'foxmod'
+    }
+  };
 
   const CONFIG_SECTIONS = [
     {
@@ -167,7 +240,7 @@
 
   const CREDIT_ITEMS = [
     {
-      name: 'Pentominoes Solo Practice & Custom Rooms (P2P Host)',
+      name: 'Pentominoes Practice & Host-Server P2P Rooms',
       detail: '12-pentomino stacker engine + WebRTC host-as-server custom multiplayer rooms.'
     },
     {
@@ -200,251 +273,219 @@
 #home_menu.play-entry-anim #${MENU_BTN_ID} {
   animation: .5s .75s HomeMenuEntryAnimSlider backwards cubic-bezier(.17,.38,.3,1);
 }
-#${MENU_BTN_ID} .twfox-home-icon {
+.scroller_item.scroller_item_giant .twfox-menu-svg {
   position: absolute;
   left: 1em;
-  top: 0.5em;
-  height: 6em;
+  top: 0.65em;
+  height: 5.7em;
   width: 10.5em;
   display: flex;
   align-items: center;
   pointer-events: none;
 }
-#${MENU_BTN_ID} .twfox-home-icon > svg { height: 100%; width: auto; display: block; }
-#${OVERLAY_ID} {
-  position: fixed;
-  inset: 0;
-  z-index: 9999998;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
+.scroller_item.scroller_item_giant .twfox-menu-svg > svg {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+.twfox-native-scroller > .scroller_block {
   box-sizing: border-box;
-  background: rgba(8, 10, 16, 0.88);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
-  color: #eef2ff;
 }
-#${OVERLAY_ID}.is-open { display: flex; }
-#${PANEL_ID} {
-  width: min(920px, 95vw);
-  max-height: 90vh;
+.twfox-scroller-header {
   display: flex;
-  flex-direction: column;
-  background: #141824;
-  border-top: 3px solid #cf6427;
-  border-left: 3px solid #2b344d;
-  border-right: 3px solid #20273b;
-  border-bottom: 3px solid #090b10;
-  border-radius: 4px;
-  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.82);
-  overflow: hidden;
-  user-select: none;
-}
-.twfox-modal-header {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  background: linear-gradient(90deg, #2d1b13 0%, #1b2030 65%);
-  border-bottom: 2px solid #273047;
+  border-top-color: #cf6427 !important;
 }
-.twfox-modal-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.twfox-modal-logo { width: 42px; height: 26px; display: flex; align-items: center; flex: 0 0 auto; }
-.twfox-modal-logo > svg { width: 100%; height: 100%; display: block; }
-.twfox-modal-title-wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-.twfox-modal-title { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.08em; color: #ffbe8e; }
-.twfox-modal-badge {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 2px 7px;
-  border-radius: 3px;
-  background: rgba(255, 140, 66, 0.16);
-  border: 1px solid rgba(255, 140, 66, 0.36);
-  color: #ffb87a;
+.twfox-scroller-header h1 {
+  margin: 0;
+  font-size: 2.1em;
+  color: #ffbe8e !important;
 }
-.twfox-header-actions { display: flex; align-items: center; gap: 8px; }
-.twfox-modal-btn {
-  font-family: inherit;
-  font-size: 12px;
+.twfox-scroller-header p {
+  margin: 0;
+  color: #9bb0e6;
+  font-size: 1.1em;
+}
+.twfox-native-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0.7em 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.twfox-native-row:first-of-type {
+  border-top: 0;
+}
+.twfox-native-label {
+  display: block;
+  font-size: 1.25em;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  color: #edf1ff;
+}
+.twfox-native-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.95em;
+  color: #8f9fc9;
+}
+.twfox-btn {
+  font-family: HUN, sans-serif;
+  font-size: 1.15em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 7px 12px;
+  padding: 0.55em 1.1em;
   border-radius: 3px;
   cursor: pointer;
   color: #dbe3ff;
-  background: #20273b;
-  border-top: 2px solid #35405f;
-  border-left: 2px solid #2b3550;
-  border-right: 2px solid #161b29;
-  border-bottom: 2px solid #0e111b;
+  background-color: #20273b;
+  border-top: 3px solid #39466b;
+  border-left: 3px solid #2b3552;
+  border-right: 3px solid #141926;
+  border-bottom: 3px solid #0d1018;
   transition: filter 120ms ease, transform 80ms ease;
+  text-decoration: none;
+  display: inline-block;
 }
-.twfox-modal-btn:hover { filter: brightness(1.18); }
-.twfox-modal-btn:active { transform: translateY(1px); }
-.twfox-modal-btn.is-primary {
-  background: #3a2115;
-  border-top-color: #cf6427;
+.twfox-btn:hover { filter: brightness(1.2); }
+.twfox-btn:active { transform: translateY(1px); }
+.twfox-btn.is-pri {
+  background-color: #3d2215;
+  border-top-color: #d46927;
   border-left-color: #914318;
-  border-right-color: #59290d;
+  border-right-color: #54250c;
   border-bottom-color: #160c07;
   color: #ffbe8e;
 }
-.twfox-modal-btn.hidden { display: none; }
-.twfox-modal-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 16px 0;
-  background: #111520;
-  border-bottom: 2px solid #242b40;
-}
-.twfox-tab-btn {
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  padding: 8px 14px;
-  border: 0;
-  border-bottom: 3px solid transparent;
-  background: transparent;
-  color: #8290b8;
-  cursor: pointer;
-  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
-}
-.twfox-tab-btn:hover { color: #e4ebff; background: rgba(255, 255, 255, 0.04); }
-.twfox-tab-btn.is-active {
-  color: #ffbe8e;
-  background: rgba(255, 138, 66, 0.1);
-  border-bottom-color: #ff8c42;
-}
-.twfox-modal-body {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 14px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.twfox-pane.hidden { display: none; }
-.twfox-hub-list { display: flex; flex-direction: column; gap: 10px; }
-.twfox-hub-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 18px;
-  border-radius: 4px;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
-  transition: transform 160ms ease, filter 160ms ease;
-}
-.twfox-hub-card:hover { transform: translateX(-6px); filter: brightness(1.18); }
-.twfox-hub-tag {
-  width: 68px;
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  background: rgba(0, 0, 0, 0.28);
+.twfox-select, .twfox-input {
+  font-family: HUN, sans-serif;
+  font-size: 1.1em;
+  font-weight: 700;
+  padding: 0.45em 0.75em;
   border-radius: 3px;
+  color: #fff;
+  background: #0a0d14;
+  border: 2px solid #2e3854;
+}
+.twfox-textarea {
+  width: 100%;
+  min-height: 62px;
+  box-sizing: border-box;
+  font-family: monospace;
+  font-size: 0.95em;
+  padding: 8px;
+  border-radius: 3px;
+  color: #dbe3ff;
+  background: #080b12;
+  border: 2px solid #2e3854;
+  resize: vertical;
+}
+.twfox-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
   flex: 0 0 auto;
 }
-.twfox-hub-text h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 0.06em; }
-.twfox-hub-text p { margin: 3px 0 0; font-size: 13px; }
-.twfox-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 12px;
-  background: #181d2b;
-  border: 1px solid rgba(130, 155, 225, 0.22);
-  border-radius: 4px;
+.twfox-toggle-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
-.twfox-toolbar-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.twfox-select, .twfox-input {
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 9px;
+.twfox-toggle-track {
+  width: 48px;
+  height: 26px;
   border-radius: 3px;
-  color: #eef2ff;
-  background: #0d1018;
-  border: 1px solid #35405f;
-  user-select: text;
+  background: #0a0d14;
+  border: 2px solid #2c3550;
+  position: relative;
+  transition: background 140ms ease, border-color 140ms ease;
 }
-.twfox-canvas-wrap {
+.twfox-toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  background: #6a7aa3;
+  transition: transform 140ms ease, background 140ms ease;
+}
+.twfox-toggle-input:checked + .twfox-toggle-track {
+  background: #3d2215;
+  border-color: #cf6427;
+}
+.twfox-toggle-input:checked + .twfox-toggle-track::after {
+  transform: translateX(22px);
+  background: #ff9c54;
+}
+.twfox-range-wrap { display: flex; align-items: center; gap: 8px; }
+.twfox-step-btn { padding: 0.3em 0.7em; font-size: 1.1em; }
+.twfox-range-input { width: 120px; accent-color: #ff8c42; cursor: pointer; }
+.twfox-range-val {
+  min-width: 28px;
+  text-align: right;
+  font-size: 1.2em;
+  font-weight: 800;
+  color: #ffbe8e;
+}
+.twfox-canvas-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .twfox-game-canvas {
-  background: #0a0d14;
-  border: 1px solid rgba(130, 155, 225, 0.25);
+  background: #080b12;
+  border: 2px solid #2e3854;
   border-radius: 4px;
   max-width: 100%;
 }
-.twfox-key-hint { font-size: 11px; color: #8c9bc4; text-align: center; }
-.twfox-multi-grid {
+.twfox-multi-cols {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
-.twfox-card-box {
-  background: #181d2b;
-  border: 1px solid rgba(130, 155, 225, 0.22);
+.twfox-multi-card {
+  background: #121622;
+  border: 2px solid #273049;
   border-radius: 4px;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.twfox-card-box h3 {
+.twfox-multi-card h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-size: 1.4em;
   color: #ffbe8e;
 }
-.twfox-card-box p { margin: 0; font-size: 12px; color: #9aa8cf; line-height: 1.4; }
-.twfox-textarea {
-  width: 100%;
-  min-height: 58px;
-  box-sizing: border-box;
-  font-family: monospace;
-  font-size: 11px;
-  padding: 7px;
-  border-radius: 3px;
-  color: #dbe3ff;
-  background: #0b0e15;
-  border: 1px solid #35405f;
-  resize: vertical;
-  user-select: text;
+.twfox-multi-card p {
+  margin: 0;
+  font-size: 1em;
+  color: #93a2cc;
 }
 .twfox-player-list, .twfox-chat-log {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  max-height: 140px;
+  max-height: 150px;
   overflow-y: auto;
-  font-size: 12px;
+  font-size: 1em;
 }
 .twfox-player-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 8px;
-  background: #111520;
+  padding: 6px 8px;
+  background: #1a2030;
   border-radius: 3px;
 }
 .twfox-multi-arena {
@@ -452,93 +493,36 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: center;
-  gap: 14px;
+  gap: 16px;
 }
 .twfox-opponents-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  flex: 1 1 260px;
+  flex: 1 1 240px;
 }
 .twfox-opp-card {
-  background: #181d2b;
-  border: 1px solid rgba(130, 155, 225, 0.25);
+  background: #121622;
+  border: 2px solid #2b3550;
   border-radius: 4px;
-  padding: 7px;
+  padding: 8px;
   text-align: center;
-  font-size: 11px;
 }
-.twfox-section {
-  background: #181d2b;
-  border: 1px solid rgba(130, 155, 225, 0.2);
-  border-left: 4px solid var(--twfox-accent, #ff8c42);
-  border-radius: 4px;
-  padding: 12px 14px;
-  margin-bottom: 12px;
-}
-.twfox-section:last-child { margin-bottom: 0; }
-.twfox-section-title {
-  margin: 0 0 10px;
-  font-size: 14px;
+.twfox-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 0.9em;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--twfox-accent, #ffbe8e);
+  background: rgba(255, 140, 66, 0.16);
+  border: 1px solid rgba(255, 140, 66, 0.42);
+  color: #ffbe8e;
 }
-.twfox-control-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 8px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+.twfox-key-hint {
+  font-size: 0.95em;
+  color: #8f9fc9;
+  text-align: center;
 }
-.twfox-control-row:first-of-type { border-top: 0; padding-top: 2px; }
-.twfox-control-row:last-of-type { padding-bottom: 2px; }
-.twfox-control-text { min-width: 0; flex: 1 1 auto; }
-.twfox-control-label { display: block; font-size: 13px; font-weight: 700; color: #edf1ff; }
-.twfox-control-desc { display: block; margin-top: 2px; font-size: 11px; color: #93a1c8; line-height: 1.35; }
-.twfox-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; flex: 0 0 auto; }
-.twfox-toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
-.twfox-toggle-track {
-  width: 44px; height: 24px; border-radius: 3px;
-  background: #0d1018; border: 2px solid #2b334b; position: relative;
-  transition: background 140ms ease, border-color 140ms ease;
-}
-.twfox-toggle-track::after {
-  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-  border-radius: 2px; background: #67769e; transition: transform 140ms ease, background 140ms ease;
-}
-.twfox-toggle-input:checked + .twfox-toggle-track { background: #3a2115; border-color: #cf6427; }
-.twfox-toggle-input:checked + .twfox-toggle-track::after { transform: translateX(20px); background: #ff9c54; }
-.twfox-range-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.twfox-step-btn { width: 26px; height: 26px; padding: 0; font-size: 14px; line-height: 1; }
-.twfox-range-input { width: 112px; accent-color: #ff8c42; cursor: pointer; }
-.twfox-range-val {
-  min-width: 26px; text-align: right; font-size: 13px; font-weight: 800;
-  color: #ffbe8e; font-variant-numeric: tabular-nums;
-}
-.twfox-credits-hero {
-  background: linear-gradient(135deg, #2d1b13 0%, #1a2133 100%);
-  border: 1px solid rgba(255, 140, 66, 0.35);
-  border-radius: 4px; padding: 14px; margin-bottom: 10px;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
-}
-.twfox-credits-author { margin: 4px 0 0; font-size: 15px; font-weight: 700; color: #ffb87a; }
-.twfox-credits-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.twfox-credits-item {
-  background: #181d2b; border: 1px solid rgba(130, 155, 225, 0.16);
-  border-radius: 4px; padding: 9px 12px;
-}
-.twfox-credits-item strong { display: block; font-size: 13px; color: #eef2ff; }
-.twfox-credits-item span { display: block; margin-top: 2px; font-size: 11px; color: #93a1c8; }
-.twfox-credits-note { margin: 10px 0 0; font-size: 11px; color: #8290b8; line-height: 1.45; }
-.twfox-github-btn { display: inline-block; text-decoration: none; }
-.twfox-modal-footer {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 16px; background: #10131e; border-top: 2px solid #242b40;
-}
-.twfox-modal-footer.hidden { display: none; }
-.twfox-modal-status { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #8496c4; }
 .hidden { display: none; }
 `;
 
@@ -608,17 +592,26 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
   }
 
+  function collectMenuViews(menusEl) {
+    const result = [];
+    if (!menusEl || !menusEl.children) return result;
+    for (const child of menusEl.children) {
+      if (typeof child.getAttribute === 'function' && child.getAttribute('data-menuview')) {
+        result.push(child);
+      }
+    }
+    return result;
+  }
+
   function initFoxmodMenu(runtimeApi) {
     ensureStyle();
 
-    let isOpen = false;
-    let activeView = 'hub';
-    let overlayEl = null;
-    let footerEl = null;
-    let backHubBtn = null;
+    let activeFoxView = null;
+    let isNavigatingInternal = false;
+    let scrollersInjected = false;
+    let backHooked = false;
     let statusEl = null;
-    const viewPanes = new Map();
-    const tabButtons = new Map();
+    const scrollerMap = new Map();
     const toggleControls = [];
     const rangeControls = [];
 
@@ -633,12 +626,12 @@
     let multiGame = null;
     let multiController = null;
     let multiCanvas = null;
-    let multiSubMode = 'entry'; // entry | join | lobby | playing
+    let multiSubMode = 'entry';
     let multiDom = null;
-    let lastSelfAttackCount = 0;
 
-    function setStatus(message) {
-      if (statusEl) statusEl.textContent = message;
+    function stopPlayControllers() {
+      if (practiceController) practiceController.stop();
+      if (multiController) multiController.stop();
     }
 
     function syncConfigControls(cfg) {
@@ -656,84 +649,116 @@
       }
     }
 
-    function stopPlayControllers() {
-      if (practiceController) practiceController.stop();
-      if (multiController) multiController.stop();
+    function hideFoxmodScrollersImmediately() {
+      activeFoxView = null;
+      stopPlayControllers();
+      for (const scroller of scrollerMap.values()) {
+        scroller.classList.add('hidden');
+        scroller.classList.add('thidden');
+      }
     }
 
-    function setActiveView(view) {
-      const validViews = ['hub', 'practice', 'multi', 'config', 'credits'];
-      activeView = validViews.includes(view) ? view : 'hub';
+    function navigateMenu(targetView) {
+      ensureNativeScrollers();
+      const menusEl = document.getElementById('menus');
+      if (!menusEl) return;
 
-      for (const [k, pane] of viewPanes.entries()) {
-        setClass(pane, 'hidden', k !== activeView);
-      }
-      for (const [k, btn] of tabButtons.entries()) {
-        setClass(btn, 'is-active', k === activeView);
-      }
-
-      setClass(backHubBtn, 'hidden', activeView === 'hub');
-      setClass(footerEl, 'hidden', activeView !== 'config');
+      const meta = VIEW_META[targetView] || VIEW_META.home;
+      const isFoxTarget = targetView !== 'home';
+      activeFoxView = isFoxTarget ? targetView : null;
 
       stopPlayControllers();
-      if (isOpen && activeView === 'practice' && practiceController) {
+
+      isNavigatingInternal = true;
+      try {
+        for (const el of collectMenuViews(menusEl)) {
+          const viewName = el.getAttribute('data-menuview');
+          if (viewName === targetView) {
+            el.classList.remove('thidden');
+            if (typeof el.getBoundingClientRect === 'function') {
+              el.getBoundingClientRect();
+            }
+            el.classList.remove('hidden');
+          } else if (!el.classList.contains('hidden')) {
+            el.classList.add('hidden');
+            if (typeof root.setTimeout === 'function') {
+              root.setTimeout(() => {
+                if (el.classList.contains('hidden')) {
+                  el.classList.add('thidden');
+                }
+              }, 666);
+            } else {
+              el.classList.add('thidden');
+            }
+          }
+        }
+
+        menusEl.setAttribute('data-menu-type', targetView);
+
+        const backBtn = document.getElementById('back');
+        if (backBtn) setClass(backBtn, 'hidden', !meta.back);
+
+        const exitBtn = document.getElementById('exit_electron');
+        if (exitBtn) setClass(exitBtn, 'hidden', targetView !== 'home');
+
+        const headerText = document.getElementById('header_text');
+        if (headerText) headerText.textContent = meta.header;
+
+        const footerText = document.getElementById('footer_text');
+        if (footerText) footerText.textContent = meta.footer;
+      } finally {
+        isNavigatingInternal = false;
+      }
+
+      if (targetView === 'foxmod_config') {
+        syncConfigControls(runtimeApi.getConfig());
+      } else if (targetView === 'foxmod_practice' && practiceController) {
         practiceController.start();
-      } else if (isOpen && activeView === 'multi' && multiSubMode === 'playing' && multiController) {
+      } else if (targetView === 'foxmod_multi' && multiSubMode === 'playing' && multiController) {
         multiController.start();
       }
     }
 
-    function openPanel() {
-      ensureOverlay();
-      if (!overlayEl) return;
-      syncConfigControls(runtimeApi.getConfig());
-      setActiveView('hub');
-      setStatus('CHANGES SAVED AUTOMATICALLY');
-      isOpen = true;
-      overlayEl.classList.add('is-open');
+    function goBack() {
+      if (!activeFoxView) return;
+      const meta = VIEW_META[activeFoxView];
+      navigateMenu(meta && meta.back ? meta.back : 'home');
     }
 
-    function closePanel() {
-      if (!overlayEl || !isOpen) return;
-      isOpen = false;
-      stopPlayControllers();
-      overlayEl.classList.remove('is-open');
-    }
-
-    function buildHubPane() {
-      const cards = HUB_SECTIONS.map((sec) => {
-        const card = createEl(
+    function buildHubScroller() {
+      const items = HUB_CARDS.map((cardSpec) => {
+        const item = createEl(
           'div',
           {
-            id: sec.cardId,
-            className: 'twfox-hub-card',
-            style: `background-color:${sec.bg};border-top:3px solid ${sec.top};border-left:3px solid ${sec.left};border-bottom:3px solid ${sec.bottom};`,
-            attrs: { 'data-hover': 'hover', 'data-hit': 'hit1' }
+            id: cardSpec.cardId,
+            className: 'scroller_item scroller_item_giant has_image has_description ns',
+            style: `background-color:${cardSpec.bg};border-top:3px solid ${cardSpec.top};border-left:3px solid ${cardSpec.left};border-bottom:3px solid ${cardSpec.bottom};`,
+            attrs: { 'data-hover': 'hover', 'data-hit': 'hit2' }
           },
           [
-            createEl('div', {
-              className: 'twfox-hub-tag',
-              style: `color:${sec.titleColor}`,
-              text: sec.tag
-            }),
-            createEl('div', { className: 'twfox-hub-text' }, [
-              createEl('h2', { style: `color:${sec.titleColor}`, text: sec.title }),
-              createEl('p', { style: `color:${sec.descColor}`, text: sec.subtitle })
-            ])
+            createEl('div', { className: 'twfox-menu-svg', html: cardSpec.icon }),
+            createEl('h1', { style: `color:${cardSpec.titleColor}`, text: cardSpec.title }),
+            createEl('p', { style: `color:${cardSpec.descColor}`, text: cardSpec.subtitle })
           ]
         );
-        card.addEventListener('click', function () {
-          setActiveView(sec.view);
+        item.addEventListener('click', function () {
+          navigateMenu(cardSpec.view);
         });
-        return card;
+        return item;
       });
 
-      return createEl('div', { id: 'twfoxtetrio-pane-hub', className: 'twfox-pane' }, [
-        createEl('div', { className: 'twfox-hub-list' }, cards)
-      ]);
+      return createEl(
+        'div',
+        {
+          id: 'twfoxtetrio-view-foxmod',
+          className: 'right_scroller hidden thidden',
+          attrs: { 'data-menuview': 'foxmod' }
+        },
+        items
+      );
     }
 
-    function buildPracticePane() {
+    function buildPracticeScroller() {
       const pieceSelect = createEl('select', { id: 'twfoxtetrio-practice-pieces', className: 'twfox-select' }, [
         createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
         createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
@@ -750,7 +775,7 @@
 
       const restartBtn = createEl('button', {
         id: 'twfoxtetrio-practice-restart',
-        className: 'twfox-modal-btn is-primary',
+        className: 'twfox-btn is-pri',
         text: 'REINICIAR [R]',
         type: 'button',
         attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
@@ -790,24 +815,34 @@
       modeSelect.addEventListener('change', applyPracticeSettings);
       restartBtn.addEventListener('click', applyPracticeSettings);
 
-      return createEl('div', { id: 'twfoxtetrio-pane-practice', className: 'twfox-pane hidden' }, [
-        createEl('div', { className: 'twfox-toolbar' }, [
-          createEl('div', { className: 'twfox-toolbar-group' }, [
-            createEl('span', { className: 'twfox-modal-badge', text: 'PIEZAS' }),
-            pieceSelect,
-            createEl('span', { className: 'twfox-modal-badge', text: 'MODO' }),
-            modeSelect
+      return createEl(
+        'div',
+        {
+          id: 'twfoxtetrio-pane-practice',
+          className: 'right_scroller hidden thidden twfox-native-scroller',
+          attrs: { 'data-menuview': 'foxmod_practice' }
+        },
+        [
+          createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
+            createEl('div', {}, [
+              createEl('h1', { text: 'PRACTICA // PENTOMINOS' }),
+              createEl('p', { text: 'Elige tu set de piezas y modalidad offline.' })
+            ]),
+            createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;' }, [
+              pieceSelect,
+              modeSelect,
+              restartBtn
+            ])
           ]),
-          restartBtn
-        ]),
-        createEl('div', { className: 'twfox-canvas-wrap' }, [
-          practiceCanvas,
-          createEl('div', {
-            className: 'twfox-key-hint',
-            text: 'ARROWS: Mover · UP/X: Rotar · Z: Anti · A: 180° · SPACE: Drop · C/SHIFT: Hold · R: Reiniciar'
-          })
-        ])
-      ]);
+          createEl('div', { className: 'scroller_block twfox-canvas-panel' }, [
+            practiceCanvas,
+            createEl('div', {
+              className: 'twfox-key-hint',
+              text: 'ARROWS: Mover · UP/X: Rotar · Z: Anti · A: 180° · SPACE: Drop · C/SHIFT: Hold · R: Reiniciar'
+            })
+          ])
+        ]
+      );
     }
 
     function teardownPeerSession() {
@@ -832,7 +867,7 @@
       setClass(multiDom.lobbyView, 'hidden', nextSub !== 'lobby');
       setClass(multiDom.gameView, 'hidden', nextSub !== 'playing');
       if (multiController) {
-        if (nextSub === 'playing' && isOpen && activeView === 'multi') {
+        if (nextSub === 'playing' && activeFoxView === 'foxmod_multi') {
           multiController.start();
         } else {
           multiController.stop();
@@ -844,7 +879,6 @@
       if (!multiDom || !snap) return;
 
       if (evType === 'match_start' && detail && pentominoEngine && foxmodCanvas) {
-        lastSelfAttackCount = 0;
         multiGame = pentominoEngine.createGame({
           pieceSet: (detail.config && detail.config.pieceSet) || 'pentomino',
           mode: 'vs',
@@ -901,19 +935,17 @@
           : '';
       setClass(multiDom.winnerBanner, 'hidden', !(snap.room.status === 'results' && snap.room.winner));
 
-      // Lobby player list
       multiDom.playersList.innerHTML = '';
       for (const p of snap.players || []) {
         const badge = p.isHost ? 'HOST SERVER' : p.ready ? 'READY' : 'WAIT';
         multiDom.playersList.appendChild(
           createEl('div', { className: 'twfox-player-row' }, [
             createEl('span', { text: `${p.name} (${badge})` }),
-            createEl('span', { className: 'twfox-modal-badge', text: `${p.wins || 0}W` })
+            createEl('span', { className: 'twfox-badge', text: `${p.wins || 0}W` })
           ])
         );
       }
 
-      // Chat log
       multiDom.chatLog.innerHTML = '';
       for (const entry of snap.chat || []) {
         multiDom.chatLog.appendChild(
@@ -924,7 +956,6 @@
         );
       }
 
-      // Live opponent boards when playing
       if (multiSubMode === 'playing' && foxmodCanvas) {
         const selfId = isHost ? 'host' : snap.selfId;
         const opponents = (snap.players || []).filter((p) => p.id !== selfId);
@@ -952,40 +983,39 @@
       peerUnsub = session.subscribe(renderMultiSnapshot);
     }
 
-    function buildMultiPane() {
+    function buildMultiScroller() {
       const createBtn = createEl('button', {
         id: 'twfoxtetrio-create-room-btn',
-        className: 'twfox-modal-btn is-primary',
+        className: 'twfox-btn is-pri',
         text: 'CREAR SALA (HOST / SERVIDOR)',
         type: 'button',
         attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
       });
       const joinBtn = createEl('button', {
         id: 'twfoxtetrio-join-room-btn',
-        className: 'twfox-modal-btn',
+        className: 'twfox-btn',
         text: 'UNIRSE A SALA (CLIENTE)',
         type: 'button',
         attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
       });
 
-      const entryView = createEl('div', { id: 'twfoxtetrio-multi-entry', className: 'twfox-multi-grid' }, [
-        createEl('div', { className: 'twfox-card-box' }, [
-          createEl('h3', { text: 'HOSTEAR SALA (TU PC = SERVIDOR)' }),
+      const entryView = createEl('div', { id: 'twfoxtetrio-multi-entry', className: 'scroller_block twfox-multi-cols' }, [
+        createEl('div', { className: 'twfox-multi-card' }, [
+          createEl('h2', { text: 'HOSTEAR SALA (TU PC = SERVIDOR)' }),
           createEl('p', {
-            text: 'Crea una sala personalizada P2P sin servidores externos. Elige Pentominós, Tetrominós o Caos, invita amigos por código WebRTC y empieza rondas VS.'
+            text: 'Crea una sala personalizada P2P sin servidores externos. Elige Pentominós, Tetrominós o Caos e invita amigos por WebRTC.'
           }),
           createBtn
         ]),
-        createEl('div', { className: 'twfox-card-box' }, [
-          createEl('h3', { text: 'UNIRSE A SALA DE UN AMIGO' }),
+        createEl('div', { className: 'twfox-multi-card' }, [
+          createEl('h2', { text: 'UNIRSE A SALA DE UN AMIGO' }),
           createEl('p', {
-            text: 'Pega el código de invitación (FOX1:...) que te envíe el Host por Discord, genera tu código de respuesta y conéctate directo PC a PC.'
+            text: 'Pega el código FOX1:... de tu amigo Host, copia tu respuesta y conéctate directo PC a PC.'
           }),
           joinBtn
         ])
       ]);
 
-      // Join view
       const joinOfferInput = createEl('textarea', {
         id: 'twfoxtetrio-join-offer-input',
         className: 'twfox-textarea',
@@ -993,7 +1023,7 @@
       });
       const joinGenerateBtn = createEl('button', {
         id: 'twfoxtetrio-join-generate-btn',
-        className: 'twfox-modal-btn is-primary',
+        className: 'twfox-btn is-pri',
         text: 'GENERAR RESPUESTA',
         type: 'button'
       });
@@ -1004,31 +1034,30 @@
       });
       const joinCopyBtn = createEl('button', {
         id: 'twfoxtetrio-join-copy-btn',
-        className: 'twfox-modal-btn',
+        className: 'twfox-btn',
         text: 'COPIAR RESPUESTA',
         type: 'button'
       });
       const joinStatus = createEl('p', { id: 'twfoxtetrio-join-status', text: '' });
       const joinBackBtn = createEl('button', {
         id: 'twfoxtetrio-join-back-btn',
-        className: 'twfox-modal-btn',
-        text: 'VOLVER',
+        className: 'twfox-btn',
+        text: 'CANCELAR',
         type: 'button'
       });
 
-      const joinView = createEl('div', { id: 'twfoxtetrio-multi-join', className: 'twfox-card-box hidden' }, [
-        createEl('h3', { text: 'UNIRSE A SALA P2P' }),
+      const joinView = createEl('div', { id: 'twfoxtetrio-multi-join', className: 'scroller_block twfox-multi-card hidden' }, [
+        createEl('h2', { text: 'UNIRSE A SALA P2P' }),
         joinOfferInput,
-        createEl('div', { className: 'twfox-toolbar-group' }, [joinGenerateBtn, joinCopyBtn, joinBackBtn]),
+        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [joinGenerateBtn, joinCopyBtn, joinBackBtn]),
         joinAnswerOutput,
         joinStatus
       ]);
 
-      // Lobby view
-      const lobbyRoleTitle = createEl('span', { className: 'twfox-modal-badge', text: 'SALA P2P' });
+      const lobbyRoleTitle = createEl('span', { className: 'twfox-badge', text: 'SALA P2P' });
       const leaveRoomBtn = createEl('button', {
         id: 'twfoxtetrio-leave-room-btn',
-        className: 'twfox-modal-btn',
+        className: 'twfox-btn',
         text: 'SALIR DE SALA',
         type: 'button'
       });
@@ -1053,13 +1082,13 @@
 
       const hostGenInviteBtn = createEl('button', {
         id: 'twfoxtetrio-host-gen-invite',
-        className: 'twfox-modal-btn is-primary',
+        className: 'twfox-btn is-pri',
         text: '+ GENERAR INVITACION',
         type: 'button'
       });
       const hostCopyInviteBtn = createEl('button', {
         id: 'twfoxtetrio-host-copy-invite',
-        className: 'twfox-modal-btn',
+        className: 'twfox-btn',
         text: 'COPIAR INVITE',
         type: 'button'
       });
@@ -1075,14 +1104,14 @@
       });
       const hostAcceptBtn = createEl('button', {
         id: 'twfoxtetrio-host-accept-btn',
-        className: 'twfox-modal-btn is-primary',
+        className: 'twfox-btn is-pri',
         text: 'CONECTAR JUGADOR',
         type: 'button'
       });
       const hostInviteStatus = createEl('p', { text: '' });
-      const hostInviteBox = createEl('div', { id: 'twfoxtetrio-host-invite-box', className: 'twfox-card-box' }, [
-        createEl('h3', { text: 'INVITAR AMIGOS (P2P DIRECTO)' }),
-        createEl('div', { className: 'twfox-toolbar-group' }, [hostGenInviteBtn, hostCopyInviteBtn]),
+      const hostInviteBox = createEl('div', { id: 'twfoxtetrio-host-invite-box', className: 'twfox-multi-card' }, [
+        createEl('h2', { text: 'INVITAR AMIGOS (P2P)' }),
+        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [hostGenInviteBtn, hostCopyInviteBtn]),
         hostOfferOutput,
         hostAnswerInput,
         hostAcceptBtn,
@@ -1098,44 +1127,44 @@
       });
       const chatSendBtn = createEl('button', {
         id: 'twfoxtetrio-lobby-chat-send',
-        className: 'twfox-modal-btn',
+        className: 'twfox-btn',
         text: 'ENVIAR',
         type: 'button'
       });
-      const winnerBanner = createEl('div', {
+      const winnerBanner = createEl('span', {
         id: 'twfoxtetrio-multi-winner',
-        className: 'twfox-modal-badge hidden',
+        className: 'twfox-badge hidden',
         text: ''
       });
       const hostStartBtn = createEl('button', {
         id: 'twfoxtetrio-host-start-btn',
-        className: 'twfox-modal-btn is-primary',
+        className: 'twfox-btn is-pri',
         text: 'START MATCH',
         type: 'button'
       });
       const clientReadyBtn = createEl('button', {
         id: 'twfoxtetrio-client-ready-btn',
-        className: 'twfox-modal-btn is-primary hidden',
+        className: 'twfox-btn is-pri hidden',
         text: 'READY / NOT READY',
         type: 'button'
       });
 
       const lobbyView = createEl('div', { id: 'twfoxtetrio-multi-lobby', className: 'hidden' }, [
-        createEl('div', { className: 'twfox-toolbar', style: 'margin-bottom:10px' }, [
-          createEl('div', { className: 'twfox-toolbar-group' }, [lobbyRoleTitle, winnerBanner]),
+        createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
+          createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;' }, [lobbyRoleTitle, winnerBanner]),
           leaveRoomBtn
         ]),
-        createEl('div', { className: 'twfox-toolbar', style: 'margin-bottom:10px' }, [
-          createEl('div', { className: 'twfox-toolbar-group' }, [pieceSelect, garbageSelect, gravitySelect]),
-          createEl('div', { className: 'twfox-toolbar-group' }, [hostStartBtn, clientReadyBtn])
+        createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
+          createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [pieceSelect, garbageSelect, gravitySelect]),
+          createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [hostStartBtn, clientReadyBtn])
         ]),
-        createEl('div', { className: 'twfox-multi-grid' }, [
+        createEl('div', { className: 'scroller_block twfox-multi-cols' }, [
           hostInviteBox,
-          createEl('div', { className: 'twfox-card-box' }, [
-            createEl('h3', { text: 'JUGADORES & CHAT' }),
+          createEl('div', { className: 'twfox-multi-card' }, [
+            createEl('h2', { text: 'JUGADORES & CHAT' }),
             playersList,
             chatLog,
-            createEl('div', { className: 'twfox-toolbar-group' }, [chatInput, chatSendBtn])
+            createEl('div', { style: 'display:flex;gap:8px;align-items:center;' }, [chatInput, chatSendBtn])
           ])
         ])
       ]);
@@ -1148,16 +1177,16 @@
       const opponentsGrid = createEl('div', { id: 'twfoxtetrio-multi-opponents', className: 'twfox-opponents-grid' });
       const backLobbyBtn = createEl('button', {
         id: 'twfoxtetrio-back-lobby-btn',
-        className: 'twfox-modal-btn',
+        className: 'twfox-btn',
         text: 'VOLVER AL LOBBY',
         type: 'button'
       });
       const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'hidden' }, [
-        createEl('div', { className: 'twfox-toolbar', style: 'margin-bottom:10px' }, [
-          createEl('span', { className: 'twfox-modal-badge', text: 'VS LIVE P2P' }),
+        createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
+          createEl('span', { className: 'twfox-badge', text: 'VS LIVE P2P' }),
           backLobbyBtn
         ]),
-        createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, opponentsGrid])
+        createEl('div', { className: 'scroller_block twfox-multi-arena' }, [multiCanvas, opponentsGrid])
       ]);
 
       if (foxmodCanvas) {
@@ -1166,9 +1195,7 @@
           game: null,
           allowRestart: false,
           onFrame(snap) {
-            if (peerSession && snap) {
-              peerSession.updateSelfBoard(snap);
-            }
+            if (peerSession && snap) peerSession.updateSelfBoard(snap);
           }
         });
       }
@@ -1196,8 +1223,7 @@
       createBtn.addEventListener('click', function () {
         if (!p2pRoom) return;
         const hostName = (runtimeApi.getState().selfUsername || 'HOST').toUpperCase();
-        const server = p2pRoom.createHostServer({ hostName });
-        bindPeerSession(server);
+        bindPeerSession(p2pRoom.createHostServer({ hostName }));
         hostOfferOutput.value = '';
         hostAnswerInput.value = '';
         hostInviteStatus.textContent = '';
@@ -1233,7 +1259,7 @@
           pendingInvitePeerId = invite.peerId;
           hostOfferOutput.value = invite.code;
           copyToClipboard(invite.code);
-          hostInviteStatus.textContent = 'Codigo listo y copiado. Envialo a tu amigo y pega su respuesta abajo.';
+          hostInviteStatus.textContent = 'Codigo copiado! Envialo por Discord y pega abajo la respuesta.';
         } catch (err) {
           hostInviteStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
         }
@@ -1253,7 +1279,7 @@
           hostAnswerInput.value = '';
           hostOfferOutput.value = '';
           pendingInvitePeerId = null;
-          hostInviteStatus.textContent = 'Jugador conectado al servidor local!';
+          hostInviteStatus.textContent = 'Jugador conectado al servidor!';
         } catch (err) {
           hostInviteStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
         }
@@ -1269,7 +1295,7 @@
           const answerCode = await client.joinFromInvite(joinOfferInput.value);
           joinAnswerOutput.value = answerCode;
           copyToClipboard(answerCode);
-          joinStatus.textContent = 'Respuesta lista y copiada! Enviasela al Host para entrar al lobby.';
+          joinStatus.textContent = 'Respuesta copiada! Enviasela al Host para entrar al lobby.';
         } catch (err) {
           joinStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
         }
@@ -1296,9 +1322,7 @@
       gravitySelect.addEventListener('change', pushRoomConfigPatch);
 
       hostStartBtn.addEventListener('click', function () {
-        if (peerSession && peerSession.getSnapshot().role === 'host') {
-          peerSession.startMatch();
-        }
+        if (peerSession && peerSession.getSnapshot().role === 'host') peerSession.startMatch();
       });
 
       clientReadyBtn.addEventListener('click', function () {
@@ -1315,23 +1339,22 @@
 
       chatSendBtn.addEventListener('click', sendChatMsg);
       chatInput.addEventListener('keydown', function (ev) {
-        if (ev && (ev.key === 'Enter' || ev.code === 'Enter')) {
-          sendChatMsg();
-        }
+        if (ev && (ev.key === 'Enter' || ev.code === 'Enter')) sendChatMsg();
       });
 
-      return createEl('div', { id: 'twfoxtetrio-pane-multi', className: 'twfox-pane hidden' }, [
-        entryView,
-        joinView,
-        lobbyView,
-        gameView
-      ]);
+      return createEl(
+        'div',
+        {
+          id: 'twfoxtetrio-pane-multi',
+          className: 'right_scroller hidden thidden twfox-native-scroller',
+          attrs: { 'data-menuview': 'foxmod_multi' }
+        },
+        [entryView, joinView, lobbyView, gameView]
+      );
     }
 
     function buildConfigSection(sectionSpec) {
-      const children = [
-        createEl('h2', { className: 'twfox-section-title', text: sectionSpec.title })
-      ];
+      const children = [createEl('h1', { style: `color:${sectionSpec.accent}`, text: sectionSpec.title })];
 
       for (const toggleSpec of sectionSpec.toggles) {
         const input = createEl('input', {
@@ -1340,29 +1363,22 @@
           attrs: { type: 'checkbox' }
         });
         input.addEventListener('change', function () {
-          runtimeApi.updateConfig({
-            [sectionSpec.key]: { [toggleSpec.field]: Boolean(input.checked) }
-          });
-          setStatus('SETTINGS SAVED');
+          runtimeApi.updateConfig({ [sectionSpec.key]: { [toggleSpec.field]: Boolean(input.checked) } });
+          if (statusEl) statusEl.textContent = 'SETTINGS SAVED';
         });
 
-        toggleControls.push({
-          section: sectionSpec.key,
-          field: toggleSpec.field,
-          input
-        });
+        toggleControls.push({ section: sectionSpec.key, field: toggleSpec.field, input });
 
         children.push(
-          createEl('div', { className: 'twfox-control-row' }, [
-            createEl('div', { className: 'twfox-control-text' }, [
-              createEl('span', { className: 'twfox-control-label', text: toggleSpec.label }),
-              createEl('span', { className: 'twfox-control-desc', text: toggleSpec.description })
+          createEl('div', { className: 'twfox-native-row' }, [
+            createEl('div', {}, [
+              createEl('span', { className: 'twfox-native-label', text: toggleSpec.label }),
+              createEl('span', { className: 'twfox-native-desc', text: toggleSpec.description })
             ]),
-            createEl(
-              'label',
-              { className: 'twfox-toggle', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } },
-              [input, createEl('span', { className: 'twfox-toggle-track' })]
-            )
+            createEl('label', { className: 'twfox-toggle', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } }, [
+              input,
+              createEl('span', { className: 'twfox-toggle-track' })
+            ])
           ])
         );
       }
@@ -1385,35 +1401,27 @@
           rangeInput.value = String(next);
           valueEl.textContent = String(next);
           runtimeApi.updateConfig({ [sectionSpec.key]: { [r.field]: next } });
-          setStatus('SETTINGS SAVED');
+          if (statusEl) statusEl.textContent = 'SETTINGS SAVED';
         }
 
-        rangeInput.addEventListener('input', function () {
-          commitRangeValue(rangeInput.value);
-        });
-        rangeInput.addEventListener('change', function () {
-          commitRangeValue(rangeInput.value);
-        });
+        rangeInput.addEventListener('input', function () { commitRangeValue(rangeInput.value); });
+        rangeInput.addEventListener('change', function () { commitRangeValue(rangeInput.value); });
 
         const minusBtn = createEl('button', {
-          className: 'twfox-modal-btn twfox-step-btn',
+          className: 'twfox-btn twfox-step-btn',
           text: '-',
           type: 'button',
           attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
         });
-        minusBtn.addEventListener('click', function () {
-          commitRangeValue(Number(rangeInput.value) - r.step);
-        });
+        minusBtn.addEventListener('click', function () { commitRangeValue(Number(rangeInput.value) - r.step); });
 
         const plusBtn = createEl('button', {
-          className: 'twfox-modal-btn twfox-step-btn',
+          className: 'twfox-btn twfox-step-btn',
           text: '+',
           type: 'button',
           attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
         });
-        plusBtn.addEventListener('click', function () {
-          commitRangeValue(Number(rangeInput.value) + r.step);
-        });
+        plusBtn.addEventListener('click', function () { commitRangeValue(Number(rangeInput.value) + r.step); });
 
         rangeControls.push({
           section: sectionSpec.key,
@@ -1425,27 +1433,61 @@
         });
 
         children.push(
-          createEl('div', { className: 'twfox-control-row' }, [
-            createEl('div', { className: 'twfox-control-text' }, [
-              createEl('span', { className: 'twfox-control-label', text: r.label }),
-              createEl('span', { className: 'twfox-control-desc', text: r.description })
+          createEl('div', { className: 'twfox-native-row' }, [
+            createEl('div', {}, [
+              createEl('span', { className: 'twfox-native-label', text: r.label }),
+              createEl('span', { className: 'twfox-native-desc', text: r.description })
             ]),
             createEl('div', { className: 'twfox-range-wrap' }, [minusBtn, rangeInput, plusBtn, valueEl])
           ])
         );
       }
 
+      return createEl('div', { className: 'scroller_block' }, children);
+    }
+
+    function buildConfigScroller() {
+      statusEl = createEl('span', {
+        id: 'twfoxtetrio-config-status',
+        className: 'twfox-badge',
+        text: 'CHANGES SAVED AUTOMATICALLY'
+      });
+
+      const resetBtn = createEl('button', {
+        id: 'twfoxtetrio-reset-defaults',
+        className: 'twfox-btn is-pri',
+        text: 'RESET DEFAULTS',
+        type: 'button',
+        attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+      });
+      resetBtn.addEventListener('click', function () {
+        const nextCfg = typeof runtimeApi.resetConfig === 'function'
+          ? runtimeApi.resetConfig()
+          : runtimeApi.getConfig();
+        syncConfigControls(nextCfg);
+        if (statusEl) statusEl.textContent = 'RESET TO DEFAULTS';
+      });
+
+      const blocks = CONFIG_SECTIONS.map(buildConfigSection);
+      blocks.push(
+        createEl('div', { className: 'scroller_block twfox-scroller-header' }, [statusEl, resetBtn])
+      );
+
       return createEl(
         'div',
-        { className: 'twfox-section', style: `--twfox-accent: ${sectionSpec.accent}` },
-        children
+        {
+          id: 'twfoxtetrio-pane-config',
+          className: 'right_scroller hidden thidden twfox-native-scroller',
+          attrs: { 'data-menuview': 'foxmod_config' }
+        },
+        blocks
       );
     }
 
-    function buildCreditsPane() {
+    function buildCreditsScroller() {
       const githubLink = createEl('a', {
         id: 'twfoxtetrio-github-link',
-        className: 'twfox-modal-btn is-primary twfox-github-btn',
+        className: 'twfox-btn is-pri',
         text: 'GITHUB REPO',
         attrs: {
           href: REPO_URL,
@@ -1461,154 +1503,76 @@
         }
       });
 
-      const listItems = CREDIT_ITEMS.map((item) =>
-        createEl('li', { className: 'twfox-credits-item' }, [
-          createEl('strong', { text: item.name }),
-          createEl('span', { text: item.detail })
+      const rows = CREDIT_ITEMS.map((item) =>
+        createEl('div', { className: 'twfox-native-row' }, [
+          createEl('div', {}, [
+            createEl('span', { className: 'twfox-native-label', text: item.name }),
+            createEl('span', { className: 'twfox-native-desc', text: item.detail })
+          ])
         ])
       );
 
-      return createEl('div', { id: 'twfoxtetrio-pane-credits', className: 'twfox-pane hidden' }, [
-        createEl('div', { className: 'twfox-credits-hero' }, [
-          createEl('div', {}, [
-            createEl('div', { className: 'twfox-modal-title-wrap' }, [
-              createEl('h2', { className: 'twfox-modal-title', text: 'FOXMOD // TWFOXTETRIO' }),
-              createEl('span', { className: 'twfox-modal-badge', text: 'v' + runtimeApi.version })
+      return createEl(
+        'div',
+        {
+          id: 'twfoxtetrio-pane-credits',
+          className: 'right_scroller hidden thidden twfox-native-scroller',
+          attrs: { 'data-menuview': 'foxmod_credits' }
+        },
+        [
+          createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
+            createEl('div', {}, [
+              createEl('h1', { text: 'FOXMOD // TWFOXTETRIO' }),
+              createEl('p', {
+                className: 'twfox-credits-author',
+                text: `Modded By: TWFoxcrack · v${runtimeApi.version}`
+              })
             ]),
-            createEl('p', { className: 'twfox-credits-author', text: 'Modded By: TWFoxcrack' })
+            githubLink
           ]),
-          githubLink
-        ]),
-        createEl('ul', { className: 'twfox-credits-list' }, listItems),
-        createEl('p', {
-          className: 'twfox-credits-note',
-          text:
-            'Visual HUD trackers & standalone offline/P2P custom FOXMOD modes. Does not alter official TETR.IO server physics or network packets.'
-        })
-      ]);
+          createEl('div', { className: 'scroller_block' }, rows),
+          createEl('div', { className: 'scroller_block' }, [
+            createEl('p', {
+              text:
+                'Visual HUD trackers & standalone offline/P2P FOXMOD modes. Never modifies official TETR.IO server physics or network packets.'
+            })
+          ])
+        ]
+      );
     }
 
-    function ensureOverlay() {
-      if (overlayEl || document.getElementById(OVERLAY_ID)) {
-        overlayEl = overlayEl || document.getElementById(OVERLAY_ID);
-        return;
+    function ensureNativeScrollers() {
+      if (scrollersInjected) return;
+      const menusEl = document.getElementById('menus');
+      if (!menusEl) return;
+      scrollersInjected = true;
+
+      const built = [
+        ['foxmod', buildHubScroller()],
+        ['foxmod_practice', buildPracticeScroller()],
+        ['foxmod_multi', buildMultiScroller()],
+        ['foxmod_config', buildConfigScroller()],
+        ['foxmod_credits', buildCreditsScroller()]
+      ];
+      for (const [viewKey, scroller] of built) {
+        scrollerMap.set(viewKey, scroller);
+        menusEl.appendChild(scroller);
       }
 
-      backHubBtn = createEl('button', {
-        id: 'twfoxtetrio-back-hub',
-        className: 'twfox-modal-btn hidden',
-        text: '< HUB',
-        type: 'button',
-        attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
-      });
-      backHubBtn.addEventListener('click', function () {
-        setActiveView('hub');
-      });
-
-      const closeBtn = createEl('button', {
-        id: 'twfoxtetrio-foxmod-close',
-        className: 'twfox-modal-btn',
-        text: 'CLOSE [ESC]',
-        type: 'button',
-        attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
-      });
-      closeBtn.addEventListener('click', closePanel);
-
-      const navSpecs = [
-        { view: 'hub', id: 'twfoxtetrio-tab-hub', label: 'FOXMOD HUB' },
-        { view: 'practice', id: 'twfoxtetrio-tab-practice', label: 'PRACTICA' },
-        { view: 'multi', id: 'twfoxtetrio-tab-multi', label: 'MULTIJUGADOR' },
-        { view: 'config', id: 'twfoxtetrio-tab-config', label: 'CONFIG' },
-        { view: 'credits', id: 'twfoxtetrio-tab-credits', label: 'CREDITS' }
-      ];
-
-      const tabsRow = navSpecs.map((spec) => {
-        const btn = createEl('button', {
-          id: spec.id,
-          className: 'twfox-tab-btn' + (spec.view === 'hub' ? ' is-active' : ''),
-          text: spec.label,
-          type: 'button',
-          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
-        });
-        btn.addEventListener('click', function () {
-          setActiveView(spec.view);
-        });
-        tabButtons.set(spec.view, btn);
-        return btn;
-      });
-
-      const hubPane = buildHubPane();
-      const practicePane = buildPracticePane();
-      const multiPane = buildMultiPane();
-      const configPane = createEl(
-        'div',
-        { id: 'twfoxtetrio-pane-config', className: 'twfox-pane hidden' },
-        CONFIG_SECTIONS.map(buildConfigSection)
-      );
-      const creditsPane = buildCreditsPane();
-
-      viewPanes.set('hub', hubPane);
-      viewPanes.set('practice', practicePane);
-      viewPanes.set('multi', multiPane);
-      viewPanes.set('config', configPane);
-      viewPanes.set('credits', creditsPane);
-
-      statusEl = createEl('span', {
-        id: 'twfoxtetrio-config-status',
-        className: 'twfox-modal-status',
-        text: 'CHANGES SAVED AUTOMATICALLY'
-      });
-
-      const resetBtn = createEl('button', {
-        id: 'twfoxtetrio-reset-defaults',
-        className: 'twfox-modal-btn',
-        text: 'RESET DEFAULTS',
-        type: 'button',
-        attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
-      });
-      resetBtn.addEventListener('click', function () {
-        const nextCfg = typeof runtimeApi.resetConfig === 'function'
-          ? runtimeApi.resetConfig()
-          : runtimeApi.getConfig();
-        syncConfigControls(nextCfg);
-        setStatus('RESET TO DEFAULTS');
-      });
-
-      footerEl = createEl('div', { className: 'twfox-modal-footer hidden' }, [statusEl, resetBtn]);
-
-      const panel = createEl('div', { id: PANEL_ID }, [
-        createEl('div', { className: 'twfox-modal-header' }, [
-          createEl('div', { className: 'twfox-modal-brand' }, [
-            createEl('div', { className: 'twfox-modal-logo', html: FOX_ICON_SVG }),
-            createEl('div', { className: 'twfox-modal-title-wrap' }, [
-              createEl('h1', { className: 'twfox-modal-title', text: 'FOXMOD' }),
-              createEl('span', { className: 'twfox-modal-badge', text: 'v' + runtimeApi.version }),
-              createEl('span', { className: 'twfox-modal-badge', text: 'BY TWFOXCRACK' })
-            ])
-          ]),
-          createEl('div', { className: 'twfox-header-actions' }, [backHubBtn, closeBtn])
-        ]),
-        createEl('div', { className: 'twfox-modal-tabs' }, tabsRow),
-        createEl('div', { className: 'twfox-modal-body' }, [
-          hubPane,
-          practicePane,
-          multiPane,
-          configPane,
-          creditsPane
-        ]),
-        footerEl
-      ]);
-
-      overlayEl = createEl('div', { id: OVERLAY_ID }, [panel]);
-      overlayEl.addEventListener('click', function (ev) {
-        if (ev && ev.target === overlayEl) {
-          closePanel();
-        }
-      });
-
-      const mountTarget = document.body || document.documentElement;
-      if (mountTarget) {
-        mountTarget.appendChild(overlayEl);
+      const backBtn = document.getElementById('back');
+      if (backBtn && !backHooked) {
+        backHooked = true;
+        backBtn.addEventListener(
+          'click',
+          function (ev) {
+            if (!activeFoxView) return;
+            if (typeof ev.preventDefault === 'function') ev.preventDefault();
+            if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+            if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+            goBack();
+          },
+          true
+        );
       }
     }
 
@@ -1625,12 +1589,14 @@
           attrs: { 'data-hover': 'hover', 'data-hit': 'hit1' }
         },
         [
-          createEl('div', { className: 'twfox-home-icon', html: FOX_ICON_SVG }),
+          createEl('div', { className: 'twfox-menu-svg', html: ICONS.fox }),
           createEl('h1', { text: 'FOXMOD' }),
           createEl('p', { text: 'practica pentominos, salas P2P, config & credits' })
         ]
       );
-      btn.addEventListener('click', openPanel);
+      btn.addEventListener('click', function () {
+        navigateMenu('foxmod');
+      });
 
       const sigAbout = document.getElementById('sig_about');
       if (sigAbout && typeof homeMenu.insertBefore === 'function' && sigAbout.parentNode === homeMenu) {
@@ -1643,22 +1609,19 @@
     document.addEventListener(
       'keydown',
       function (ev) {
-        if (!isOpen || !ev) return;
+        if (!activeFoxView || !ev) return;
         if (ev.key === 'Escape' || ev.code === 'Escape') {
           if (typeof ev.preventDefault === 'function') ev.preventDefault();
+          if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
           if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
-          if (activeView !== 'hub') {
-            setActiveView('hub');
-          } else {
-            closePanel();
-          }
+          goBack();
           return;
         }
         if (isTextInputTarget(ev.target)) return;
         const activeCtrl =
-          activeView === 'practice'
+          activeFoxView === 'foxmod_practice'
             ? practiceController
-            : activeView === 'multi' && multiSubMode === 'playing'
+            : activeFoxView === 'foxmod_multi' && multiSubMode === 'playing'
               ? multiController
               : null;
         if (activeCtrl && activeCtrl.handleKeyDown(ev)) {
@@ -1672,7 +1635,7 @@
     document.addEventListener(
       'keyup',
       function (ev) {
-        if (!isOpen || !ev) return;
+        if (!activeFoxView || !ev) return;
         if (practiceController) practiceController.handleKeyUp(ev);
         if (multiController) multiController.handleKeyUp(ev);
       },
@@ -1680,14 +1643,15 @@
     );
 
     ensureHomeButton();
+    ensureNativeScrollers();
 
     const menusEl = document.getElementById('menus');
     if (menusEl && typeof root.MutationObserver === 'function') {
       const menuObserver = new root.MutationObserver(function () {
-        if (!isOpen) return;
+        if (isNavigatingInternal || !activeFoxView) return;
         const menuType = menusEl.getAttribute('data-menu-type');
-        if (menusEl.classList.contains('hidden') || (menuType && menuType !== 'home')) {
-          closePanel();
+        if (menusEl.classList.contains('hidden') || (menuType && !menuType.startsWith('foxmod'))) {
+          hideFoxmodScrollersImmediately();
         }
       });
       menuObserver.observe(menusEl, {
@@ -1698,11 +1662,12 @@
 
     runtimeApi.subscribe(function (state, cfg) {
       ensureHomeButton();
-      if (state && (state.inGame || state.inMultiplayer) && isOpen) {
-        closePanel();
+      ensureNativeScrollers();
+      if (state && (state.inGame || state.inMultiplayer) && activeFoxView) {
+        hideFoxmodScrollersImmediately();
         return;
       }
-      if (isOpen) {
+      if (activeFoxView === 'foxmod_config') {
         syncConfigControls(cfg);
       }
     });

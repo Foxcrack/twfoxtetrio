@@ -170,11 +170,23 @@ function createFakeDomEnvironment(protocol) {
   const body = new FakeElement('body', '', '');
   const head = new FakeElement('head', '', '');
   const menus = new FakeElement('div', 'menus', '');
+  menus.setAttribute('data-menu-type', 'home');
+  const headerText = new FakeElement('div', 'header_text', 'ns');
+  headerText.textContent = 'HOME';
+  const footerText = new FakeElement('div', 'footer_text', 'ns');
+  footerText.textContent = 'WELCOME TO TETR.IO!';
+  const backBtn = new FakeElement('div', 'back', 'hidden ns');
+  const exitElectron = new FakeElement('div', 'exit_electron', 'ns');
   const homeMenu = new FakeElement('div', 'home_menu', 'right_scroller');
+  homeMenu.setAttribute('data-menuview', 'home');
   const sigConfig = new FakeElement('div', 'sig_config', 'scroller_item scroller_item_giant');
   const sigAbout = new FakeElement('div', 'sig_about', 'scroller_item scroller_item_giant');
   homeMenu.appendChild(sigConfig);
   homeMenu.appendChild(sigAbout);
+  menus.appendChild(headerText);
+  menus.appendChild(footerText);
+  menus.appendChild(backBtn);
+  menus.appendChild(exitElectron);
   menus.appendChild(homeMenu);
   const meUsername = new FakeElement('h1', 'me_username', '');
   meUsername.textContent = 'fox';
@@ -246,6 +258,10 @@ function createFakeDomEnvironment(protocol) {
     elements,
     menus,
     homeMenu,
+    headerText,
+    footerText,
+    backBtn,
+    exitElectron,
     sigConfig,
     sigAbout,
     storage,
@@ -557,7 +573,7 @@ test('bundled mod displays and sorts live multiplayer VS leaderboard on the righ
   assert.equal(env.body.classList.contains('twfox-multi-lb-active'), false);
 });
 
-test('Home menu injects FOXMOD Hub with Practice, Multiplayer P2P Host, Config, and Credits sections', () => {
+test('Home menu injects FOXMOD natively into #menus with Practice, Multiplayer P2P, Config, and Credits', () => {
   const env = createFakeDomEnvironment('https:');
   env.triggerDOMContentLoaded();
 
@@ -568,49 +584,54 @@ test('Home menu injects FOXMOD Hub with Practice, Multiplayer P2P Host, Config, 
   assert.equal(foxmodBtn.getAttribute('data-hit'), 'hit1');
   assert.equal(foxmodBtn.querySelector('h1').textContent, 'FOXMOD');
 
-  // Click FOXMOD banner to open on FOXMOD HUB
-  foxmodBtn.click();
-  const overlay = env.elements.get('twfoxtetrio-foxmod-overlay');
-  const hubPane = env.elements.get('twfoxtetrio-pane-hub');
+  const foxView = env.elements.get('twfoxtetrio-view-foxmod');
   const practicePane = env.elements.get('twfoxtetrio-pane-practice');
   const multiPane = env.elements.get('twfoxtetrio-pane-multi');
   const configPane = env.elements.get('twfoxtetrio-pane-config');
   const creditsPane = env.elements.get('twfoxtetrio-pane-credits');
 
-  assert.ok(overlay.classList.contains('is-open'));
-  assert.equal(hubPane.classList.contains('hidden'), false);
-  assert.equal(practicePane.classList.contains('hidden'), true);
-  assert.equal(multiPane.classList.contains('hidden'), true);
-  assert.equal(configPane.classList.contains('hidden'), true);
-  assert.equal(creditsPane.classList.contains('hidden'), true);
+  assert.equal(foxView.classList.contains('hidden'), true);
 
-  // Enter PRACTICA (Pentominoes) via Hub card, then press Escape to go back to Hub
+  // Clicking FOXMOD in HOME transitions natively inside #menus like SOLO
+  foxmodBtn.click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
+  assert.equal(env.headerText.textContent, 'FOXMOD');
+  assert.equal(env.backBtn.classList.contains('hidden'), false);
+  assert.equal(env.exitElectron.classList.contains('hidden'), true);
+  assert.equal(env.homeMenu.classList.contains('hidden'), true);
+  assert.equal(foxView.classList.contains('hidden'), false);
+
+  // Enter PRACTICA (Pentominoes) via native banner card, then click #back
   env.elements.get('twfoxtetrio-card-practice').click();
-  assert.equal(hubPane.classList.contains('hidden'), true);
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
+  assert.equal(env.headerText.textContent, 'PRACTICA');
   assert.equal(practicePane.classList.contains('hidden'), false);
+  assert.equal(foxView.classList.contains('hidden'), true);
   assert.equal(env.elements.get('twfoxtetrio-practice-pieces').value, 'pentomino');
-  env.dispatchDocEvent('keydown', { key: 'Escape', code: 'Escape' });
-  assert.equal(overlay.classList.contains('is-open'), true);
-  assert.equal(hubPane.classList.contains('hidden'), false);
 
-  // Enter MULTIJUGADOR via Hub card and create a Host-Server P2P room
+  env.backBtn.click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
+  assert.equal(foxView.classList.contains('hidden'), false);
+
+  // Enter MULTIJUGADOR and create a Host-Server P2P room
   env.elements.get('twfoxtetrio-card-multi').click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
   assert.equal(multiPane.classList.contains('hidden'), false);
   env.elements.get('twfoxtetrio-create-room-btn').click();
   assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-lobby-players').children.length, 1);
 
-  // Enter CONFIG via Hub card -> toggle Blitz off & step maxRows
-  env.elements.get('twfoxtetrio-back-hub').click();
+  // Navigate to CONFIG via back -> card -> toggle Blitz & maxRows -> reset defaults
+  env.backBtn.click();
   env.elements.get('twfoxtetrio-card-config').click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_config');
   assert.equal(configPane.classList.contains('hidden'), false);
 
   const checkboxes = configPane.querySelectorAll('.twfox-toggle-input');
   assert.equal(checkboxes.length, 7);
   checkboxes[0].checked = false;
   checkboxes[0].dispatchEvent('change');
-
   assert.equal(env.context.__TWFOX_TETRIO__.getConfig().blitzTracker.enabled, false);
   const persisted = JSON.parse(env.storage.get('twfoxtetrio_config_v1'));
   assert.equal(persisted.blitzTracker.enabled, false);
@@ -621,34 +642,34 @@ test('Home menu injects FOXMOD Hub with Practice, Multiplayer P2P Host, Config, 
   assert.equal(env.context.__TWFOX_TETRIO__.getConfig().multiplayerLeaderboard.maxRows, 13);
   assert.equal(env.elements.get('twfoxtetrio-maxrows-value').textContent, '13');
 
-  // Switch to CREDITS tab and verify attribution & external link handling
-  env.elements.get('twfoxtetrio-tab-credits').click();
-  assert.equal(configPane.classList.contains('hidden'), true);
+  env.elements.get('twfoxtetrio-reset-defaults').click();
+  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().blitzTracker.enabled, true);
+  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().multiplayerLeaderboard.maxRows, 12);
+  assert.equal(checkboxes[0].checked, true);
+
+  // Back to FOXMOD -> CREDITS -> check author & GitHub link
+  env.backBtn.click();
+  env.elements.get('twfoxtetrio-card-credits').click();
   assert.equal(creditsPane.classList.contains('hidden'), false);
   assert.match(creditsPane.querySelector('.twfox-credits-author').textContent, /TWFoxcrack/);
 
   env.elements.get('twfoxtetrio-github-link').click();
   assert.deepEqual(env.openedExternalUrls, ['https://github.com/Foxcrack/twfoxtetrio']);
 
-  // Reset Defaults button restores initial values
-  env.elements.get('twfoxtetrio-tab-config').click();
-  env.elements.get('twfoxtetrio-reset-defaults').click();
-  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().blitzTracker.enabled, true);
-  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().multiplayerLeaderboard.maxRows, 12);
-  assert.equal(checkboxes[0].checked, true);
-  assert.equal(env.elements.get('twfoxtetrio-maxrows-value').textContent, '12');
-
-  // Escape from subview returns to Hub, second Escape closes overlay completely
+  // Escape twice navigates CREDITS -> FOXMOD -> HOME
   env.dispatchDocEvent('keydown', { key: 'Escape', code: 'Escape' });
-  assert.equal(hubPane.classList.contains('hidden'), false);
-  assert.equal(overlay.classList.contains('is-open'), true);
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
   env.dispatchDocEvent('keydown', { key: 'Escape', code: 'Escape' });
-  assert.equal(overlay.classList.contains('is-open'), false);
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'home');
+  assert.equal(env.headerText.textContent, 'HOME');
+  assert.equal(env.homeMenu.classList.contains('hidden'), false);
+  assert.equal(env.backBtn.classList.contains('hidden'), true);
+  assert.equal(env.exitElectron.classList.contains('hidden'), false);
 
-  // Entering an active game also closes FOXMOD panel if left open
+  // External menu transition (e.g. entering Blitz) hides FOXMOD cleanly
   foxmodBtn.click();
-  assert.equal(overlay.classList.contains('is-open'), true);
+  assert.equal(foxView.classList.contains('hidden'), false);
   env.menus.setAttribute('data-menu-type', 'blitz');
   env.menus.classList.add('hidden');
-  assert.equal(overlay.classList.contains('is-open'), false);
+  assert.equal(foxView.classList.contains('hidden'), true);
 });
