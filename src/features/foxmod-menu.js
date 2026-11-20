@@ -404,20 +404,30 @@
 }
 .twfox-stage-scroller {
   position: fixed !important;
-  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
   padding: 0 !important;
   margin: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
   background: transparent !important;
   text-align: center;
 }
 .twfox-stage-inner {
   width: 100%;
   height: 100%;
-  min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .twfox-stage-corner-controls {
   position: fixed;
@@ -462,8 +472,14 @@ body.twfox-ingame #menus > #footer {
 .twfox-game-canvas {
   background: transparent;
   display: block;
-  max-width: 96vw;
-  max-height: 94vh;
+  width: auto;
+  height: auto;
+  max-width: 96%;
+  max-height: 92%;
+}
+#twfoxtetrio-multi-canvas {
+  max-width: calc(100% - 280px);
+  max-height: 92%;
 }
 .twfox-native-scroller > .scroller_block {
   box-sizing: border-box;
@@ -624,23 +640,41 @@ body.twfox-ingame #menus > #footer {
   transition: .3s opacity;
 }
 #twfoxtetrio-pane-multi {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
   padding: 0 !important;
+  margin: 0 !important;
   background: transparent !important;
   text-align: left;
   overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+#twfoxtetrio-multi-lobby {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 #twfoxtetrio-lobby-top {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4em;
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  height: 3.9em;
   pointer-events: none;
   z-index: 4;
 }
 #twfoxtetrio-leave-room-btn {
   pointer-events: all;
-  position: fixed;
+  position: absolute;
   left: 0;
   top: .2em;
   transform: translateX(-1.2em);
@@ -650,8 +684,8 @@ body.twfox-ingame #menus > #footer {
   border-bottom: 3px solid #09070d;
   color: #fffb;
   font-family: HUN, sans-serif;
-  font-size: 1.8em;
-  padding: .35em .8em .3em 2.2em;
+  font-size: 1.75em;
+  padding: .32em .8em .28em 2.2em;
   border-radius: 3px;
   cursor: pointer;
   transition: .25s transform, .25s filter;
@@ -662,11 +696,12 @@ body.twfox-ingame #menus > #footer {
 }
 #twfoxtetrio-lobby-invite-banner {
   pointer-events: all;
-  position: fixed;
-  left: calc(50% - 11em);
-  width: 22em;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(22em, calc(100vw - 14em));
   top: 0.25em;
-  height: 3.4em;
+  height: 3.35em;
   background-color: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -679,15 +714,13 @@ body.twfox-ingame #menus > #footer {
 .twfox-invite-sub { color: rgba(255, 255, 255, 0.45); font-size: 0.8em; letter-spacing: 0.08em; margin-top: 3px; }
 .twfox-invite-id { color: #ffffff; font-size: 1.55em; font-weight: 900; letter-spacing: 0.08em; }
 .twfox-lobby-grid {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 4.4em;
-  bottom: 4.5em;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
   display: grid;
-  grid-template-columns: 23em minmax(0, 1fr) 23em;
-  gap: 0.9em;
-  padding: 0 0.4em;
+  grid-template-columns: minmax(14em, 24%) minmax(0, 1fr) minmax(14em, 24%);
+  gap: 0.75em;
+  padding: 0.2em 0.5em 0.5em;
   box-sizing: border-box;
 }
 .twfox-lobby-col {
@@ -799,24 +832,23 @@ body.twfox-ingame #menus > #footer {
 }
 .twfox-chat-bar .twfox-input { flex: 1 1 auto; min-width: 0; }
 .twfox-lobby-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 4.1em;
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 3.4em;
   background: linear-gradient(to bottom, #1c1328 0%, #2a1a3d 100%);
   border-top: 2px solid #493066;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 0 1.2em;
+  padding: 0.28em 1.2em;
 }
 .twfox-footer-wing-btn {
   justify-self: start;
   cursor: pointer;
   color: #d4b9f5;
   font-family: HUN, sans-serif;
-  font-size: 1.6em;
+  font-size: 1.5em;
   font-weight: 800;
   text-align: left;
   transition: .2s filter;
@@ -833,9 +865,10 @@ body.twfox-ingame #menus > #footer {
   border-radius: 4px;
   color: #e6d5ff;
   font-family: HUN, sans-serif;
-  font-size: 1.85em;
+  font-size: 1.55em;
+  line-height: 1.08;
   font-weight: 900;
-  padding: 0.15em 2.2em;
+  padding: 0.18em 2.1em;
   cursor: pointer;
   text-align: center;
   box-shadow: 0 0 16px rgba(130, 80, 200, 0.35);
@@ -869,10 +902,14 @@ body.twfox-ingame #menus > #footer {
 }
 .twfox-multi-arena {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 16px;
+  max-width: 100vw;
+  max-height: 96vh;
+  padding: 0 12px;
+  box-sizing: border-box;
 }
 .twfox-multi-side-col {
   display: flex;
