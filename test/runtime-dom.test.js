@@ -708,17 +708,28 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
   assert.equal(foxView.classList.contains('hidden'), false);
 
-  // Enter MULTIJUGADOR and create a Host-Server P2P room
+  // Enter MULTIJUGADOR -> opens #list_request style CREATE LOBBY / JOIN LOBBY picker
   env.elements.get('twfoxtetrio-card-multi').click();
+  const multiReq = env.elements.get('twfoxtetrio-multi-request');
+  assert.ok(multiReq.classList.contains('is-open'));
+  assert.equal(env.elements.get('twfoxtetrio-create-room-btn').querySelector('h1').textContent, 'CREATE LOBBY');
+  assert.equal(env.elements.get('twfoxtetrio-join-room-btn').querySelector('h1').textContent, 'JOIN LOBBY');
+
+  // Clicking CREATE LOBBY opens the 3-column TETR.IO room lobby as Host Server
+  env.elements.get('twfoxtetrio-create-room-btn').click();
+  assert.equal(multiReq.classList.contains('is-open'), false);
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
   assert.equal(multiPane.classList.contains('hidden'), false);
-  env.elements.get('twfoxtetrio-create-room-btn').click();
   assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-lobby-players').children.length, 1);
 
-  // Navigate to CONFIG via back -> card -> toggle Blitz & maxRows -> reset defaults
-  env.backBtn.click();
+  // Switch center lobby tab to GAME -> shows room PIECE SET selector
+  env.elements.get('twfoxtetrio-lobby-tab-game').click();
+  assert.equal(env.elements.get('twfoxtetrio-center-game').classList.contains('hidden'), false);
+
+  // Navigate to CONFIG via EXIT -> card -> toggle Blitz & maxRows -> reset defaults
+  env.elements.get('twfoxtetrio-leave-room-btn').click();
   env.elements.get('twfoxtetrio-card-config').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_config');
   assert.equal(configPane.classList.contains('hidden'), false);

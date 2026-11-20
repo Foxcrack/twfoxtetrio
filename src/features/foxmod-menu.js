@@ -525,37 +525,299 @@
 .twfox-step-btn { padding: 0.3em 0.7em; font-size: 1.1em; }
 .twfox-range-input { width: 120px; accent-color: #ff8c42; cursor: pointer; }
 .twfox-range-val { min-width: 28px; text-align: right; font-size: 1.2em; font-weight: 800; color: #ffbe8e; }
-.twfox-multi-cols {
+#twfoxtetrio-multi-request {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.84);
+  z-index: 9999999;
+  opacity: 0;
+  pointer-events: none;
+  transition: .3s opacity;
+}
+#twfoxtetrio-multi-request.is-open {
+  opacity: 1;
+  pointer-events: all;
+}
+#twfoxtetrio-multi-request .right_scroller {
+  transform: translateX(30vw);
+  transition: .45s transform, .45s opacity;
+}
+#twfoxtetrio-multi-request.is-open .right_scroller {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: all;
+}
+#twfoxtetrio-req-back {
+  position: fixed;
+  left: 0;
+  top: 4em;
+  width: fit-content;
+  transform: translateX(-2em);
+  background-color: #242424;
+  border-top: 3px solid #3d3d3d;
+  border-right: 3px solid #181818;
+  border-bottom: 3px solid #0e0e0e;
+  box-shadow: 0 0 8px #000;
+  color: #c9c9c9;
+  font-family: HUN, sans-serif;
+  font-size: 1.8em;
+  border-radius: 3px;
+  padding: .45em .7em .35em 3.2em;
+  cursor: pointer;
+  z-index: 2;
+  transition: .3s transform, .3s filter;
+}
+#twfoxtetrio-req-back:hover {
+  transform: translateX(-1em);
+  filter: brightness(1.25);
+}
+#twfoxtetrio-multi-request .scroller_item {
+  background-color: #1a161d;
+  border-top: 3px solid #453351;
+  border-left: 3px solid #392e40;
+  border-bottom: 3px solid #0a080b;
+}
+#twfoxtetrio-multi-request .scroller_item > h1 { color: #dac8e7; }
+#twfoxtetrio-multi-request .scroller_item > p { color: #7c6b88; }
+#menus[data-menu-type='foxmod_multi'] #header_text,
+#menus[data-menu-type='foxmod_multi'] #back,
+#menus[data-menu-type='foxmod_multi'] #footer {
+  opacity: 0;
+  pointer-events: none;
+  transition: .3s opacity;
+}
+#twfoxtetrio-pane-multi {
+  padding: 0 !important;
+  background: transparent !important;
+  text-align: left;
+  overflow: hidden !important;
+}
+#twfoxtetrio-lobby-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4em;
+  pointer-events: none;
+  z-index: 4;
+}
+#twfoxtetrio-leave-room-btn {
+  pointer-events: all;
+  position: fixed;
+  left: 0;
+  top: .2em;
+  transform: translateX(-1.2em);
+  background-color: #120e18;
+  border-top: 3px solid #2b2238;
+  border-right: 3px solid #211a2c;
+  border-bottom: 3px solid #09070d;
+  color: #fffb;
+  font-family: HUN, sans-serif;
+  font-size: 1.8em;
+  padding: .35em .8em .3em 2.2em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: .25s transform, .25s filter;
+}
+#twfoxtetrio-leave-room-btn:hover {
+  transform: translateX(-.4em);
+  filter: brightness(1.25);
+}
+#twfoxtetrio-lobby-invite-banner {
+  pointer-events: all;
+  position: fixed;
+  left: calc(50% - 11em);
+  width: 22em;
+  top: 0.25em;
+  height: 3.4em;
+  background-color: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  text-align: center;
+  cursor: pointer;
+  transition: .2s filter;
+}
+#twfoxtetrio-lobby-invite-banner:hover { filter: brightness(1.25); }
+.twfox-invite-sub { color: rgba(255, 255, 255, 0.45); font-size: 0.8em; letter-spacing: 0.08em; margin-top: 3px; }
+.twfox-invite-id { color: #ffffff; font-size: 1.55em; font-weight: 900; letter-spacing: 0.08em; }
+.twfox-lobby-grid {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 4.4em;
+  bottom: 4.5em;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 14px;
+  grid-template-columns: 23em minmax(0, 1fr) 23em;
+  gap: 0.9em;
+  padding: 0 0.4em;
+  box-sizing: border-box;
 }
-.twfox-multi-card {
-  background: #121622;
-  border: 2px solid #273049;
-  border-radius: 4px;
-  padding: 12px 14px;
+.twfox-lobby-col {
+  background-color: rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
-.twfox-multi-card h2 { margin: 0; font-size: 1.4em; color: #ffbe8e; }
-.twfox-multi-card p { margin: 0; font-size: 1em; color: #93a2cc; }
-.twfox-player-list, .twfox-chat-log {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  max-height: 150px;
+.twfox-col-heading {
+  margin: 0.45em 0.7em 0.35em;
+  font-family: HUN, sans-serif;
+  font-size: 2em;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 2px 6px #000;
+}
+.twfox-col-heading.right { text-align: right; }
+.twfox-col-heading.center { text-align: center; margin-bottom: 0.2em; }
+.twfox-player-list {
+  flex: 1 1 auto;
   overflow-y: auto;
-  font-size: 1em;
+  padding: 0 0.7em 0.7em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
 }
 .twfox-player-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
-  background: #1a2030;
+  padding: 0.55em 0.8em;
+  background: linear-gradient(90deg, #2b2139 0%, #1c1626 100%);
+  border-top: 2px solid #4f3b69;
+  border-left: 2px solid #3c2e50;
+  border-bottom: 2px solid #0e0a14;
   border-radius: 3px;
+  color: #fff;
+  font-weight: 800;
+}
+.twfox-lobby-tabs {
+  display: flex;
+  width: 100%;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.twfox-room-tab {
+  flex: 1 1 0;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(to bottom, rgba(170,170,170,0.14) 0, transparent 100%);
+  font-family: HUN, sans-serif;
+  text-align: center;
+  color: #aaa;
+  padding: .42em 0;
+  font-size: 1.35em;
+  font-weight: 800;
+  cursor: pointer;
+  transition: .25s filter, .25s color;
+}
+.twfox-room-tab:hover { filter: brightness(1.3); color: #ddd; }
+.twfox-room-tab.active {
+  background: linear-gradient(to bottom, #fff 0, #fff 3px, rgba(170,170,170,0.28) 3px, transparent 100%);
+  color: #fff;
+}
+.twfox-room-center-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 1em 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8em;
+}
+.twfox-room-opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0.55em 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  color: #c9b9db;
+  font-size: 1.15em;
+  font-weight: 700;
+}
+.twfox-room-opt-row:first-of-type { border-top: 0; }
+.twfox-room-savebar {
+  background: linear-gradient(to bottom, transparent 0, rgba(170,170,170,0.15) 100%);
+  text-align: center;
+  color: #d6c8eb;
+  font-family: HUN, sans-serif;
+  font-size: 1.4em;
+  font-weight: 800;
+  padding: .45em 0.6em;
+}
+.twfox-chat-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 0.8em 0.5em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: monospace;
+  font-size: 0.95em;
+}
+.twfox-chat-bar {
+  padding: 0.5em 0.7em 0.7em;
+  display: flex;
+  gap: 6px;
+}
+.twfox-chat-bar .twfox-input { flex: 1 1 auto; min-width: 0; }
+.twfox-lobby-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4.1em;
+  background: linear-gradient(to bottom, #1c1328 0%, #2a1a3d 100%);
+  border-top: 2px solid #493066;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 1.2em;
+}
+.twfox-footer-wing-btn {
+  justify-self: start;
+  cursor: pointer;
+  color: #d4b9f5;
+  font-family: HUN, sans-serif;
+  font-size: 1.6em;
+  font-weight: 800;
+  text-align: left;
+  transition: .2s filter;
+}
+.twfox-footer-wing-btn span {
+  display: block;
+  font-size: 0.45em;
+  color: #9378b5;
+}
+.twfox-footer-start-btn {
+  background: linear-gradient(to bottom, #3b2754 0%, #221633 100%);
+  border: 2px solid #7651a8;
+  border-bottom-color: #160c24;
+  border-radius: 4px;
+  color: #e6d5ff;
+  font-family: HUN, sans-serif;
+  font-size: 1.85em;
+  font-weight: 900;
+  padding: 0.15em 2.2em;
+  cursor: pointer;
+  text-align: center;
+  box-shadow: 0 0 16px rgba(130, 80, 200, 0.35);
+  transition: .2s filter, .1s transform;
+}
+.twfox-footer-start-btn:hover { filter: brightness(1.22); }
+.twfox-footer-start-btn span {
+  display: block;
+  font-size: 0.42em;
+  font-weight: 700;
+  color: #b79ce0;
+}
+.twfox-footer-mode-tag {
+  justify-self: end;
+  font-family: HUN, sans-serif;
+  font-size: 1.45em;
+  font-weight: 800;
+  color: #b79ce0;
+  letter-spacing: 0.06em;
 }
 .twfox-multi-arena {
   display: flex;
@@ -593,7 +855,8 @@
   color: #ffbe8e;
 }
 .twfox-native-scroller .hidden,
-.twfox-stage-scroller .hidden {
+.twfox-stage-scroller .hidden,
+#twfoxtetrio-pane-multi .hidden {
   display: none;
 }
 `;
@@ -748,7 +1011,9 @@
     let multiGame = null;
     let multiController = null;
     let multiCanvas = null;
-    let multiSubMode = 'entry';
+    let multiSubMode = 'lobby';
+    let multiRequestEl = null;
+    let multiRequestOpen = false;
     let multiDom = null;
 
     function stopPlayControllers() {
@@ -771,7 +1036,22 @@
       }
     }
 
+    function closeMultiRequest() {
+      multiRequestOpen = false;
+      if (multiRequestEl) {
+        multiRequestEl.classList.remove('is-open');
+      }
+    }
+
+    function openMultiRequest() {
+      ensureNativeScrollers();
+      if (!multiRequestEl) return;
+      multiRequestOpen = true;
+      multiRequestEl.classList.add('is-open');
+    }
+
     function hideFoxmodScrollersImmediately() {
+      closeMultiRequest();
       activeFoxView = null;
       stopPlayControllers();
       for (const scroller of scrollerMap.values()) {
@@ -875,7 +1155,11 @@
     function buildHubScroller() {
       const items = HUB_CARDS.map((cardSpec) =>
         makeGiantBanner(cardSpec, function () {
-          navigateMenu(cardSpec.view);
+          if (cardSpec.view === 'foxmod_multi') {
+            openMultiRequest();
+          } else {
+            navigateMenu(cardSpec.view);
+          }
         })
       );
 
@@ -1046,16 +1330,19 @@
         peerSession = null;
       }
       multiGame = null;
-      multiSubMode = 'entry';
+      multiSubMode = 'lobby';
     }
 
     function showMultiSubMode(nextSub) {
       multiSubMode = nextSub;
       if (!multiDom) return;
-      setClass(multiDom.entryView, 'hidden', nextSub !== 'entry');
-      setClass(multiDom.joinView, 'hidden', nextSub !== 'join');
-      setClass(multiDom.lobbyView, 'hidden', nextSub !== 'lobby');
+      setClass(multiDom.joinBox, 'hidden', nextSub !== 'join');
+      setClass(multiDom.hostInviteBox, 'hidden', nextSub === 'join');
+      setClass(multiDom.lobbyView, 'hidden', nextSub === 'playing');
       setClass(multiDom.gameView, 'hidden', nextSub !== 'playing');
+      if (nextSub === 'join') {
+        multiDom.setCenterTab('invite');
+      }
       if (multiController) {
         if (nextSub === 'playing' && activeFoxView === 'foxmod_multi') {
           multiController.reloadUserSettings();
@@ -1100,12 +1387,26 @@
       }
 
       const isHost = snap.role === 'host';
-      multiDom.lobbyRoleTitle.textContent = isHost
-        ? `HOST SERVER // ${snap.room.roomName}`
-        : `CLIENT // ${snap.room.roomName}`;
-      setClass(multiDom.hostInviteBox, 'hidden', !isHost);
+      multiDom.lobbyRoomTitle.textContent = snap.room.roomName || 'FOXMOD ROOM';
+      multiDom.lobbyModeTag.textContent =
+        snap.room.pieceSet === 'chaos'
+          ? 'CAOS MIX VS'
+          : snap.room.pieceSet === 'tetromino'
+            ? 'TETROMINOS VS'
+            : 'PENTOMINOS VS';
+      multiDom.roomInfoOwner.textContent = isHost ? 'YOU (HOST SERVER)' : 'REMOTE HOST SERVER';
+      multiDom.roomInfoStatus.textContent = String(snap.room.status || 'lobby').toUpperCase();
+
+      if (multiSubMode !== 'join') {
+        setClass(multiDom.joinBox, 'hidden', true);
+        setClass(multiDom.hostInviteBox, 'hidden', !isHost);
+      }
       setClass(multiDom.hostStartBtn, 'hidden', !isHost);
       setClass(multiDom.clientReadyBtn, 'hidden', isHost);
+
+      const count = (snap.players || []).length;
+      multiDom.playersHeading.textContent = `PLAYERS (${count})`;
+      multiDom.startCountSub.textContent = `${count} PLAYER${count === 1 ? '' : 'S'}`;
 
       if (multiDom.pieceSelect) {
         multiDom.pieceSelect.value = snap.room.pieceSet || 'pentomino';
@@ -1120,31 +1421,43 @@
         multiDom.gravitySelect.disabled = !isHost;
       }
 
-      multiDom.winnerBanner.textContent =
-        snap.room.status === 'results' && snap.room.winner
-          ? `GANADOR RONDA #${snap.room.round}: ${snap.room.winner}`
-          : '';
-      setClass(multiDom.winnerBanner, 'hidden', !(snap.room.status === 'results' && snap.room.winner));
+      const hasWinner = snap.room.status === 'results' && snap.room.winner;
+      multiDom.winnerBanner.textContent = hasWinner
+        ? `WINNER RONDA #${snap.room.round}: ${snap.room.winner}`
+        : isHost
+          ? 'HOST SERVER ACTIVE'
+          : snap.connected
+            ? 'CONNECTED TO HOST SERVER'
+            : 'PASTE INVITE TO JOIN';
 
       multiDom.playersList.innerHTML = '';
       for (const p of snap.players || []) {
-        const badge = p.isHost ? 'HOST SERVER' : p.ready ? 'READY' : 'WAIT';
+        const roleTag = p.isHost ? 'HOST' : p.ready ? 'READY' : 'WAIT';
         multiDom.playersList.appendChild(
           createEl('div', { className: 'twfox-player-row' }, [
-            createEl('span', { text: `${p.name} (${badge})` }),
-            createEl('span', { className: 'twfox-badge', text: `${p.wins || 0}W` })
+            createEl('span', { text: p.name }),
+            createEl('span', { className: 'twfox-badge', text: `${roleTag} · ${p.wins || 0}/${snap.room.round || 0}` })
           ])
         );
       }
 
       multiDom.chatLog.innerHTML = '';
-      for (const entry of snap.chat || []) {
+      if (!snap.chat || snap.chat.length === 0) {
         multiDom.chatLog.appendChild(
           createEl('div', {
-            style: entry.system ? 'color:#ffbe8e' : 'color:#dce4ff',
-            text: entry.system ? `* ${entry.text}` : `${entry.author}: ${entry.text}`
+            style: 'color:#8a7ca3',
+            text: 'Welcome to FOXMOD P2P chat! Host PC acts as the room server.'
           })
         );
+      } else {
+        for (const entry of snap.chat) {
+          multiDom.chatLog.appendChild(
+            createEl('div', {
+              style: entry.system ? 'color:#ffbe8e' : 'color:#dce4ff',
+              text: entry.system ? `* ${entry.text}` : `${entry.author}: ${entry.text}`
+            })
+          );
+        }
       }
 
       if (multiSubMode === 'playing' && foxmodCanvas) {
@@ -1175,133 +1488,51 @@
     }
 
     function buildMultiScroller() {
-      const createBtn = createEl('button', {
-        id: 'twfoxtetrio-create-room-btn',
-        className: 'twfox-btn is-pri',
-        text: 'CREAR SALA (HOST / SERVIDOR)',
-        type: 'button',
-        attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
-      });
-      const joinBtn = createEl('button', {
-        id: 'twfoxtetrio-join-room-btn',
-        className: 'twfox-btn',
-        text: 'UNIRSE A SALA (CLIENTE)',
-        type: 'button',
-        attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
-      });
-
-      const entryView = createEl('div', { id: 'twfoxtetrio-multi-entry', className: 'scroller_block twfox-multi-cols' }, [
-        createEl('div', { className: 'twfox-multi-card' }, [
-          createEl('h2', { text: 'HOSTEAR SALA (TU PC = SERVIDOR)' }),
-          createEl('p', {
-            text: 'Crea una sala personalizada P2P sin servidores externos. Elige Pentominós, Tetrominós o Caos e invita amigos por WebRTC.'
-          }),
-          createBtn
-        ]),
-        createEl('div', { className: 'twfox-multi-card' }, [
-          createEl('h2', { text: 'UNIRSE A SALA DE UN AMIGO' }),
-          createEl('p', {
-            text: 'Pega el código FOX1:... de tu amigo Host, copia tu respuesta y conéctate directo PC a PC.'
-          }),
-          joinBtn
-        ])
-      ]);
-
-      const joinOfferInput = createEl('textarea', {
-        id: 'twfoxtetrio-join-offer-input',
-        className: 'twfox-textarea',
-        attrs: { placeholder: 'Pega aqui el codigo FOX1:... de tu amigo Host' }
-      });
-      const joinGenerateBtn = createEl('button', {
-        id: 'twfoxtetrio-join-generate-btn',
-        className: 'twfox-btn is-pri',
-        text: 'GENERAR RESPUESTA',
-        type: 'button'
-      });
-      const joinAnswerOutput = createEl('textarea', {
-        id: 'twfoxtetrio-join-answer-output',
-        className: 'twfox-textarea',
-        attrs: { readonly: 'true', placeholder: 'Aqui saldra tu codigo FOXR:... para enviarle al Host' }
-      });
-      const joinCopyBtn = createEl('button', {
-        id: 'twfoxtetrio-join-copy-btn',
-        className: 'twfox-btn',
-        text: 'COPIAR RESPUESTA',
-        type: 'button'
-      });
-      const joinStatus = createEl('p', { id: 'twfoxtetrio-join-status', text: '' });
-      const joinBackBtn = createEl('button', {
-        id: 'twfoxtetrio-join-back-btn',
-        className: 'twfox-btn',
-        text: 'CANCELAR',
-        type: 'button'
-      });
-
-      const joinView = createEl('div', { id: 'twfoxtetrio-multi-join', className: 'scroller_block twfox-multi-card hidden' }, [
-        createEl('h2', { text: 'UNIRSE A SALA P2P' }),
-        joinOfferInput,
-        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [joinGenerateBtn, joinCopyBtn, joinBackBtn]),
-        joinAnswerOutput,
-        joinStatus
-      ]);
-
-      const lobbyRoleTitle = createEl('span', { className: 'twfox-badge', text: 'SALA P2P' });
-      const leaveRoomBtn = createEl('button', {
+      // Top bar (EXIT & clickable INVITE pill matching TETR.IO lobby top chrome)
+      const leaveRoomBtn = createEl('div', {
         id: 'twfoxtetrio-leave-room-btn',
-        className: 'twfox-btn',
-        text: 'SALIR DE SALA',
-        type: 'button'
+        className: 'ns',
+        text: 'EXIT',
+        attrs: { 'data-hover': 'hover', 'data-hit': 'back' }
       });
-
-      const pieceSelect = createEl('select', { id: 'twfoxtetrio-room-pieces', className: 'twfox-select' }, [
-        createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
-        createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
-        createEl('option', { text: 'CAOS MIX (19)', attrs: { value: 'chaos' } })
-      ]);
-      const garbageSelect = createEl('select', { id: 'twfoxtetrio-room-garbage', className: 'twfox-select' }, [
-        createEl('option', { text: 'BASURA 0.5x', attrs: { value: '0.5' } }),
-        createEl('option', { text: 'BASURA 1x', attrs: { value: '1' } }),
-        createEl('option', { text: 'BASURA 1.5x', attrs: { value: '1.5' } }),
-        createEl('option', { text: 'BASURA 2x', attrs: { value: '2' } })
-      ]);
-      const gravitySelect = createEl('select', { id: 'twfoxtetrio-room-gravity', className: 'twfox-select' }, [
-        createEl('option', { text: 'GRAV 1', attrs: { value: '1' } }),
-        createEl('option', { text: 'GRAV 2', attrs: { value: '2' } }),
-        createEl('option', { text: 'GRAV 3', attrs: { value: '3' } }),
-        createEl('option', { text: 'GRAV 5', attrs: { value: '5' } })
+      const invitePillCode = createEl('div', { className: 'twfox-invite-id', text: '#FOXP2P' });
+      const inviteBanner = createEl('div', { id: 'twfoxtetrio-lobby-invite-banner', className: 'ns', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } }, [
+        createEl('div', { className: 'twfox-invite-sub', text: 'CLICK TO GENERATE & COPY INVITE' }),
+        invitePillCode
       ]);
 
-      const hostGenInviteBtn = createEl('button', {
-        id: 'twfoxtetrio-host-gen-invite',
-        className: 'twfox-btn is-pri',
-        text: '+ GENERAR INVITACION',
-        type: 'button'
+      // Left column: PLAYERS
+      const playersHeading = createEl('h1', { className: 'twfox-col-heading ns', text: 'PLAYERS (1)' });
+      const playersList = createEl('div', { id: 'twfoxtetrio-lobby-players', className: 'twfox-player-list' });
+
+      // Center column tabs: INVITE / ROOM / GAME
+      const lobbyRoomTitle = createEl('h1', {
+        id: 'twfoxtetrio-lobby-room-title',
+        className: 'twfox-col-heading center ns',
+        text: 'FOXMOD PRIVATE ROOM'
       });
-      const hostCopyInviteBtn = createEl('button', {
-        id: 'twfoxtetrio-host-copy-invite',
-        className: 'twfox-btn',
-        text: 'COPIAR INVITE',
-        type: 'button'
-      });
+
+      const tabInviteBtn = createEl('div', { id: 'twfoxtetrio-lobby-tab-invite', className: 'twfox-room-tab active', text: 'INVITE', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } });
+      const tabRoomBtn = createEl('div', { id: 'twfoxtetrio-lobby-tab-room', className: 'twfox-room-tab', text: 'ROOM', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } });
+      const tabGameBtn = createEl('div', { id: 'twfoxtetrio-lobby-tab-game', className: 'twfox-room-tab', text: 'GAME', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } });
+
+      // INVITE pane (Host + Client join inside native center well)
+      const hostGenInviteBtn = createEl('button', { id: 'twfoxtetrio-host-gen-invite', className: 'twfox-btn is-pri', text: '+ GENERATE INVITE', type: 'button' });
+      const hostCopyInviteBtn = createEl('button', { id: 'twfoxtetrio-host-copy-invite', className: 'twfox-btn', text: 'COPY INVITE', type: 'button' });
       const hostOfferOutput = createEl('textarea', {
         id: 'twfoxtetrio-host-offer-output',
         className: 'twfox-textarea',
-        attrs: { readonly: 'true', placeholder: 'Genera un codigo para enviarselo a tu amigo por Discord...' }
+        attrs: { readonly: 'true', placeholder: 'Generate an invite code to send your friend on Discord...' }
       });
       const hostAnswerInput = createEl('textarea', {
         id: 'twfoxtetrio-host-answer-input',
         className: 'twfox-textarea',
-        attrs: { placeholder: 'Pega aqui el codigo FOXR:... que te devuelva tu amigo' }
+        attrs: { placeholder: 'Paste FOXR:... reply code from your friend here' }
       });
-      const hostAcceptBtn = createEl('button', {
-        id: 'twfoxtetrio-host-accept-btn',
-        className: 'twfox-btn is-pri',
-        text: 'CONECTAR JUGADOR',
-        type: 'button'
-      });
-      const hostInviteStatus = createEl('p', { text: '' });
-      const hostInviteBox = createEl('div', { id: 'twfoxtetrio-host-invite-box', className: 'twfox-multi-card' }, [
-        createEl('h2', { text: 'INVITAR AMIGOS (P2P)' }),
+      const hostAcceptBtn = createEl('button', { id: 'twfoxtetrio-host-accept-btn', className: 'twfox-btn is-pri', text: 'CONNECT PLAYER', type: 'button' });
+      const hostInviteStatus = createEl('p', { style: 'margin:0;color:#b89de0;', text: '' });
+      const hostInviteBox = createEl('div', { id: 'twfoxtetrio-host-invite-box', style: 'display:flex;flex-direction:column;gap:8px;' }, [
+        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'HOST SERVER P2P — Invite friends over Discord without external servers:' }),
         createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [hostGenInviteBtn, hostCopyInviteBtn]),
         hostOfferOutput,
         hostAnswerInput,
@@ -1309,74 +1540,131 @@
         hostInviteStatus
       ]);
 
-      const playersList = createEl('div', { id: 'twfoxtetrio-lobby-players', className: 'twfox-player-list' });
+      const joinOfferInput = createEl('textarea', {
+        id: 'twfoxtetrio-join-offer-input',
+        className: 'twfox-textarea',
+        attrs: { placeholder: 'Paste your friend Host FOX1:... invite code here' }
+      });
+      const joinGenerateBtn = createEl('button', { id: 'twfoxtetrio-join-generate-btn', className: 'twfox-btn is-pri', text: 'GENERATE REPLY', type: 'button' });
+      const joinAnswerOutput = createEl('textarea', {
+        id: 'twfoxtetrio-join-answer-output',
+        className: 'twfox-textarea',
+        attrs: { readonly: 'true', placeholder: 'Send this generated FOXR:... code back to Host' }
+      });
+      const joinCopyBtn = createEl('button', { id: 'twfoxtetrio-join-copy-btn', className: 'twfox-btn', text: 'COPY REPLY', type: 'button' });
+      const joinStatus = createEl('p', { id: 'twfoxtetrio-join-status', style: 'margin:0;color:#b89de0;', text: '' });
+      const joinBox = createEl('div', { id: 'twfoxtetrio-multi-join', className: 'hidden', style: 'display:flex;flex-direction:column;gap:8px;' }, [
+        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'JOIN P2P LOBBY — Paste Host invite, copy reply & wait for Host accept:' }),
+        joinOfferInput,
+        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [joinGenerateBtn, joinCopyBtn]),
+        joinAnswerOutput,
+        joinStatus
+      ]);
+
+      const centerTabInvite = createEl('div', { id: 'twfoxtetrio-center-invite' }, [hostInviteBox, joinBox]);
+
+      // ROOM pane
+      const roomInfoOwner = createEl('span', { text: 'HOST SERVER' });
+      const roomInfoStatus = createEl('span', { text: 'LOBBY' });
+      const centerTabRoom = createEl('div', { id: 'twfoxtetrio-center-room', className: 'hidden' }, [
+        createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'SERVER AUTHORITY' }), roomInfoOwner]),
+        createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'ROOM STATUS' }), roomInfoStatus]),
+        createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'TOPOLOGY' }), createEl('span', { text: 'WEBRTC DIRECT P2P' })])
+      ]);
+
+      // GAME pane
+      const pieceSelect = createEl('select', { id: 'twfoxtetrio-room-pieces', className: 'twfox-select' }, [
+        createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
+        createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
+        createEl('option', { text: 'CAOS MIX (19)', attrs: { value: 'chaos' } })
+      ]);
+      const garbageSelect = createEl('select', { id: 'twfoxtetrio-room-garbage', className: 'twfox-select' }, [
+        createEl('option', { text: '0.5x', attrs: { value: '0.5' } }),
+        createEl('option', { text: '1x', attrs: { value: '1' } }),
+        createEl('option', { text: '1.5x', attrs: { value: '1.5' } }),
+        createEl('option', { text: '2x', attrs: { value: '2' } })
+      ]);
+      const gravitySelect = createEl('select', { id: 'twfoxtetrio-room-gravity', className: 'twfox-select' }, [
+        createEl('option', { text: 'LEVEL 1', attrs: { value: '1' } }),
+        createEl('option', { text: 'LEVEL 2', attrs: { value: '2' } }),
+        createEl('option', { text: 'LEVEL 3', attrs: { value: '3' } }),
+        createEl('option', { text: 'LEVEL 5', attrs: { value: '5' } })
+      ]);
+      const centerTabGame = createEl('div', { id: 'twfoxtetrio-center-game', className: 'hidden' }, [
+        createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'PIECE SET' }), pieceSelect]),
+        createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'GARBAGE MULTIPLIER' }), garbageSelect]),
+        createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'GRAVITY LEVEL' }), gravitySelect])
+      ]);
+
+      function setCenterTab(tabName) {
+        setClass(tabInviteBtn, 'active', tabName === 'invite');
+        setClass(tabRoomBtn, 'active', tabName === 'room');
+        setClass(tabGameBtn, 'active', tabName === 'game');
+        setClass(centerTabInvite, 'hidden', tabName !== 'invite');
+        setClass(centerTabRoom, 'hidden', tabName !== 'room');
+        setClass(centerTabGame, 'hidden', tabName !== 'game');
+      }
+
+      tabInviteBtn.addEventListener('click', () => setCenterTab('invite'));
+      tabRoomBtn.addEventListener('click', () => setCenterTab('room'));
+      tabGameBtn.addEventListener('click', () => setCenterTab('game'));
+
+      const winnerBanner = createEl('div', { id: 'twfoxtetrio-multi-winner', className: 'twfox-room-savebar', text: 'HOST SERVER ACTIVE' });
+
+      // Right column: CHAT
       const chatLog = createEl('div', { id: 'twfoxtetrio-lobby-chat', className: 'twfox-chat-log' });
       const chatInput = createEl('input', {
         id: 'twfoxtetrio-lobby-chat-input',
         className: 'twfox-input',
-        attrs: { type: 'text', placeholder: 'Mensaje en el lobby...' }
+        attrs: { type: 'text', placeholder: 'message...' }
       });
-      const chatSendBtn = createEl('button', {
-        id: 'twfoxtetrio-lobby-chat-send',
-        className: 'twfox-btn',
-        text: 'ENVIAR',
-        type: 'button'
-      });
-      const winnerBanner = createEl('span', {
-        id: 'twfoxtetrio-multi-winner',
-        className: 'twfox-badge hidden',
-        text: ''
-      });
-      const hostStartBtn = createEl('button', {
-        id: 'twfoxtetrio-host-start-btn',
-        className: 'twfox-btn is-pri',
-        text: 'START MATCH',
-        type: 'button'
-      });
-      const clientReadyBtn = createEl('button', {
-        id: 'twfoxtetrio-client-ready-btn',
-        className: 'twfox-btn is-pri hidden',
-        text: 'READY / NOT READY',
-        type: 'button'
-      });
+      const chatSendBtn = createEl('button', { id: 'twfoxtetrio-lobby-chat-send', className: 'twfox-btn', text: 'SEND', type: 'button' });
 
-      const lobbyView = createEl('div', { id: 'twfoxtetrio-multi-lobby', className: 'hidden' }, [
-        createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
-          createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;' }, [lobbyRoleTitle, winnerBanner]),
-          leaveRoomBtn
-        ]),
-        createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
-          createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [pieceSelect, garbageSelect, gravitySelect]),
-          createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [hostStartBtn, clientReadyBtn])
-        ]),
-        createEl('div', { className: 'scroller_block twfox-multi-cols' }, [
-          hostInviteBox,
-          createEl('div', { className: 'twfox-multi-card' }, [
-            createEl('h2', { text: 'JUGADORES & CHAT' }),
-            playersList,
+      // Bottom 3-wing bar
+      const clientReadyBtn = createEl('div', { id: 'twfoxtetrio-client-ready-btn', className: 'twfox-footer-wing-btn hidden' }, [
+        createEl('div', { text: 'READY' }),
+        createEl('span', { text: 'CLICK TO TOGGLE READY STATUS' })
+      ]);
+      const startCountSub = createEl('span', { text: '1 PLAYER' });
+      const hostStartBtn = createEl('button', { id: 'twfoxtetrio-host-start-btn', className: 'twfox-footer-start-btn', type: 'button', attrs: { 'data-hover': 'hover', 'data-hit': 'confirm' } }, [
+        createEl('div', { text: 'START' }),
+        startCountSub
+      ]);
+      const lobbyModeTag = createEl('div', { className: 'twfox-footer-mode-tag', text: 'PENTOMINOS VS' });
+
+      const lobbyView = createEl('div', { id: 'twfoxtetrio-multi-lobby' }, [
+        createEl('div', { id: 'twfoxtetrio-lobby-top' }, [leaveRoomBtn, inviteBanner]),
+        createEl('div', { className: 'twfox-lobby-grid' }, [
+          createEl('div', { className: 'twfox-lobby-col' }, [playersHeading, playersList]),
+          createEl('div', { className: 'twfox-lobby-col' }, [
+            lobbyRoomTitle,
+            createEl('div', { className: 'twfox-lobby-tabs' }, [tabInviteBtn, tabRoomBtn, tabGameBtn]),
+            createEl('div', { className: 'twfox-room-center-scroll' }, [centerTabInvite, centerTabRoom, centerTabGame]),
+            winnerBanner
+          ]),
+          createEl('div', { className: 'twfox-lobby-col' }, [
+            createEl('h1', { className: 'twfox-col-heading right ns', text: 'CHAT' }),
             chatLog,
-            createEl('div', { style: 'display:flex;gap:8px;align-items:center;' }, [chatInput, chatSendBtn])
+            createEl('div', { className: 'twfox-chat-bar' }, [chatInput, chatSendBtn])
           ])
+        ]),
+        createEl('div', { className: 'twfox-lobby-footer' }, [
+          createEl('div', {}, [clientReadyBtn]),
+          hostStartBtn,
+          lobbyModeTag
         ])
       ]);
 
+      // In-game VS stage
       multiCanvas = createEl('canvas', {
         id: 'twfoxtetrio-multi-canvas',
         className: 'twfox-game-canvas',
         attrs: { width: '580', height: '540' }
       });
       const opponentsGrid = createEl('div', { id: 'twfoxtetrio-multi-opponents', className: 'twfox-opponents-grid' });
-      const backLobbyBtn = createEl('button', {
-        id: 'twfoxtetrio-back-lobby-btn',
-        className: 'twfox-btn',
-        text: 'VOLVER AL LOBBY',
-        type: 'button'
-      });
-      const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'hidden' }, [
-        createEl('div', { className: 'twfox-stage-bar' }, [
-          createEl('span', { className: 'twfox-badge', text: 'VS LIVE P2P' }),
-          backLobbyBtn
-        ]),
+      const backLobbyBtn = createEl('button', { id: 'twfoxtetrio-back-lobby-btn', className: 'twfox-btn', text: 'BACK TO LOBBY', type: 'button' });
+      const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'twfox-stage-inner hidden' }, [
+        createEl('div', { className: 'twfox-stage-bar' }, [createEl('span', { className: 'twfox-badge', text: 'VS LIVE P2P' }), backLobbyBtn]),
         createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, opponentsGrid])
       ]);
 
@@ -1392,12 +1680,16 @@
       }
 
       multiDom = {
-        entryView,
-        joinView,
         lobbyView,
         gameView,
-        lobbyRoleTitle,
+        lobbyRoomTitle,
+        lobbyModeTag,
+        playersHeading,
+        startCountSub,
+        roomInfoOwner,
+        roomInfoStatus,
         hostInviteBox,
+        joinBox,
         hostStartBtn,
         clientReadyBtn,
         pieceSelect,
@@ -1406,60 +1698,110 @@
         winnerBanner,
         playersList,
         chatLog,
-        opponentsGrid
+        opponentsGrid,
+        setCenterTab
       };
+
+      // #list_request style picker overlay (CREATE LOBBY / JOIN LOBBY)
+      const createBtn = createEl(
+        'div',
+        { id: 'twfoxtetrio-create-room-btn', className: 'scroller_item ns', attrs: { 'data-hover': 'hover', 'data-hit': 'hit2' } },
+        [
+          createEl('h1', { text: 'CREATE LOBBY' }),
+          createEl('p', { text: 'create a custom P2P room where your PC acts as the server' })
+        ]
+      );
+      const joinBtn = createEl(
+        'div',
+        { id: 'twfoxtetrio-join-room-btn', className: 'scroller_item ns', attrs: { 'data-hover': 'hover', 'data-hit': 'hit2' } },
+        [
+          createEl('h1', { text: 'JOIN LOBBY' }),
+          createEl('p', { text: 'connect to a friend room using their FOX1 invite code' })
+        ]
+      );
+      const reqBackBtn = createEl('div', { id: 'twfoxtetrio-req-back', className: 'ns', text: 'BACK', attrs: { 'data-hover': 'hover', 'data-hit': 'back' } });
+      reqBackBtn.addEventListener('click', closeMultiRequest);
+
+      multiRequestEl = createEl('div', { id: 'twfoxtetrio-multi-request' }, [
+        reqBackBtn,
+        createEl('div', { className: 'right_scroller ns' }, [createBtn, joinBtn])
+      ]);
+      multiRequestEl.addEventListener('click', function (ev) {
+        if (ev && ev.target === multiRequestEl) closeMultiRequest();
+      });
+
+      const menusHost = document.getElementById('menus') || document.body;
+      if (menusHost) menusHost.appendChild(multiRequestEl);
 
       let pendingInvitePeerId = null;
 
       createBtn.addEventListener('click', function () {
+        closeMultiRequest();
         if (!p2pRoom) return;
         const hostName = (runtimeApi.getState().selfUsername || 'HOST').toUpperCase();
         bindPeerSession(p2pRoom.createHostServer({ hostName }));
         hostOfferOutput.value = '';
         hostAnswerInput.value = '';
         hostInviteStatus.textContent = '';
+        setCenterTab('invite');
         showMultiSubMode('lobby');
+        navigateMenu('foxmod_multi');
       });
 
       joinBtn.addEventListener('click', function () {
+        closeMultiRequest();
+        teardownPeerSession();
         joinOfferInput.value = '';
         joinAnswerOutput.value = '';
         joinStatus.textContent = '';
+        lobbyRoomTitle.textContent = 'JOIN FOXMOD ROOM';
+        playersHeading.textContent = 'PLAYERS (0)';
+        playersList.innerHTML = '';
+        chatLog.innerHTML = '';
+        winnerBanner.textContent = 'PASTE HOST INVITE TO JOIN';
         showMultiSubMode('join');
-      });
-
-      joinBackBtn.addEventListener('click', function () {
-        teardownPeerSession();
-        showMultiSubMode('entry');
+        navigateMenu('foxmod_multi');
       });
 
       leaveRoomBtn.addEventListener('click', function () {
         teardownPeerSession();
-        showMultiSubMode('entry');
+        navigateMenu('foxmod');
       });
 
       backLobbyBtn.addEventListener('click', function () {
         showMultiSubMode('lobby');
       });
 
-      hostGenInviteBtn.addEventListener('click', async function () {
+      async function generateHostInvite() {
         if (!peerSession || peerSession.getSnapshot().role !== 'host') return;
-        hostInviteStatus.textContent = 'Generando codigo WebRTC...';
+        hostInviteStatus.textContent = 'Generating WebRTC invite code...';
         try {
           const invite = await peerSession.createInvite();
           pendingInvitePeerId = invite.peerId;
           hostOfferOutput.value = invite.code;
           copyToClipboard(invite.code);
-          hostInviteStatus.textContent = 'Codigo copiado! Envialo por Discord y pega abajo la respuesta.';
+          hostInviteStatus.textContent = 'Invite copied! Send on Discord and paste friend FOXR reply below.';
         } catch (err) {
           hostInviteStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
+        }
+      }
+
+      hostGenInviteBtn.addEventListener('click', generateHostInvite);
+      inviteBanner.addEventListener('click', function () {
+        if (peerSession && peerSession.getSnapshot().role === 'host') {
+          if (hostOfferOutput.value) {
+            copyToClipboard(hostOfferOutput.value);
+            hostInviteStatus.textContent = 'Invite copied to clipboard!';
+          } else {
+            generateHostInvite();
+          }
         }
       });
 
       hostCopyInviteBtn.addEventListener('click', function () {
         if (hostOfferOutput.value) {
           copyToClipboard(hostOfferOutput.value);
-          hostInviteStatus.textContent = 'Codigo copiado al portapapeles.';
+          hostInviteStatus.textContent = 'Invite copied to clipboard.';
         }
       });
 
@@ -1470,7 +1812,7 @@
           hostAnswerInput.value = '';
           hostOfferOutput.value = '';
           pendingInvitePeerId = null;
-          hostInviteStatus.textContent = 'Jugador conectado al servidor!';
+          hostInviteStatus.textContent = 'Player connected to your Host Server!';
         } catch (err) {
           hostInviteStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
         }
@@ -1478,7 +1820,7 @@
 
       joinGenerateBtn.addEventListener('click', async function () {
         if (!p2pRoom) return;
-        joinStatus.textContent = 'Procesando invitacion...';
+        joinStatus.textContent = 'Generating reply code...';
         try {
           const playerName = (runtimeApi.getState().selfUsername || 'PLAYER').toUpperCase();
           const client = p2pRoom.createClientPeer({ playerName });
@@ -1486,7 +1828,7 @@
           const answerCode = await client.joinFromInvite(joinOfferInput.value);
           joinAnswerOutput.value = answerCode;
           copyToClipboard(answerCode);
-          joinStatus.textContent = 'Respuesta copiada! Enviasela al Host para entrar al lobby.';
+          joinStatus.textContent = 'Reply copied! Send to Host on Discord and wait for accept.';
         } catch (err) {
           joinStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
         }
@@ -1495,7 +1837,7 @@
       joinCopyBtn.addEventListener('click', function () {
         if (joinAnswerOutput.value) {
           copyToClipboard(joinAnswerOutput.value);
-          joinStatus.textContent = 'Respuesta copiada al portapapeles.';
+          joinStatus.textContent = 'Reply copied to clipboard.';
         }
       });
 
@@ -1537,10 +1879,10 @@
         'div',
         {
           id: 'twfoxtetrio-pane-multi',
-          className: 'right_scroller hidden thidden twfox-native-scroller',
+          className: 'right_scroller hidden thidden',
           attrs: { 'data-menuview': 'foxmod_multi' }
         },
-        [entryView, joinView, lobbyView, gameView]
+        [lobbyView, gameView]
       );
     }
 
@@ -1806,7 +2148,11 @@
           if (typeof ev.preventDefault === 'function') ev.preventDefault();
           if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
           if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
-          goBack();
+          if (multiRequestOpen) {
+            closeMultiRequest();
+          } else {
+            goBack();
+          }
           return;
         }
         if (isTextInputTarget(ev.target)) return;
