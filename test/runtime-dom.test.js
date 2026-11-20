@@ -188,6 +188,34 @@ function createFakeDomEnvironment(protocol) {
   menus.appendChild(backBtn);
   menus.appendChild(exitElectron);
   menus.appendChild(homeMenu);
+
+  const customContainer = new FakeElement('div', 'custom_content_container', '');
+  const bwInput = new FakeElement('input', '', 'room_config_item');
+  bwInput.setAttribute('data-index', 'boardwidth');
+  bwInput.setAttribute('type', 'number');
+  bwInput.value = '10';
+  const objTypeSpinner = new FakeElement('div', '', 'room_config_item room_config_spinner');
+  objTypeSpinner.setAttribute('data-index', 'objective_type');
+  objTypeSpinner.textContent = 'lines';
+  const objCountInput = new FakeElement('input', '', 'room_config_item');
+  objCountInput.setAttribute('data-index', 'objective_count');
+  objCountInput.setAttribute('type', 'number');
+  objCountInput.value = '40';
+  const levelsCheck = new FakeElement('input', '', 'room_config_item');
+  levelsCheck.setAttribute('data-index', 'levels');
+  levelsCheck.setAttribute('type', 'checkbox');
+  levelsCheck.checked = false;
+  customContainer.appendChild(bwInput);
+  customContainer.appendChild(objTypeSpinner);
+  customContainer.appendChild(objCountInput);
+  customContainer.appendChild(levelsCheck);
+  const startCustomBtn = new FakeElement('div', 'start_custom', 'start_game');
+  let customStarts = 0;
+  startCustomBtn.addEventListener('click', () => {
+    customStarts += 1;
+  });
+  menus.appendChild(customContainer);
+  menus.appendChild(startCustomBtn);
   const meUsername = new FakeElement('h1', 'me_username', '');
   meUsername.textContent = 'fox';
   const pbBlitz = new FakeElement('h1', 'pbdisplay_blitz_inner', '');
@@ -264,6 +292,10 @@ function createFakeDomEnvironment(protocol) {
     exitElectron,
     sigConfig,
     sigAbout,
+    customContainer,
+    getCustomStarts() {
+      return customStarts;
+    },
     storage,
     openedExternalUrls,
     meUsername,
@@ -573,8 +605,29 @@ test('bundled mod displays and sorts live multiplayer VS leaderboard on the righ
   assert.equal(env.body.classList.contains('twfox-multi-lb-active'), false);
 });
 
-test('Home menu injects FOXMOD natively into #menus with Practice, Multiplayer P2P, Config, and Credits', () => {
+test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide, Pentominoes, Marathon), userConfig keybinds, Multi P2P, Config, and Credits', () => {
   const env = createFakeDomEnvironment('https:');
+  // Configure real custom TETR.IO controls (like TWFoxcrack: KEYJ/KEYL/KEYK/DIGIT8/KEYZ) + instant handling
+  env.storage.set(
+    'userConfig',
+    JSON.stringify({
+      controls: {
+        style: 'custom',
+        custom: {
+          moveLeft: ['KEYJ'],
+          moveRight: ['KEYL'],
+          softDrop: ['KEYK'],
+          hardDrop: ['SPACE', 'DIGIT8'],
+          rotateCCW: ['KEYZ'],
+          rotateCW: ['KEYX'],
+          rotate180: ['KEYA'],
+          hold: ['KEYC'],
+          retry: ['KEYR']
+        }
+      },
+      handling: { das: 8, arr: 0, sdf: 41 }
+    })
+  );
   env.triggerDOMContentLoaded();
 
   const foxmodBtn = env.elements.get('twfoxtetrio-home-foxmod');
@@ -585,7 +638,8 @@ test('Home menu injects FOXMOD natively into #menus with Practice, Multiplayer P
   assert.equal(foxmodBtn.querySelector('h1').textContent, 'FOXMOD');
 
   const foxView = env.elements.get('twfoxtetrio-view-foxmod');
-  const practicePane = env.elements.get('twfoxtetrio-pane-practice');
+  const practiceMenuPane = env.elements.get('twfoxtetrio-pane-practice');
+  const pentominoStagePane = env.elements.get('twfoxtetrio-pane-pentomino');
   const multiPane = env.elements.get('twfoxtetrio-pane-multi');
   const configPane = env.elements.get('twfoxtetrio-pane-config');
   const creditsPane = env.elements.get('twfoxtetrio-pane-credits');
@@ -601,14 +655,51 @@ test('Home menu injects FOXMOD natively into #menus with Practice, Multiplayer P
   assert.equal(env.homeMenu.classList.contains('hidden'), true);
   assert.equal(foxView.classList.contains('hidden'), false);
 
-  // Enter PRACTICA (Pentominoes) via native banner card, then click #back
+  // Enter PRACTICA submenu -> shows 4WIDE, PENTOMINOS, MARATHON
   env.elements.get('twfoxtetrio-card-practice').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
   assert.equal(env.headerText.textContent, 'PRACTICA');
-  assert.equal(practicePane.classList.contains('hidden'), false);
+  assert.equal(practiceMenuPane.classList.contains('hidden'), false);
   assert.equal(foxView.classList.contains('hidden'), true);
+  assert.ok(env.elements.get('twfoxtetrio-prac-4wide'));
+  assert.ok(env.elements.get('twfoxtetrio-prac-pentomino'));
+  assert.ok(env.elements.get('twfoxtetrio-prac-marathon'));
+
+  // Clicking 4WIDE configures TETR.IO custom boardwidth=4 & launches real engine (#start_custom)
+  env.elements.get('twfoxtetrio-prac-4wide').click();
+  assert.equal(env.getCustomStarts(), 1);
+  assert.equal(env.customContainer.children[0].value, '4');
+  assert.equal(env.customContainer.children[1].textContent, 'none');
+
+  // Reopen FOXMOD -> PRACTICA -> click MARATHON -> configures 150 lines & levels=true
+  foxmodBtn.click();
+  env.elements.get('twfoxtetrio-card-practice').click();
+  env.elements.get('twfoxtetrio-prac-marathon').click();
+  assert.equal(env.getCustomStarts(), 2);
+  assert.equal(env.customContainer.children[0].value, '10');
+  assert.equal(env.customContainer.children[1].textContent, 'lines');
+  assert.equal(env.customContainer.children[2].value, '150');
+  assert.equal(env.customContainer.children[3].checked, true);
+
+  // Reopen FOXMOD -> PRACTICA -> click PENTOMINOS -> full-stage TETR.IO-styled Pentominoes + custom userConfig controls
+  foxmodBtn.click();
+  env.elements.get('twfoxtetrio-card-practice').click();
+  env.elements.get('twfoxtetrio-prac-pentomino').click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_pentomino');
+  assert.equal(pentominoStagePane.classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-practice-pieces').value, 'pentomino');
 
+  // Custom keybinds read from userConfig (DIGIT8 hard-drops, J/L/Z/C work cleanly)
+  const settings = env.context.__TWFOX_INTERNAL__.foxmodCanvas.readTetrioUserSettings();
+  assert.deepEqual(Array.from(settings.binds.moveLeft), ['KEYJ']);
+  assert.deepEqual(Array.from(settings.binds.hardDrop), ['SPACE', 'DIGIT8']);
+  assert.equal(settings.sdf, 41);
+
+  env.dispatchDocEvent('keydown', { key: '8', code: 'Digit8' });
+
+  // Back returns PENTOMINOS -> PRACTICA -> FOXMOD
+  env.backBtn.click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
   env.backBtn.click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
   assert.equal(foxView.classList.contains('hidden'), false);

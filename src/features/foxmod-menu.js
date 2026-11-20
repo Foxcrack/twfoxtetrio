@@ -46,15 +46,47 @@
     ),
     practice: buildPixelBadgeSvg(
       [
-        '..1111...11111..',
-        '..2...2..2......',
-        '..2...2..2222...',
-        '..2222.......2..',
-        '..2..........2..',
-        '..3......3333...',
-        '..3.............'
+        '1111..1111...1111',
+        '2...2.2...2.2....',
+        '2222..2222..2....',
+        '2.....2..2..2....',
+        '3.....3...3..3333',
+        '.................'
       ],
       ['#ffe580', '#f5a623', '#b36b0c']
+    ),
+    fourWide: buildPixelBadgeSvg(
+      [
+        '1...1..1...1.....',
+        '1...1..1...1.....',
+        '22222..2.2.2.....',
+        '....2..22.22.....',
+        '....3..3...3.....',
+        '.................'
+      ],
+      ['#ffe580', '#f5a623', '#b36b0c']
+    ),
+    pentomino: buildPixelBadgeSvg(
+      [
+        '..1111...11111...',
+        '..2...2..2.......',
+        '..2...2..2222....',
+        '..2222.......2...',
+        '..2..........2...',
+        '..3......3333....'
+      ],
+      ['#ff99aa', '#e84863', '#a32238']
+    ),
+    marathon: buildPixelBadgeSvg(
+      [
+        '1...1..1111..1111',
+        '11.11..2...2..2..',
+        '2.2.2..2222...2..',
+        '2...2..2..2...2..',
+        '3...3..3...3..3..',
+        '.................'
+      ],
+      ['#99ccff', '#4b8aff', '#2351b8']
     ),
     multi: buildPixelBadgeSvg(
       [
@@ -97,7 +129,7 @@
       cardId: 'twfoxtetrio-card-practice',
       icon: ICONS.practice,
       title: 'PRACTICA',
-      subtitle: 'pentominoes (12 pieces), 40 lines, blitz & chaos mix',
+      subtitle: '4-wide, pentominoes, marathon & custom solo modes',
       bg: '#382a18',
       top: '#705226',
       left: '#4f3a1d',
@@ -146,13 +178,95 @@
     }
   ];
 
+  const CUSTOM_SOLO_PRESETS = {
+    fourWide: {
+      bagtype: '7-bag',
+      spinbonuses: 'all-mini+',
+      combotable: 'multiplier',
+      allclears: true,
+      seed_random: true,
+      can_retry: true,
+      stock: 0,
+      clutch: true,
+      nolockout: true,
+      boardwidth: 4,
+      boardheight: 20,
+      survivalmode: 'none',
+      allow180: true,
+      kickset: 'SRS+',
+      allow_harddrop: true,
+      display_next: true,
+      display_hold: true,
+      nextcount: 5,
+      infinite_movement: false,
+      infinite_hold: false,
+      display_shadow: true,
+      are: 0,
+      lineclear_are: 0,
+      g: 0.02,
+      levels: false,
+      objective_type: 'none',
+      topoutisclear: false,
+      mission: '4-WIDE PRACTICE',
+      slot_counter1: 'stopwatch',
+      slot_counter2: 'lines',
+      slot_counter3: 'pieces',
+      slot_counter4: 'attack',
+      slot_counter5: 'score'
+    },
+    marathon: {
+      bagtype: '7-bag',
+      spinbonuses: 'all-mini+',
+      combotable: 'multiplier',
+      allclears: true,
+      seed_random: true,
+      can_retry: true,
+      stock: 0,
+      clutch: true,
+      nolockout: false,
+      boardwidth: 10,
+      boardheight: 20,
+      survivalmode: 'none',
+      allow180: true,
+      kickset: 'SRS+',
+      allow_harddrop: true,
+      display_next: true,
+      display_hold: true,
+      nextcount: 5,
+      infinite_movement: false,
+      infinite_hold: false,
+      display_shadow: true,
+      are: 0,
+      lineclear_are: 0,
+      levels: true,
+      masterlevels: false,
+      startinglevel: 1,
+      levelstatic: true,
+      levelstaticspeed: 10,
+      levelgbase: 0.8,
+      levelgspeed: 0.007,
+      locktime: 30,
+      objective_type: 'lines',
+      objective_count: 150,
+      objective_result: 'score',
+      topoutisclear: true,
+      mission: 'MARATHON 150 LINES',
+      slot_counter1: 'stopwatch',
+      slot_counter2: 'lines',
+      slot_counter3: 'level',
+      slot_counter4: '---empty---',
+      slot_counter5: 'score'
+    }
+  };
+
   const VIEW_META = {
     home: { header: 'HOME', footer: 'WELCOME TO TETR.IO!', back: null },
-    foxmod: { header: 'FOXMOD', footer: 'pick a foxmod mode', back: 'home' },
-    foxmod_practice: {
-      header: 'PRACTICA',
-      footer: 'pentominoes & custom solo practice',
-      back: 'foxmod'
+    foxmod: { header: 'FOXMOD', footer: 'pick a foxmod section', back: 'home' },
+    foxmod_practice: { header: 'PRACTICA', footer: 'pick a practice mode', back: 'foxmod' },
+    foxmod_pentomino: {
+      header: 'PENTOMINOS',
+      footer: '12 pentominoes · real TETR.IO controls & skin',
+      back: 'foxmod_practice'
     },
     foxmod_multi: {
       header: 'MULTIJUGADOR',
@@ -240,20 +354,20 @@
 
   const CREDIT_ITEMS = [
     {
-      name: 'Pentominoes Practice & Host-Server P2P Rooms',
-      detail: '12-pentomino stacker engine + WebRTC host-as-server custom multiplayer rooms.'
+      name: 'Practice Modes (4Wide, Pentominoes & Marathon)',
+      detail: 'Launches 4Wide & Marathon on TETR.IO engine + TETR.IO-skinned 12-Pentominoes.'
     },
     {
-      name: 'Blitz PB Delta HUD',
-      detail: 'Real-time points needed to beat your Blitz PB, switching green at overtake.'
+      name: 'Host-Server P2P Custom Rooms',
+      detail: 'Creator acts as room server over WebRTC with Pentominoes / Tetrominoes / Chaos.'
     },
     {
-      name: '40 Lines PB Pace Timer',
-      detail: 'Green countdown from your 40L PB time to zero, switching red into overtime.'
+      name: 'Blitz PB Delta & 40 Lines PB Pace HUDs',
+      detail: 'Real-time top HUD trackers dynamically adapting to PB and quick retry.'
     },
     {
       name: 'Multiplayer Live VS Leaderboard',
-      detail: 'Sorted real-time VS ranking with [KO] badges and automatic #killfeed offset.'
+      detail: 'Sorted real-time VS standings with [KO] tracking and automatic #killfeed shift.'
     },
     {
       name: 'Loading Screen Attribution',
@@ -288,6 +402,29 @@
   width: auto;
   display: block;
 }
+.twfox-stage-scroller {
+  padding-left: 0 !important;
+  background: transparent !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.twfox-stage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.twfox-game-canvas {
+  background: transparent;
+  display: block;
+  max-width: 96vw;
+  max-height: 76vh;
+}
 .twfox-native-scroller > .scroller_block {
   box-sizing: border-box;
 }
@@ -304,11 +441,7 @@
   font-size: 2.1em;
   color: #ffbe8e !important;
 }
-.twfox-scroller-header p {
-  margin: 0;
-  color: #9bb0e6;
-  font-size: 1.1em;
-}
+.twfox-scroller-header p { margin: 0; color: #9bb0e6; font-size: 1.1em; }
 .twfox-native-row {
   display: flex;
   flex-wrap: wrap;
@@ -318,28 +451,16 @@
   padding: 0.7em 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
-.twfox-native-row:first-of-type {
-  border-top: 0;
-}
-.twfox-native-label {
-  display: block;
-  font-size: 1.25em;
-  font-weight: 700;
-  color: #edf1ff;
-}
-.twfox-native-desc {
-  display: block;
-  margin-top: 2px;
-  font-size: 0.95em;
-  color: #8f9fc9;
-}
+.twfox-native-row:first-of-type { border-top: 0; }
+.twfox-native-label { display: block; font-size: 1.25em; font-weight: 700; color: #edf1ff; }
+.twfox-native-desc { display: block; margin-top: 2px; font-size: 0.95em; color: #8f9fc9; }
 .twfox-btn {
   font-family: HUN, sans-serif;
-  font-size: 1.15em;
+  font-size: 1.05em;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.55em 1.1em;
+  padding: 0.45em 1em;
   border-radius: 3px;
   cursor: pointer;
   color: #dbe3ff;
@@ -364,12 +485,12 @@
 }
 .twfox-select, .twfox-input {
   font-family: HUN, sans-serif;
-  font-size: 1.1em;
+  font-size: 1.05em;
   font-weight: 700;
-  padding: 0.45em 0.75em;
+  padding: 0.4em 0.7em;
   border-radius: 3px;
   color: #fff;
-  background: #0a0d14;
+  background: rgba(10, 13, 20, 0.92);
   border: 2px solid #2e3854;
 }
 .twfox-textarea {
@@ -385,69 +506,22 @@
   border: 2px solid #2e3854;
   resize: vertical;
 }
-.twfox-toggle {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-.twfox-toggle-input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
+.twfox-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; flex: 0 0 auto; }
+.twfox-toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
 .twfox-toggle-track {
-  width: 48px;
-  height: 26px;
-  border-radius: 3px;
-  background: #0a0d14;
-  border: 2px solid #2c3550;
-  position: relative;
-  transition: background 140ms ease, border-color 140ms ease;
+  width: 48px; height: 26px; border-radius: 3px; background: #0a0d14;
+  border: 2px solid #2c3550; position: relative; transition: background 140ms ease, border-color 140ms ease;
 }
 .twfox-toggle-track::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 2px;
-  background: #6a7aa3;
-  transition: transform 140ms ease, background 140ms ease;
+  content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+  border-radius: 2px; background: #6a7aa3; transition: transform 140ms ease, background 140ms ease;
 }
-.twfox-toggle-input:checked + .twfox-toggle-track {
-  background: #3d2215;
-  border-color: #cf6427;
-}
-.twfox-toggle-input:checked + .twfox-toggle-track::after {
-  transform: translateX(22px);
-  background: #ff9c54;
-}
+.twfox-toggle-input:checked + .twfox-toggle-track { background: #3d2215; border-color: #cf6427; }
+.twfox-toggle-input:checked + .twfox-toggle-track::after { transform: translateX(22px); background: #ff9c54; }
 .twfox-range-wrap { display: flex; align-items: center; gap: 8px; }
 .twfox-step-btn { padding: 0.3em 0.7em; font-size: 1.1em; }
 .twfox-range-input { width: 120px; accent-color: #ff8c42; cursor: pointer; }
-.twfox-range-val {
-  min-width: 28px;
-  text-align: right;
-  font-size: 1.2em;
-  font-weight: 800;
-  color: #ffbe8e;
-}
-.twfox-canvas-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.twfox-game-canvas {
-  background: #080b12;
-  border: 2px solid #2e3854;
-  border-radius: 4px;
-  max-width: 100%;
-}
+.twfox-range-val { min-width: 28px; text-align: right; font-size: 1.2em; font-weight: 800; color: #ffbe8e; }
 .twfox-multi-cols {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -462,16 +536,8 @@
   flex-direction: column;
   gap: 8px;
 }
-.twfox-multi-card h2 {
-  margin: 0;
-  font-size: 1.4em;
-  color: #ffbe8e;
-}
-.twfox-multi-card p {
-  margin: 0;
-  font-size: 1em;
-  color: #93a2cc;
-}
+.twfox-multi-card h2 { margin: 0; font-size: 1.4em; color: #ffbe8e; }
+.twfox-multi-card p { margin: 0; font-size: 1em; color: #93a2cc; }
 .twfox-player-list, .twfox-chat-log {
   display: flex;
   flex-direction: column;
@@ -491,21 +557,15 @@
 .twfox-multi-arena {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 18px;
 }
-.twfox-opponents-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  flex: 1 1 240px;
-}
+.twfox-opponents-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .twfox-opp-card {
-  background: #121622;
-  border: 2px solid #2b3550;
-  border-radius: 4px;
-  padding: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid #ffffff;
+  padding: 6px;
   text-align: center;
 }
 .twfox-badge {
@@ -517,11 +577,6 @@
   background: rgba(255, 140, 66, 0.16);
   border: 1px solid rgba(255, 140, 66, 0.42);
   color: #ffbe8e;
-}
-.twfox-key-hint {
-  font-size: 0.95em;
-  color: #8f9fc9;
-  text-align: center;
 }
 .hidden { display: none; }
 `;
@@ -603,6 +658,56 @@
     return result;
   }
 
+  function collectIndexedItems(rootEl) {
+    const result = [];
+    if (!rootEl) return result;
+    if (typeof rootEl.querySelectorAll === 'function') {
+      try {
+        const found = rootEl.querySelectorAll('.room_config_item');
+        if (Array.isArray(found) || (found && found.length)) {
+          for (const item of found) {
+            if (item.getAttribute && item.getAttribute('data-index')) {
+              result.push(item);
+            }
+          }
+          if (result.length > 0) return result;
+        }
+      } catch (_) {}
+    }
+    const stack = Array.from(rootEl.children || []);
+    while (stack.length > 0) {
+      const node = stack.shift();
+      if (node.getAttribute && node.getAttribute('data-index')) {
+        result.push(node);
+      }
+      if (node.children) stack.push(...node.children);
+    }
+    return result;
+  }
+
+  function applyCustomSoloPreset(presetMap) {
+    const container = document.getElementById('custom_content_container');
+    const startBtn = document.getElementById('start_custom');
+    if (!container || !startBtn) return false;
+
+    for (const item of collectIndexedItems(container)) {
+      const key = item.getAttribute('data-index');
+      if (!Object.prototype.hasOwnProperty.call(presetMap, key)) continue;
+      const val = presetMap[key];
+      const inputType = item.getAttribute('type');
+      if (inputType === 'checkbox') {
+        item.checked = Boolean(val);
+      } else if (item.classList && item.classList.contains('room_config_spinner')) {
+        item.textContent = String(val);
+      } else {
+        item.value = String(val);
+      }
+    }
+
+    startBtn.click();
+    return true;
+  }
+
   function initFoxmodMenu(runtimeApi) {
     ensureStyle();
 
@@ -615,12 +720,12 @@
     const toggleControls = [];
     const rangeControls = [];
 
-    // Practice state
+    // Practice Pentominoes stage
     let practiceGame = null;
     let practiceController = null;
     let practiceCanvas = null;
 
-    // Multiplayer P2P state
+    // Multiplayer P2P
     let peerSession = null;
     let peerUnsub = null;
     let multiGame = null;
@@ -712,9 +817,11 @@
 
       if (targetView === 'foxmod_config') {
         syncConfigControls(runtimeApi.getConfig());
-      } else if (targetView === 'foxmod_practice' && practiceController) {
+      } else if (targetView === 'foxmod_pentomino' && practiceController) {
+        practiceController.reloadUserSettings();
         practiceController.start();
       } else if (targetView === 'foxmod_multi' && multiSubMode === 'playing' && multiController) {
+        multiController.reloadUserSettings();
         multiController.start();
       }
     }
@@ -725,27 +832,31 @@
       navigateMenu(meta && meta.back ? meta.back : 'home');
     }
 
+    function makeGiantBanner(spec, onClick) {
+      const item = createEl(
+        'div',
+        {
+          id: spec.cardId,
+          className: 'scroller_item scroller_item_giant has_image has_description ns',
+          style: `background-color:${spec.bg};border-top:3px solid ${spec.top};border-left:3px solid ${spec.left};border-bottom:3px solid ${spec.bottom};`,
+          attrs: { 'data-hover': 'hover', 'data-hit': spec.hit || 'hit2' }
+        },
+        [
+          createEl('div', { className: 'twfox-menu-svg', html: spec.icon }),
+          createEl('h1', { style: `color:${spec.titleColor}`, text: spec.title }),
+          createEl('p', { style: `color:${spec.descColor}`, text: spec.subtitle })
+        ]
+      );
+      item.addEventListener('click', onClick);
+      return item;
+    }
+
     function buildHubScroller() {
-      const items = HUB_CARDS.map((cardSpec) => {
-        const item = createEl(
-          'div',
-          {
-            id: cardSpec.cardId,
-            className: 'scroller_item scroller_item_giant has_image has_description ns',
-            style: `background-color:${cardSpec.bg};border-top:3px solid ${cardSpec.top};border-left:3px solid ${cardSpec.left};border-bottom:3px solid ${cardSpec.bottom};`,
-            attrs: { 'data-hover': 'hover', 'data-hit': 'hit2' }
-          },
-          [
-            createEl('div', { className: 'twfox-menu-svg', html: cardSpec.icon }),
-            createEl('h1', { style: `color:${cardSpec.titleColor}`, text: cardSpec.title }),
-            createEl('p', { style: `color:${cardSpec.descColor}`, text: cardSpec.subtitle })
-          ]
-        );
-        item.addEventListener('click', function () {
+      const items = HUB_CARDS.map((cardSpec) =>
+        makeGiantBanner(cardSpec, function () {
           navigateMenu(cardSpec.view);
-        });
-        return item;
-      });
+        })
+      );
 
       return createEl(
         'div',
@@ -758,7 +869,79 @@
       );
     }
 
-    function buildPracticeScroller() {
+    function buildPracticeMenuScroller() {
+      const items = [
+        makeGiantBanner(
+          {
+            cardId: 'twfoxtetrio-prac-4wide',
+            icon: ICONS.fourWide,
+            title: '4WIDE',
+            subtitle: 'practice stacking combos on a 4-wide well (real TETR.IO engine)',
+            bg: '#382a18',
+            top: '#705226',
+            left: '#4f3a1d',
+            bottom: '#1a120a',
+            titleColor: '#ffd28c',
+            descColor: '#c9954c',
+            hit: 'confirm'
+          },
+          function () {
+            hideFoxmodScrollersImmediately();
+            applyCustomSoloPreset(CUSTOM_SOLO_PRESETS.fourWide);
+          }
+        ),
+        makeGiantBanner(
+          {
+            cardId: 'twfoxtetrio-prac-pentomino',
+            icon: ICONS.pentomino,
+            title: 'PENTOMINOS',
+            subtitle: '12-piece pentominoes with your TETR.IO skin & real controls',
+            bg: '#3b1c23',
+            top: '#752d3c',
+            left: '#52212c',
+            bottom: '#1c0c10',
+            titleColor: '#ffb5c2',
+            descColor: '#c96b7c',
+            hit: 'hit2'
+          },
+          function () {
+            if (practiceGame) practiceGame.reset();
+            navigateMenu('foxmod_pentomino');
+          }
+        ),
+        makeGiantBanner(
+          {
+            cardId: 'twfoxtetrio-prac-marathon',
+            icon: ICONS.marathon,
+            title: 'MARATHON',
+            subtitle: 'classic 150-line speed progression marathon (real TETR.IO engine)',
+            bg: '#1c263e',
+            top: '#1d3164',
+            left: '#1e2a48',
+            bottom: '#0e0f13',
+            titleColor: '#88afff',
+            descColor: '#5169c0',
+            hit: 'confirm'
+          },
+          function () {
+            hideFoxmodScrollersImmediately();
+            applyCustomSoloPreset(CUSTOM_SOLO_PRESETS.marathon);
+          }
+        )
+      ];
+
+      return createEl(
+        'div',
+        {
+          id: 'twfoxtetrio-pane-practice',
+          className: 'right_scroller hidden thidden',
+          attrs: { 'data-menuview': 'foxmod_practice' }
+        },
+        items
+      );
+    }
+
+    function buildPentominoStageScroller() {
       const pieceSelect = createEl('select', { id: 'twfoxtetrio-practice-pieces', className: 'twfox-select' }, [
         createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
         createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
@@ -776,7 +959,7 @@
       const restartBtn = createEl('button', {
         id: 'twfoxtetrio-practice-restart',
         className: 'twfox-btn is-pri',
-        text: 'REINICIAR [R]',
+        text: 'RETRY',
         type: 'button',
         attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
       });
@@ -784,7 +967,7 @@
       practiceCanvas = createEl('canvas', {
         id: 'twfoxtetrio-practice-canvas',
         className: 'twfox-game-canvas',
-        attrs: { width: '430', height: '420' }
+        attrs: { width: '620', height: '560' }
       });
 
       if (pentominoEngine && foxmodCanvas) {
@@ -818,29 +1001,13 @@
       return createEl(
         'div',
         {
-          id: 'twfoxtetrio-pane-practice',
-          className: 'right_scroller hidden thidden twfox-native-scroller',
-          attrs: { 'data-menuview': 'foxmod_practice' }
+          id: 'twfoxtetrio-pane-pentomino',
+          className: 'right_scroller hidden thidden twfox-stage-scroller',
+          attrs: { 'data-menuview': 'foxmod_pentomino' }
         },
         [
-          createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
-            createEl('div', {}, [
-              createEl('h1', { text: 'PRACTICA // PENTOMINOS' }),
-              createEl('p', { text: 'Elige tu set de piezas y modalidad offline.' })
-            ]),
-            createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;' }, [
-              pieceSelect,
-              modeSelect,
-              restartBtn
-            ])
-          ]),
-          createEl('div', { className: 'scroller_block twfox-canvas-panel' }, [
-            practiceCanvas,
-            createEl('div', {
-              className: 'twfox-key-hint',
-              text: 'ARROWS: Mover · UP/X: Rotar · Z: Anti · A: 180° · SPACE: Drop · C/SHIFT: Hold · R: Reiniciar'
-            })
-          ])
+          createEl('div', { className: 'twfox-stage-bar' }, [pieceSelect, modeSelect, restartBtn]),
+          practiceCanvas
         ]
       );
     }
@@ -868,6 +1035,7 @@
       setClass(multiDom.gameView, 'hidden', nextSub !== 'playing');
       if (multiController) {
         if (nextSub === 'playing' && activeFoxView === 'foxmod_multi') {
+          multiController.reloadUserSettings();
           multiController.start();
         } else {
           multiController.stop();
@@ -963,12 +1131,12 @@
         for (const opp of opponents) {
           const miniCanvas = createEl('canvas', {
             attrs: { width: '100', height: '200' },
-            style: 'background:#090c14;border:1px solid #2b344d;border-radius:3px;'
+            style: 'background:#000;display:block;'
           });
           foxmodCanvas.renderMiniBoard(miniCanvas, opp.board, opp.alive);
           multiDom.opponentsGrid.appendChild(
             createEl('div', { className: 'twfox-opp-card' }, [
-              createEl('div', { style: 'font-weight:800;margin-bottom:4px;color:#ffbe8e', text: opp.name }),
+              createEl('div', { style: 'font-weight:800;margin-bottom:4px;color:#fff', text: opp.name }),
               miniCanvas,
               createEl('div', { style: 'margin-top:4px;color:#9aa8cf', text: `L:${opp.lines || 0} · ATK:${opp.attack || 0}` })
             ])
@@ -1172,7 +1340,7 @@
       multiCanvas = createEl('canvas', {
         id: 'twfoxtetrio-multi-canvas',
         className: 'twfox-game-canvas',
-        attrs: { width: '400', height: '420' }
+        attrs: { width: '580', height: '540' }
       });
       const opponentsGrid = createEl('div', { id: 'twfoxtetrio-multi-opponents', className: 'twfox-opponents-grid' });
       const backLobbyBtn = createEl('button', {
@@ -1182,11 +1350,11 @@
         type: 'button'
       });
       const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'hidden' }, [
-        createEl('div', { className: 'scroller_block twfox-scroller-header' }, [
+        createEl('div', { className: 'twfox-stage-bar' }, [
           createEl('span', { className: 'twfox-badge', text: 'VS LIVE P2P' }),
           backLobbyBtn
         ]),
-        createEl('div', { className: 'scroller_block twfox-multi-arena' }, [multiCanvas, opponentsGrid])
+        createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, opponentsGrid])
       ]);
 
       if (foxmodCanvas) {
@@ -1549,7 +1717,8 @@
 
       const built = [
         ['foxmod', buildHubScroller()],
-        ['foxmod_practice', buildPracticeScroller()],
+        ['foxmod_practice', buildPracticeMenuScroller()],
+        ['foxmod_pentomino', buildPentominoStageScroller()],
         ['foxmod_multi', buildMultiScroller()],
         ['foxmod_config', buildConfigScroller()],
         ['foxmod_credits', buildCreditsScroller()]
@@ -1591,7 +1760,7 @@
         [
           createEl('div', { className: 'twfox-menu-svg', html: ICONS.fox }),
           createEl('h1', { text: 'FOXMOD' }),
-          createEl('p', { text: 'practica pentominos, salas P2P, config & credits' })
+          createEl('p', { text: 'practica, salas P2P, config & credits' })
         ]
       );
       btn.addEventListener('click', function () {
@@ -1619,7 +1788,7 @@
         }
         if (isTextInputTarget(ev.target)) return;
         const activeCtrl =
-          activeFoxView === 'foxmod_practice'
+          activeFoxView === 'foxmod_pentomino'
             ? practiceController
             : activeFoxView === 'foxmod_multi' && multiSubMode === 'playing'
               ? multiController

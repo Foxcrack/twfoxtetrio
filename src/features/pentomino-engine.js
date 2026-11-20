@@ -10,27 +10,27 @@
   const TETROMINO_KEYS = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
 
   const RAW_PIECES = {
-    // 12 Free Pentominoes
-    PF: { size: 3, color: '#ff5d47', cells: [[1, 0], [2, 0], [0, 1], [1, 1], [1, 2]] },
-    PI: { size: 5, color: '#39d5ff', cells: [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]] },
-    PL: { size: 4, color: '#ff9c2a', cells: [[0, 1], [0, 2], [1, 2], [2, 2], [3, 2]] },
-    PN: { size: 4, color: '#c46dff', cells: [[0, 1], [1, 1], [1, 2], [2, 2], [3, 2]] },
-    PP: { size: 3, color: '#ff5ca8', cells: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]] },
-    PT: { size: 3, color: '#9c4dff', cells: [[0, 0], [1, 0], [2, 0], [1, 1], [1, 2]] },
-    PU: { size: 3, color: '#45e898', cells: [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]] },
-    PV: { size: 3, color: '#4a88ff', cells: [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]] },
-    PW: { size: 3, color: '#ffd93b', cells: [[0, 0], [0, 1], [1, 1], [1, 2], [2, 2]] },
-    PX: { size: 3, color: '#ff7b29', cells: [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2]] },
-    PY: { size: 4, color: '#85ff47', cells: [[1, 1], [0, 2], [1, 2], [2, 2], [3, 2]] },
-    PZ: { size: 3, color: '#ff4274', cells: [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]] },
+    // 12 Free Pentominoes mapped to native TETR.IO skin colors/slots
+    PF: { size: 3, slot: 'z', color: '#ce5761', cells: [[1, 0], [2, 0], [0, 1], [1, 1], [1, 2]] },
+    PI: { size: 5, slot: 'i', color: '#52ccac', cells: [[0, 2], [1, 2], [2, 2], [3, 2], [4, 2]] },
+    PL: { size: 4, slot: 'l', color: '#ce8542', cells: [[0, 1], [0, 2], [1, 2], [2, 2], [3, 2]] },
+    PN: { size: 4, slot: 't', color: '#c352ce', cells: [[0, 1], [1, 1], [1, 2], [2, 2], [3, 2]] },
+    PP: { size: 3, slot: 'o', color: '#cec652', cells: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]] },
+    PT: { size: 3, slot: 't', color: '#c352ce', cells: [[0, 0], [1, 0], [2, 0], [1, 1], [1, 2]] },
+    PU: { size: 3, slot: 's', color: '#80cc52', cells: [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]] },
+    PV: { size: 3, slot: 'j', color: '#6652ce', cells: [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2]] },
+    PW: { size: 3, slot: 'l', color: '#ce8542', cells: [[0, 0], [0, 1], [1, 1], [1, 2], [2, 2]] },
+    PX: { size: 3, slot: 'o', color: '#cec652', cells: [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2]] },
+    PY: { size: 4, slot: 's', color: '#80cc52', cells: [[1, 1], [0, 2], [1, 2], [2, 2], [3, 2]] },
+    PZ: { size: 3, slot: 'z', color: '#ce5761', cells: [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]] },
     // 7 Standard Tetrominoes
-    I: { size: 4, color: '#39d5ff', cells: [[0, 1], [1, 1], [2, 1], [3, 1]] },
-    J: { size: 3, color: '#4a88ff', cells: [[0, 0], [0, 1], [1, 1], [2, 1]] },
-    L: { size: 3, color: '#ff9c2a', cells: [[2, 0], [0, 1], [1, 1], [2, 1]] },
-    O: { size: 2, color: '#ffd93b', cells: [[0, 0], [1, 0], [0, 1], [1, 1]], noRotate: true },
-    S: { size: 3, color: '#6ee845', cells: [[1, 0], [2, 0], [0, 1], [1, 1]] },
-    T: { size: 3, color: '#c46dff', cells: [[1, 0], [0, 1], [1, 1], [2, 1]] },
-    Z: { size: 3, color: '#ff5d47', cells: [[0, 0], [1, 0], [1, 1], [2, 1]] }
+    I: { size: 4, slot: 'i', color: '#52ccac', cells: [[0, 1], [1, 1], [2, 1], [3, 1]] },
+    J: { size: 3, slot: 'j', color: '#6652ce', cells: [[0, 0], [0, 1], [1, 1], [2, 1]] },
+    L: { size: 3, slot: 'l', color: '#ce8542', cells: [[2, 0], [0, 1], [1, 1], [2, 1]] },
+    O: { size: 2, slot: 'o', color: '#cec652', cells: [[0, 0], [1, 0], [0, 1], [1, 1]], noRotate: true },
+    S: { size: 3, slot: 's', color: '#80cc52', cells: [[1, 0], [2, 0], [0, 1], [1, 1]] },
+    T: { size: 3, slot: 't', color: '#c352ce', cells: [[1, 0], [0, 1], [1, 1], [2, 1]] },
+    Z: { size: 3, slot: 'z', color: '#ce5761', cells: [[0, 0], [1, 0], [1, 1], [2, 1]] }
   };
 
   function rotateCellsCw(cells, size) {
@@ -46,6 +46,7 @@
     PIECE_DEFS[key] = {
       key,
       size: spec.size,
+      slot: spec.slot,
       color: spec.color,
       noRotate: Boolean(spec.noRotate),
       rotations
@@ -254,7 +255,7 @@
       for (let i = 0; i < safeCount; i++) {
         board.shift();
         const hole = Math.floor(rng() * BOARD_WIDTH);
-        const row = new Array(BOARD_WIDTH).fill('#70798c');
+        const row = new Array(BOARD_WIDTH).fill('gb');
         row[hole] = null;
         board.push(row);
       }
@@ -293,7 +294,7 @@
       const def = PIECE_DEFS[active.key];
       for (const [gx, gy] of getCells(active.key, active.rot, active.x, active.y)) {
         if (gy >= 0 && gy < TOTAL_HEIGHT && gx >= 0 && gx < BOARD_WIDTH) {
-          board[gy][gx] = def.color;
+          board[gy][gx] = def.slot;
         }
       }
 
@@ -423,7 +424,20 @@
       }
     }
 
-    function step(dtMs, softDropHeld) {
+    function instantMove(dx) {
+      let moved = false;
+      while (move(dx, 0)) moved = true;
+      return moved;
+    }
+
+    function sonicDrop() {
+      if (!active || finished) return 0;
+      let dropped = 0;
+      while (move(0, 1)) dropped++;
+      return dropped;
+    }
+
+    function step(dtMs, softDropHeld, sdfMultiplier) {
       if (finished) return;
       const delta = Math.max(0, Math.min(100, Number(dtMs) || 0));
       elapsedMs += delta;
@@ -443,15 +457,20 @@
 
       if (!active) return;
 
-      const baseDropMs = Math.max(85, 800 - (opts.gravityLevel - 1) * 70);
-      const intervalMs = softDropHeld ? Math.min(45, baseDropMs / 10) : baseDropMs;
-      gravityAccMs += delta;
-      while (gravityAccMs >= intervalMs && active && !finished) {
-        gravityAccMs -= intervalMs;
-        if (!collides(active.key, active.rot, active.x, active.y + 1)) {
-          active.y += 1;
-          if (softDropHeld) score += 1;
-          lockTimerMs = 0;
+      if (softDropHeld && Number(sdfMultiplier) >= 41) {
+        sonicDrop();
+      } else {
+        const baseDropMs = Math.max(85, 800 - (opts.gravityLevel - 1) * 70);
+        const sdf = Math.max(1, Number(sdfMultiplier) || 6);
+        const intervalMs = softDropHeld ? Math.max(12, baseDropMs / sdf) : baseDropMs;
+        gravityAccMs += delta;
+        while (gravityAccMs >= intervalMs && active && !finished) {
+          gravityAccMs -= intervalMs;
+          if (!collides(active.key, active.rot, active.x, active.y + 1)) {
+            active.y += 1;
+            if (softDropHeld) score += 1;
+            lockTimerMs = 0;
+          }
         }
       }
 
@@ -498,7 +517,7 @@
         for (const [gx, gy] of getCells(active.key, active.rot, active.x, active.y)) {
           const vy = gy - BUFFER_HEIGHT;
           if (vy >= 0 && vy < VISIBLE_HEIGHT && gx >= 0 && gx < BOARD_WIDTH) {
-            cells[vy][gx] = def.color;
+            cells[vy][gx] = def.slot;
           }
         }
       }
@@ -545,6 +564,8 @@
 
     return {
       move,
+      instantMove,
+      sonicDrop,
       rotate,
       hardDrop,
       hold,

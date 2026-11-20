@@ -33,8 +33,11 @@ En modos **multijugador** (Tetra League, Public Rooms, Private Rooms y Royale �
 Al iniciar TETR.IO Desktop y durante la pantalla de carga inicial (`preload`), muestra `Modded By: TWFoxcrack` debajo del título/logo.
 
 ### 5. Hub FOXMOD en Home (`foxmod-menu`, `pentomino-engine`, `p2p-room`)
-Añade un acceso **`FOXMOD`** en el menú principal (`HOME`, debajo de `ABOUT`) que abre un hub con 4 secciones propias:
-- 🧩 **Práctica (`PRACTICA`):** Motor independiente con los **12 pentominós reales**, tetrominós o mezcla **Caos (19 piezas)** en modos `ZEN`, `40 LINES` y `BLITZ 2:00` (con Hold, Next x5, Ghost, rotaciones y clears de hasta 5 líneas `PENTA!`).
+Añade un acceso **`FOXMOD`** en el menú principal (`HOME`, debajo de `ABOUT`) completamente integrado en el menú nativo de TETR.IO:
+- 🧩 **Práctica (`PRACTICA`):** Submenú nativo con tres modos:
+  - **`4WIDE`:** Lanza directamente una partida **4-Wide** en el motor real de TETR.IO Desktop.
+  - **`PENTOMINOS`:** Tablero a pantalla completa con la estética y sprites reales de TETR.IO (`/res/skins/minos/tetrio.png`), **12 pentominós reales** (y opción Mix Caos / Tetrominós) adaptado automáticamente a tus **controles y handling (`DAS`, `ARR`, `SDF`)** de TETR.IO.
+  - **`MARATHON`:** Lanza directamente **Marathon (150 líneas con niveles)** en el motor real de TETR.IO Desktop.
 - 🌐 **Multijugador P2P (`MULTIJUGADOR`):** Salas personalizadas donde **el usuario creador se convierte en el servidor (Host)** vía WebRTC directo PC-a-PC sin servidor central. El Host elige el modo (Pentominós, Tetrominós o Caos), basura y gravedad, invita amigos mediante código `FOX1:` / `FOXR:`, chatea en el lobby e inicia rondas VS con envío de basura y mini-tableros en tiempo real.
 - ⚙️ **Config (`CONFIG`):** Activa/desactiva y personaliza los HUDs (`Blitz PB`, `40 Lines Pace`, `Multiplayer VS Leaderboard`) o restablece valores por defecto.
 - ❤️ **Créditos (`CREDITS`):** Versión del mod, módulos incluidos, **`Modded By: TWFoxcrack`** y enlace al repositorio en GitHub.
