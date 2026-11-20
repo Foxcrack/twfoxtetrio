@@ -19,6 +19,9 @@ const SOURCE_FILES = [
   'src/features/blitz-pb-tracker.js',
   'src/features/forty-lines-pb-tracker.js',
   'src/features/multiplayer-vs-leaderboard.js',
+  'src/features/pentomino-engine.js',
+  'src/features/p2p-room.js',
+  'src/features/foxmod-canvas.js',
   'src/features/foxmod-menu.js'
 ];
 

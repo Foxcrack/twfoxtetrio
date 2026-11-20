@@ -1,0 +1,155 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+require('../src/features/p2p-room.js');
+const p2p = globalThis.__TWFOX_INTERNAL__.p2pRoom;
+
+function createLoopbackRtcFactory() {
+  const endpoints = new Map();
+  let seq = 1;
+
+  function createPairChannel(localPc, remotePc, label) {
+    const a = { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null };
+    const b = { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null };
+
+    a.send = (data) => {
+      if (b.onmessage) queueMicrotask(() => b.onmessage({ data }));
+    };
+    b.send = (data) => {
+      if (a.onmessage) queueMicrotask(() => a.onmessage({ data }));
+    };
+    a.close = () => {
+      a.readyState = 'closed';
+      b.readyState = 'closed';
+      if (a.onclose) a.onclose();
+      if (b.onclose) b.onclose();
+    };
+    b.close = a.close;
+
+    localPc._pendingOpen = () => {
+      a.readyState = 'open';
+      b.readyState = 'open';
+      if (remotePc.ondatachannel) remotePc.ondatachannel({ channel: b });
+      if (a.onopen) a.onopen();
+      if (b.onopen) b.onopen();
+    };
+
+    return a;
+  }
+
+  return function rtcFactory() {
+    const id = 'rtc-' + seq++;
+    const pc = {
+      id,
+      iceGatheringState: 'complete',
+      localDescription: null,
+      remoteDescription: null,
+      ondatachannel: null,
+      _channels: [],
+      _pendingOpen: null,
+      createDataChannel(label) {
+        const ch = {
+          label,
+          _placeholder: true,
+          readyState: 'connecting',
+          onopen: null,
+          onmessage: null,
+          onclose: null
+        };
+        pc._pendingChannel = ch;
+        return ch;
+      },
+      async createOffer() {
+        return { type: 'offer', sdp: 'v=0\r\nfrom=' + id };
+      },
+      async createAnswer() {
+        return { type: 'answer', sdp: 'v=0\r\nfrom=' + id };
+      },
+      async setLocalDescription(desc) {
+        pc.localDescription = desc;
+      },
+      async setRemoteDescription(desc) {
+        pc.remoteDescription = desc;
+        if (desc.type === 'answer') {
+          const remoteId = desc.sdp.split('from=')[1];
+          const remotePc = endpoints.get(remoteId);
+          const pairCh = createPairChannel(pc, remotePc, 'foxmod-room');
+          // Transfer host listener callbacks bound to _pendingChannel
+          if (pc._pendingChannel) {
+            pairCh.onopen = pc._pendingChannel.onopen;
+            pairCh.onmessage = pc._pendingChannel.onmessage;
+            pairCh.onclose = pc._pendingChannel.onclose;
+            pc._pendingChannel.send = pairCh.send;
+            pc._pendingChannel.close = pairCh.close;
+            Object.defineProperty(pc._pendingChannel, 'readyState', {
+              get: () => pairCh.readyState
+            });
+          }
+          pc._pendingOpen();
+        }
+      },
+      close() {}
+    };
+    endpoints.set(id, pc);
+    return pc;
+  };
+}
+
+test('signal encode/decode round-trips offer and answer descriptors cleanly', async () => {
+  const payload = { role: 'offer', peerId: 'p2', sdp: { type: 'offer', sdp: 'abc123' } };
+  const encoded = await p2p.encodeSignal(payload);
+  assert.ok(encoded.startsWith('FOX1:') || encoded.startsWith('FOX0:'));
+  const decoded = await p2p.decodeSignal(encoded);
+  assert.deepEqual(decoded, payload);
+});
+
+test('HostServer runs custom P2P room lifecycle, relays settings/boards/attacks, and crowns winner', async () => {
+  const rtcFactory = createLoopbackRtcFactory();
+  const host = p2p.createHostServer({ hostName: 'TWFoxcrack', rtcFactory });
+  const client = p2p.createClientPeer({ playerName: 'Maekrix', rtcFactory });
+
+  const hostEvents = [];
+  const clientEvents = [];
+  host.subscribe((snap, ev, detail) => hostEvents.push({ snap, ev, detail }));
+  client.subscribe((snap, ev, detail) => clientEvents.push({ snap, ev, detail }));
+
+  const invite = await host.createInvite();
+  const answer = await client.joinFromInvite(invite.code);
+  await host.acceptAnswer(invite.peerId, answer);
+
+  await new Promise((r) => setTimeout(r, 30));
+
+  let hostSnap = host.getSnapshot();
+  let clientSnap = client.getSnapshot();
+  assert.equal(hostSnap.players.length, 2);
+  assert.equal(clientSnap.connected, true);
+  assert.equal(clientSnap.players.some((p) => p.name === 'Maekrix'), true);
+
+  host.updateSettings({ pieceSet: 'chaos', garbageMultiplier: 2, gravityLevel: 3 });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(client.getSnapshot().room.pieceSet, 'chaos');
+  assert.equal(client.getSnapshot().room.garbageMultiplier, 2);
+
+  host.startMatch();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(client.getSnapshot().room.status, 'playing');
+
+  // Client sends 4 garbage -> routed to Host server
+  client.sendSelfAttack(4, 'QUAD');
+  await new Promise((r) => setTimeout(r, 20));
+  const garbageEv = hostEvents.find((e) => e.ev === 'garbage');
+  assert.ok(garbageEv);
+  assert.equal(garbageEv.detail.amount, 4);
+
+  // Client tops out -> Host awards win to TWFoxcrack and broadcasts round_end
+  client.reportSelfKo();
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(host.getSnapshot().room.status, 'results');
+  assert.equal(host.getSnapshot().room.winner, 'TWFoxcrack');
+  assert.equal(client.getSnapshot().room.winner, 'TWFoxcrack');
+
+  client.close();
+  host.close();
+});

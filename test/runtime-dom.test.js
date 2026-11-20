@@ -557,7 +557,7 @@ test('bundled mod displays and sorts live multiplayer VS leaderboard on the righ
   assert.equal(env.body.classList.contains('twfox-multi-lb-active'), false);
 });
 
-test('Home menu injects FOXMOD item and opens interactive Config & Credits panel', () => {
+test('Home menu injects FOXMOD Hub with Practice, Multiplayer P2P Host, Config, and Credits sections', () => {
   const env = createFakeDomEnvironment('https:');
   env.triggerDOMContentLoaded();
 
@@ -568,16 +568,44 @@ test('Home menu injects FOXMOD item and opens interactive Config & Credits panel
   assert.equal(foxmodBtn.getAttribute('data-hit'), 'hit1');
   assert.equal(foxmodBtn.querySelector('h1').textContent, 'FOXMOD');
 
-  // Click FOXMOD banner to open the panel
+  // Click FOXMOD banner to open on FOXMOD HUB
   foxmodBtn.click();
   const overlay = env.elements.get('twfoxtetrio-foxmod-overlay');
+  const hubPane = env.elements.get('twfoxtetrio-pane-hub');
+  const practicePane = env.elements.get('twfoxtetrio-pane-practice');
+  const multiPane = env.elements.get('twfoxtetrio-pane-multi');
   const configPane = env.elements.get('twfoxtetrio-pane-config');
   const creditsPane = env.elements.get('twfoxtetrio-pane-credits');
+
   assert.ok(overlay.classList.contains('is-open'));
-  assert.equal(configPane.classList.contains('hidden'), false);
+  assert.equal(hubPane.classList.contains('hidden'), false);
+  assert.equal(practicePane.classList.contains('hidden'), true);
+  assert.equal(multiPane.classList.contains('hidden'), true);
+  assert.equal(configPane.classList.contains('hidden'), true);
   assert.equal(creditsPane.classList.contains('hidden'), true);
 
-  // Toggle Blitz enabled off via UI checkbox -> updates runtime config & persists
+  // Enter PRACTICA (Pentominoes) via Hub card, then press Escape to go back to Hub
+  env.elements.get('twfoxtetrio-card-practice').click();
+  assert.equal(hubPane.classList.contains('hidden'), true);
+  assert.equal(practicePane.classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-practice-pieces').value, 'pentomino');
+  env.dispatchDocEvent('keydown', { key: 'Escape', code: 'Escape' });
+  assert.equal(overlay.classList.contains('is-open'), true);
+  assert.equal(hubPane.classList.contains('hidden'), false);
+
+  // Enter MULTIJUGADOR via Hub card and create a Host-Server P2P room
+  env.elements.get('twfoxtetrio-card-multi').click();
+  assert.equal(multiPane.classList.contains('hidden'), false);
+  env.elements.get('twfoxtetrio-create-room-btn').click();
+  assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-lobby-players').children.length, 1);
+
+  // Enter CONFIG via Hub card -> toggle Blitz off & step maxRows
+  env.elements.get('twfoxtetrio-back-hub').click();
+  env.elements.get('twfoxtetrio-card-config').click();
+  assert.equal(configPane.classList.contains('hidden'), false);
+
   const checkboxes = configPane.querySelectorAll('.twfox-toggle-input');
   assert.equal(checkboxes.length, 7);
   checkboxes[0].checked = false;
@@ -587,20 +615,17 @@ test('Home menu injects FOXMOD item and opens interactive Config & Credits panel
   const persisted = JSON.parse(env.storage.get('twfoxtetrio_config_v1'));
   assert.equal(persisted.blitzTracker.enabled, false);
 
-  // Increase maxRows via + stepper button
   const stepBtns = configPane.querySelectorAll('.twfox-step-btn');
   assert.equal(stepBtns.length, 2);
   stepBtns[1].click();
   assert.equal(env.context.__TWFOX_TETRIO__.getConfig().multiplayerLeaderboard.maxRows, 13);
   assert.equal(env.elements.get('twfoxtetrio-maxrows-value').textContent, '13');
 
-  // Switch to Credits tab and verify attribution & external link handling
+  // Switch to CREDITS tab and verify attribution & external link handling
   env.elements.get('twfoxtetrio-tab-credits').click();
   assert.equal(configPane.classList.contains('hidden'), true);
   assert.equal(creditsPane.classList.contains('hidden'), false);
-
-  const authorText = creditsPane.querySelector('.twfox-credits-author').textContent;
-  assert.match(authorText, /TWFoxcrack/);
+  assert.match(creditsPane.querySelector('.twfox-credits-author').textContent, /TWFoxcrack/);
 
   env.elements.get('twfoxtetrio-github-link').click();
   assert.deepEqual(env.openedExternalUrls, ['https://github.com/Foxcrack/twfoxtetrio']);
@@ -613,7 +638,10 @@ test('Home menu injects FOXMOD item and opens interactive Config & Credits panel
   assert.equal(checkboxes[0].checked, true);
   assert.equal(env.elements.get('twfoxtetrio-maxrows-value').textContent, '12');
 
-  // Escape closes the modal cleanly
+  // Escape from subview returns to Hub, second Escape closes overlay completely
+  env.dispatchDocEvent('keydown', { key: 'Escape', code: 'Escape' });
+  assert.equal(hubPane.classList.contains('hidden'), false);
+  assert.equal(overlay.classList.contains('is-open'), true);
   env.dispatchDocEvent('keydown', { key: 'Escape', code: 'Escape' });
   assert.equal(overlay.classList.contains('is-open'), false);
 
