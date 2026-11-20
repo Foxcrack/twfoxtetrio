@@ -32,6 +32,11 @@ En modos **multijugador** (Tetra League, Public Rooms, Private Rooms y Royale �
 ### 4. Crédito en pantalla de carga (`loading-credit`)
 Al iniciar TETR.IO Desktop y durante la pantalla de carga inicial (`preload`), muestra `Modded By: TWFoxcrack` debajo del título/logo.
 
+### 5. Menú FOXMOD en Home (`foxmod-menu`)
+Añade un acceso **`FOXMOD`** en el menú principal (`HOME`, debajo de `ABOUT`) con el estilo nativo de TETR.IO:
+- ⚙️ **Config (`CONFIG`):** Permite activar/desactivar cada módulo del HUD, ajustar opciones (como el subtítulo PB, el signo `-` o el límite de jugadores en la leaderboard VS y mostrarla en Quick Play) y restablecer valores por defecto con guardado automático.
+- ❤️ **Créditos (`CREDITS`):** Muestra la versión del mod, el listado de módulos incluidos, el crédito **`Modded By: TWFoxcrack`** y el enlace al repositorio en GitHub.
+
 ---
 
 ## 📦 Instalación (Windows - TETR.IO Desktop)
@@ -85,6 +90,7 @@ twfoxtetrio/
 │       ├── blitz-pb-tracker.js            # HUD superior para BLITZ (rojo -> verde)
 │       ├── forty-lines-logic.js           # Lógica pura del pace de 40 Lines
 │       ├── forty-lines-pb-tracker.js      # HUD superior para 40 LINES (verde -> rojo)
+│       ├── foxmod-menu.js                 # Botón FOXMOD en Home con panel de Configuración y Créditos
 │       ├── loading-credit.js              # Texto "Modded By: TWFoxcrack" al iniciar/cargar
 │       ├── multiplayer-logic.js           # Cálculo de VS y roster en vivo para multijugador
 │       └── multiplayer-vs-leaderboard.js  # Leaderboard lateral derecha de VS en tiempo real

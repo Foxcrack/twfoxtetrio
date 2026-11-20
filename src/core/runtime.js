@@ -46,23 +46,25 @@
     };
   }
 
+  function applyConfigPatch(target, patch) {
+    if (!patch || typeof patch !== 'object') return false;
+    let changed = false;
+    for (const sectionKey of Object.keys(DEFAULT_CONFIG)) {
+      if (patch[sectionKey] && typeof patch[sectionKey] === 'object') {
+        Object.assign(target[sectionKey], patch[sectionKey]);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   function loadConfig() {
     const base = cloneDefaults();
     try {
       const raw = root.localStorage ? root.localStorage.getItem(CONFIG_STORAGE_KEY) : null;
       if (!raw) return base;
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        if (parsed.blitzTracker && typeof parsed.blitzTracker === 'object') {
-          Object.assign(base.blitzTracker, parsed.blitzTracker);
-        }
-        if (parsed.fortyLinesTracker && typeof parsed.fortyLinesTracker === 'object') {
-          Object.assign(base.fortyLinesTracker, parsed.fortyLinesTracker);
-        }
-        if (parsed.multiplayerLeaderboard && typeof parsed.multiplayerLeaderboard === 'object') {
-          Object.assign(base.multiplayerLeaderboard, parsed.multiplayerLeaderboard);
-        }
-      }
+      applyConfigPatch(base, parsed);
     } catch (_) {}
     return base;
   }
@@ -505,7 +507,7 @@
   }
 
   const api = {
-    version: '0.3.0',
+    version: '0.4.0',
     getState() {
       return {
         ...state,
@@ -520,19 +522,16 @@
       };
     },
     updateConfig(patch) {
-      if (patch && typeof patch === 'object') {
-        if (patch.blitzTracker && typeof patch.blitzTracker === 'object') {
-          Object.assign(config.blitzTracker, patch.blitzTracker);
-        }
-        if (patch.fortyLinesTracker && typeof patch.fortyLinesTracker === 'object') {
-          Object.assign(config.fortyLinesTracker, patch.fortyLinesTracker);
-        }
-        if (patch.multiplayerLeaderboard && typeof patch.multiplayerLeaderboard === 'object') {
-          Object.assign(config.multiplayerLeaderboard, patch.multiplayerLeaderboard);
-        }
+      if (applyConfigPatch(config, patch)) {
         saveConfig(config);
         emitState();
       }
+      return this.getConfig();
+    },
+    resetConfig() {
+      config = cloneDefaults();
+      saveConfig(config);
+      emitState();
       return this.getConfig();
     },
     subscribe(listener) {

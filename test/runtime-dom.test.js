@@ -25,6 +25,15 @@ function createFakeDomEnvironment(protocol) {
     contains(c) {
       return this.set.has(c);
     }
+    toggle(c, force) {
+      const shouldAdd = force === undefined ? !this.set.has(c) : Boolean(force);
+      if (shouldAdd) {
+        this.add(c);
+      } else {
+        this.remove(c);
+      }
+      return shouldAdd;
+    }
   }
 
   class FakeElement {
@@ -32,10 +41,21 @@ function createFakeDomEnvironment(protocol) {
       this.tagName = tag.toUpperCase();
       this.id = id || '';
       this.children = [];
+      this.parentNode = null;
       this.attributes = {};
+      this.listeners = new Map();
+      this.checked = false;
+      this.value = '';
+      this.type = '';
       this._textContent = '';
       this.classList = new FakeClassList(this, classes);
       if (this.id) elements.set(this.id, this);
+    }
+    get nextSibling() {
+      if (!this.parentNode) return null;
+      const idx = this.parentNode.children.indexOf(this);
+      if (idx === -1 || idx + 1 >= this.parentNode.children.length) return null;
+      return this.parentNode.children[idx + 1];
     }
     get className() {
       return Array.from(this.classList.set).join(' ');
@@ -70,20 +90,58 @@ function createFakeDomEnvironment(protocol) {
       return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null;
     }
     appendChild(child) {
+      child.parentNode = this;
       this.children.push(child);
       if (child.id) elements.set(child.id, child);
       return child;
     }
-    querySelector(sel) {
-      if (sel.startsWith('.')) {
-        const cls = sel.slice(1);
-        for (const child of this.children) {
-          if (child.classList.contains(cls)) return child;
-          const nested = child.querySelector(sel);
-          if (nested) return nested;
-        }
+    insertBefore(child, refNode) {
+      child.parentNode = this;
+      if (child.id) elements.set(child.id, child);
+      const idx = refNode ? this.children.indexOf(refNode) : -1;
+      if (idx === -1) {
+        this.children.push(child);
+      } else {
+        this.children.splice(idx, 0, child);
       }
-      return null;
+      return child;
+    }
+    addEventListener(type, fn) {
+      if (!this.listeners.has(type)) this.listeners.set(type, []);
+      this.listeners.get(type).push(fn);
+    }
+    dispatchEvent(type, ev) {
+      const eventObj = Object.assign(
+        {
+          type,
+          target: this,
+          preventDefault() {},
+          stopPropagation() {}
+        },
+        ev || {}
+      );
+      for (const fn of this.listeners.get(type) || []) {
+        fn(eventObj);
+      }
+    }
+    click() {
+      this.dispatchEvent('click');
+    }
+    querySelectorAll(sel) {
+      const results = [];
+      for (const child of this.children) {
+        const matches =
+          (sel.startsWith('.') && child.classList.contains(sel.slice(1))) ||
+          (sel.startsWith('#') && child.id === sel.slice(1)) ||
+          child.tagName.toLowerCase() === sel.toLowerCase();
+        if (matches) results.push(child);
+        results.push(...child.querySelectorAll(sel));
+      }
+      return results;
+    }
+    querySelector(sel) {
+      const all = this.querySelectorAll(sel);
+      return all.length > 0 ? all[0] : null;
     }
   }
 
@@ -112,6 +170,12 @@ function createFakeDomEnvironment(protocol) {
   const body = new FakeElement('body', '', '');
   const head = new FakeElement('head', '', '');
   const menus = new FakeElement('div', 'menus', '');
+  const homeMenu = new FakeElement('div', 'home_menu', 'right_scroller');
+  const sigConfig = new FakeElement('div', 'sig_config', 'scroller_item scroller_item_giant');
+  const sigAbout = new FakeElement('div', 'sig_about', 'scroller_item scroller_item_giant');
+  homeMenu.appendChild(sigConfig);
+  homeMenu.appendChild(sigAbout);
+  menus.appendChild(homeMenu);
   const meUsername = new FakeElement('h1', 'me_username', '');
   meUsername.textContent = 'fox';
   const pbBlitz = new FakeElement('h1', 'pbdisplay_blitz_inner', '');
@@ -128,6 +192,7 @@ function createFakeDomEnvironment(protocol) {
   const docListeners = new Map();
   const storage = new Map();
   const intervals = new Map();
+  const openedExternalUrls = [];
   let nextIntervalId = 1;
   let fakeNow = 1000;
 
@@ -154,6 +219,9 @@ function createFakeDomEnvironment(protocol) {
     MutationObserver: FakeMutationObserver,
     console,
     performance: { now: () => fakeNow },
+    OPEN_EXTERNAL(url) {
+      openedExternalUrls.push(url);
+    },
     setInterval(fn) {
       const id = nextIntervalId++;
       intervals.set(id, fn);
@@ -177,12 +245,30 @@ function createFakeDomEnvironment(protocol) {
     context,
     elements,
     menus,
+    homeMenu,
+    sigConfig,
+    sigAbout,
+    storage,
+    openedExternalUrls,
     meUsername,
     pbBlitz,
     pb40l,
     resultHeader,
     resultValue,
     body,
+    dispatchDocEvent(type, ev) {
+      const eventObj = Object.assign(
+        {
+          type,
+          preventDefault() {},
+          stopPropagation() {}
+        },
+        ev || {}
+      );
+      for (const fn of docListeners.get(type) || []) {
+        fn(eventObj);
+      }
+    },
     setNow(t) {
       fakeNow = t;
     },
@@ -469,4 +555,72 @@ test('bundled mod displays and sorts live multiplayer VS leaderboard on the righ
   env.menus.classList.remove('hidden');
   assert.equal(lbPanel.classList.contains('is-visible'), false);
   assert.equal(env.body.classList.contains('twfox-multi-lb-active'), false);
+});
+
+test('Home menu injects FOXMOD item and opens interactive Config & Credits panel', () => {
+  const env = createFakeDomEnvironment('https:');
+  env.triggerDOMContentLoaded();
+
+  const foxmodBtn = env.elements.get('twfoxtetrio-home-foxmod');
+  assert.ok(foxmodBtn, 'FOXMOD button should be injected into #home_menu');
+  assert.equal(env.homeMenu.children[env.homeMenu.children.length - 1], foxmodBtn);
+  assert.equal(foxmodBtn.getAttribute('data-hover'), 'hover');
+  assert.equal(foxmodBtn.getAttribute('data-hit'), 'hit1');
+  assert.equal(foxmodBtn.querySelector('h1').textContent, 'FOXMOD');
+
+  // Click FOXMOD banner to open the panel
+  foxmodBtn.click();
+  const overlay = env.elements.get('twfoxtetrio-foxmod-overlay');
+  const configPane = env.elements.get('twfoxtetrio-pane-config');
+  const creditsPane = env.elements.get('twfoxtetrio-pane-credits');
+  assert.ok(overlay.classList.contains('is-open'));
+  assert.equal(configPane.classList.contains('hidden'), false);
+  assert.equal(creditsPane.classList.contains('hidden'), true);
+
+  // Toggle Blitz enabled off via UI checkbox -> updates runtime config & persists
+  const checkboxes = configPane.querySelectorAll('.twfox-toggle-input');
+  assert.equal(checkboxes.length, 7);
+  checkboxes[0].checked = false;
+  checkboxes[0].dispatchEvent('change');
+
+  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().blitzTracker.enabled, false);
+  const persisted = JSON.parse(env.storage.get('twfoxtetrio_config_v1'));
+  assert.equal(persisted.blitzTracker.enabled, false);
+
+  // Increase maxRows via + stepper button
+  const stepBtns = configPane.querySelectorAll('.twfox-step-btn');
+  assert.equal(stepBtns.length, 2);
+  stepBtns[1].click();
+  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().multiplayerLeaderboard.maxRows, 13);
+  assert.equal(env.elements.get('twfoxtetrio-maxrows-value').textContent, '13');
+
+  // Switch to Credits tab and verify attribution & external link handling
+  env.elements.get('twfoxtetrio-tab-credits').click();
+  assert.equal(configPane.classList.contains('hidden'), true);
+  assert.equal(creditsPane.classList.contains('hidden'), false);
+
+  const authorText = creditsPane.querySelector('.twfox-credits-author').textContent;
+  assert.match(authorText, /TWFoxcrack/);
+
+  env.elements.get('twfoxtetrio-github-link').click();
+  assert.deepEqual(env.openedExternalUrls, ['https://github.com/Foxcrack/twfoxtetrio']);
+
+  // Reset Defaults button restores initial values
+  env.elements.get('twfoxtetrio-tab-config').click();
+  env.elements.get('twfoxtetrio-reset-defaults').click();
+  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().blitzTracker.enabled, true);
+  assert.equal(env.context.__TWFOX_TETRIO__.getConfig().multiplayerLeaderboard.maxRows, 12);
+  assert.equal(checkboxes[0].checked, true);
+  assert.equal(env.elements.get('twfoxtetrio-maxrows-value').textContent, '12');
+
+  // Escape closes the modal cleanly
+  env.dispatchDocEvent('keydown', { key: 'Escape', code: 'Escape' });
+  assert.equal(overlay.classList.contains('is-open'), false);
+
+  // Entering an active game also closes FOXMOD panel if left open
+  foxmodBtn.click();
+  assert.equal(overlay.classList.contains('is-open'), true);
+  env.menus.setAttribute('data-menu-type', 'blitz');
+  env.menus.classList.add('hidden');
+  assert.equal(overlay.classList.contains('is-open'), false);
 });
