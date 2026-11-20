@@ -294,3 +294,116 @@ test('room defaults to normal tetrominoes, blocks <2 players from starting, and 
   client.close();
   host.close();
 });
+
+test('host and client exchange WebRTC handshake via MQTT-over-WebSocket relay', async () => {
+  const rtcFactory = createLoopbackRtcFactory();
+  const subscriptions = new Map(); // brokerUrl -> Set<{ topic, sendPublish }>
+
+  function createMockMqttWsFactory() {
+    return function wsFactory(url) {
+      if (!subscriptions.has(url)) subscriptions.set(url, new Set());
+      const peers = subscriptions.get(url);
+      let entry = null;
+
+      function encodeVarLen(len) {
+        const out = [];
+        let v = len;
+        do {
+          let b = v % 128;
+          v = Math.floor(v / 128);
+          if (v > 0) b |= 128;
+          out.push(b);
+        } while (v > 0);
+        return Uint8Array.from(out);
+      }
+
+      const ws = {
+        readyState: 0,
+        binaryType: 'arraybuffer',
+        onopen: null,
+        onmessage: null,
+        onerror: null,
+        onclose: null,
+        send(data) {
+          const u = new Uint8Array(data);
+          const type = u[0] & 0xf0;
+          if (type === 0x10) {
+            queueMicrotask(() => {
+              if (ws.onmessage) ws.onmessage({ data: Uint8Array.from([0x20, 0x02, 0x00, 0x00]).buffer });
+            });
+          } else if (type === 0x80) {
+            let idx = 4;
+            const tLen = (u[idx] << 8) | u[idx + 1];
+            idx += 2;
+            const topic = Buffer.from(u.slice(idx, idx + tLen)).toString('utf8');
+            entry = { topic, ws };
+            peers.add(entry);
+            queueMicrotask(() => {
+              if (ws.onmessage) ws.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer });
+            });
+          } else if (type === 0x30) {
+            let idx = 1;
+            while ((u[idx] & 0x80) !== 0) idx++;
+            idx++;
+            const tLen = (u[idx] << 8) | u[idx + 1];
+            const topic = Buffer.from(u.slice(idx + 2, idx + 2 + tLen)).toString('utf8');
+            const payloadBytes = u.slice(idx + 2 + tLen);
+            const tb = Buffer.from(topic, 'utf8');
+            const body = Buffer.concat([Buffer.from([(tb.length >> 8) & 255, tb.length & 255]), tb, payloadBytes]);
+            const frame = Buffer.concat([Buffer.from([0x30]), Buffer.from(encodeVarLen(body.length)), body]);
+            for (const sub of peers) {
+              if (sub.topic === topic && sub.ws.onmessage && sub.ws.readyState === 1) {
+                queueMicrotask(() => sub.ws.onmessage({ data: Uint8Array.from(frame).buffer }));
+              }
+            }
+          }
+        },
+        close() {
+          ws.readyState = 3;
+          if (entry) peers.delete(entry);
+          if (ws.onclose) ws.onclose();
+        }
+      };
+
+      queueMicrotask(() => {
+        ws.readyState = 1;
+        if (ws.onopen) ws.onopen();
+      });
+      return ws;
+    };
+  }
+
+  const wsFactory = createMockMqttWsFactory();
+  const host = p2p.createHostServer({
+    hostName: 'TWFoxcrack',
+    rtcFactory,
+    wsFactory,
+    brokers: ['wss://mock-emqx/mqtt', 'wss://mock-hivemq/mqtt']
+  });
+
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(host.getSnapshot().signalingStatus, 'online');
+  const roomCode = host.getSnapshot().room.roomCode;
+
+  const client = p2p.createClientPeer({
+    playerName: 'Maekrix',
+    rtcFactory,
+    wsFactory,
+    brokers: ['wss://mock-emqx/mqtt', 'wss://mock-hivemq/mqtt'],
+    joinTimeoutMs: 3000
+  });
+
+  const joinRes = await client.joinByCode(roomCode);
+  assert.equal(joinRes.mode, 'auto');
+  assert.equal(joinRes.roomCode, roomCode);
+  await new Promise((r) => setTimeout(r, 40));
+
+  assert.equal(client.getSnapshot().connected, true);
+  assert.deepEqual(
+    host.getSnapshot().players.map((p) => p.name),
+    ['TWFoxcrack', 'Maekrix']
+  );
+
+  client.close();
+  host.close();
+});

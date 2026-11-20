@@ -1703,13 +1703,31 @@ body.twfox-ingame #menus > #footer {
           ? `WINNER RONDA #${snap.room.round}: ${snap.room.winner}`
           : isHost
             ? (snap.signalingStatus === 'offline'
-                ? 'MANUAL FALLBACK ACTIVE'
-                : roomCode
-                  ? `HOST SERVER ACTIVE · CODE #${roomCode}`
-                  : 'HOST SERVER ACTIVE')
+                ? 'RELAY OFFLINE · USE MANUAL FALLBACK'
+                : snap.signalingStatus === 'connecting'
+                  ? `CONNECTING RELAY · CODE #${roomCode}`
+                  : roomCode
+                    ? `ROOM ONLINE · CODE #${roomCode}`
+                    : 'HOST SERVER ACTIVE')
             : snap.connected
               ? 'CONNECTED TO HOST SERVER'
               : 'ENTER #CODE TO JOIN';
+
+      if (isHost && multiDom.hostInviteStatus) {
+        if (evType === 'signaling_ready') {
+          multiDom.hostInviteStatus.textContent = `Relay online — share #${roomCode} so friends can join immediately.`;
+        } else if (evType === 'signaling_offline') {
+          multiDom.hostInviteStatus.textContent = 'Relay offline — open MANUAL P2P FALLBACK below to share FOX1 code.';
+        }
+      }
+
+      if (!isHost && multiDom.joinStatus) {
+        if (evType === 'exchanging_sdp') {
+          multiDom.joinStatus.textContent = `Room #${roomCode} found! Opening WebRTC tunnel...`;
+        } else if (evType === 'webrtc_failed' && detail && detail.reason) {
+          multiDom.joinStatus.textContent = `Error: ${detail.reason}`;
+        }
+      }
 
       multiDom.playersList.innerHTML = '';
       for (const p of snap.players || []) {
@@ -2038,6 +2056,7 @@ body.twfox-ingame #menus > #footer {
         inviteBannerSub,
         invitePillCode,
         hostRoomCodeLabel,
+        hostInviteStatus,
         lobbyModeTag,
         playersHeading,
         startCountSub,
@@ -2046,6 +2065,7 @@ body.twfox-ingame #menus > #footer {
         hostInviteBox,
         hostManualToggleBtn,
         hostManualPanel,
+        joinStatus,
         hostStartBtn,
         clientReadyBtn,
         modeSelect,
@@ -2254,7 +2274,15 @@ body.twfox-ingame #menus > #footer {
             setClass(joinManualReplyBox, 'hidden', false);
             joinStatus.textContent = 'Manual reply copied! Send it to the Host to finish connecting.';
           } else {
-            joinStatus.textContent = `Connected to #${res.roomCode}! Opening WebRTC tunnel...`;
+            joinStatus.textContent = `Room #${res.roomCode} answered! Opening P2P tunnel...`;
+            if (typeof root.setTimeout === 'function') {
+              const natHintTimer = root.setTimeout(function () {
+                if (peerSession === client && multiRequestOpen && !client.getSnapshot().connected) {
+                  joinStatus.textContent = 'P2P tunnel taking long (NAT/firewall may block UDP between peers).';
+                }
+              }, 10000);
+              if (natHintTimer && typeof natHintTimer.unref === 'function') natHintTimer.unref();
+            }
           }
         } catch (err) {
           joinStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);

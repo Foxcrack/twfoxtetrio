@@ -3,11 +3,16 @@
 
   const ICE_SERVERS = [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' }
   ];
 
   const ROOM_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const SIGNAL_BASE_URL = 'https://ntfy.sh';
+  const SIGNAL_BROKERS = [
+    'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8884/mqtt'
+  ];
+  const SIGNAL_MQTT_PREFIX = 'twfoxtetrio/v1/';
   const SIGNAL_TOPIC_PREFIX = 'twfoxtetrio-v1-';
 
   function generateRoomCode(length) {
@@ -35,16 +40,293 @@
 
   function resolveFetch(opts) {
     if (opts && typeof opts.fetchFn === 'function') return opts.fetchFn;
-    if (typeof root.fetch === 'function') return root.fetch.bind(root);
     return null;
   }
 
-  function buildTopicUrl(roomCode) {
-    return `${SIGNAL_BASE_URL}/${SIGNAL_TOPIC_PREFIX}${normalizeRoomCode(roomCode)}`;
+  function resolveWsFactory(opts) {
+    if (opts && typeof opts.wsFactory === 'function') return opts.wsFactory;
+    if (!opts || !opts.fetchFn) {
+      if (typeof root.WebSocket === 'function') {
+        return function defaultWsFactory(url, protocol) {
+          return protocol ? new root.WebSocket(url, protocol) : new root.WebSocket(url);
+        };
+      }
+    }
+    return null;
   }
 
-  async function postTopicSignal(fetchFn, roomCode, payload) {
-    const resp = await fetchFn(buildTopicUrl(roomCode), {
+  function concatUint8(parts) {
+    let total = 0;
+    for (const p of parts) total += p.length;
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const p of parts) {
+      out.set(p, offset);
+      offset += p.length;
+    }
+    return out;
+  }
+
+  function mqttEncodeVarLen(len) {
+    const bytes = [];
+    let val = len;
+    do {
+      let b = val % 128;
+      val = Math.floor(val / 128);
+      if (val > 0) b |= 128;
+      bytes.push(b);
+    } while (val > 0);
+    return new Uint8Array(bytes);
+  }
+
+  function mqttUtfString(str) {
+    const bytes = encodeUtf8(str);
+    const hdr = new Uint8Array([(bytes.length >> 8) & 0xff, bytes.length & 0xff]);
+    return concatUint8([hdr, bytes]);
+  }
+
+  function mqttPacketConnect(clientId) {
+    const varHdr = new Uint8Array([0, 4, 77, 81, 84, 84, 4, 2, 0, 50]);
+    const body = concatUint8([varHdr, mqttUtfString(clientId)]);
+    return concatUint8([new Uint8Array([0x10]), mqttEncodeVarLen(body.length), body]);
+  }
+
+  function mqttPacketSubscribe(packetId, topic) {
+    const idBytes = new Uint8Array([(packetId >> 8) & 0xff, packetId & 0xff]);
+    const body = concatUint8([idBytes, mqttUtfString(topic), new Uint8Array([0])]);
+    return concatUint8([new Uint8Array([0x82]), mqttEncodeVarLen(body.length), body]);
+  }
+
+  function mqttPacketPublish(topic, text) {
+    const body = concatUint8([mqttUtfString(topic), encodeUtf8(text)]);
+    return concatUint8([new Uint8Array([0x30]), mqttEncodeVarLen(body.length), body]);
+  }
+
+  function mqttPacketPingReq() {
+    return new Uint8Array([0xc0, 0x00]);
+  }
+
+  function mqttPacketDisconnect() {
+    return new Uint8Array([0xe0, 0x00]);
+  }
+
+  function createMqttFrameReader(onPacket) {
+    let pending = new Uint8Array(0);
+    return function feedChunk(rawData) {
+      let chunk;
+      if (rawData instanceof Uint8Array) {
+        chunk = rawData;
+      } else if (rawData instanceof ArrayBuffer) {
+        chunk = new Uint8Array(rawData);
+      } else if (rawData && rawData.buffer) {
+        chunk = new Uint8Array(rawData.buffer, rawData.byteOffset || 0, rawData.byteLength || rawData.length);
+      } else {
+        return;
+      }
+      pending = concatUint8([pending, chunk]);
+      while (pending.length >= 2) {
+        let mul = 1;
+        let remLen = 0;
+        let idx = 1;
+        let incomplete = false;
+        while (true) {
+          if (idx >= pending.length) {
+            incomplete = true;
+            break;
+          }
+          const b = pending[idx++];
+          remLen += (b & 0x7f) * mul;
+          if ((b & 0x80) === 0) break;
+          mul *= 128;
+          if (idx > 5) return;
+        }
+        if (incomplete || pending.length < idx + remLen) break;
+        const firstByte = pending[0];
+        const body = pending.slice(idx, idx + remLen);
+        pending = pending.slice(idx + remLen);
+        onPacket(firstByte & 0xf0, firstByte & 0x0f, body);
+      }
+    };
+  }
+
+  /**
+   * Opens one persistent MQTT-over-WebSocket relay socket for a room topic.
+   */
+  function createMqttBrokerClient(opts) {
+    const clientId = 'twfx_' + Math.random().toString(36).slice(2, 10) + '_' + Date.now().toString(36);
+    let subscribed = false;
+    let closed = false;
+    let pingTimer = null;
+    let ws = null;
+
+    function sendBytes(bytes) {
+      if (!closed && ws && ws.readyState === 1) {
+        try {
+          ws.send(bytes);
+        } catch (_) {}
+      }
+    }
+
+    const reader = createMqttFrameReader((packetType, flags, body) => {
+      if (closed) return;
+      if (packetType === 0x20 && body.length >= 2) {
+        if (body[1] === 0) {
+          sendBytes(mqttPacketSubscribe(1, opts.topic));
+          pingTimer = setInterval(() => sendBytes(mqttPacketPingReq()), 25000);
+          if (pingTimer && typeof pingTimer.unref === 'function') pingTimer.unref();
+        } else if (opts.onClose) {
+          opts.onClose();
+        }
+      } else if (packetType === 0x90) {
+        if (!subscribed) {
+          subscribed = true;
+          if (opts.onReady) opts.onReady();
+        }
+      } else if (packetType === 0x30 && body.length >= 2) {
+        const topicLen = (body[0] << 8) | body[1];
+        let offset = 2 + topicLen;
+        if ((flags & 0x06) !== 0) offset += 2;
+        if (offset > body.length) return;
+        try {
+          const text = decodeUtf8(body.slice(offset));
+          const payload = JSON.parse(text);
+          if (opts.onMessage) opts.onMessage(payload);
+        } catch (_) {}
+      }
+    });
+
+    try {
+      ws = opts.wsFactory(opts.url, 'mqtt');
+      ws.binaryType = 'arraybuffer';
+      ws.onopen = () => {
+        if (!closed) sendBytes(mqttPacketConnect(clientId));
+      };
+      ws.onmessage = (ev) => {
+        if (ev && ev.data !== undefined) reader(ev.data);
+      };
+      ws.onerror = () => {
+        if (!closed && opts.onClose) opts.onClose();
+      };
+      ws.onclose = () => {
+        clearInterval(pingTimer);
+        pingTimer = null;
+        subscribed = false;
+        if (!closed && opts.onClose) opts.onClose();
+      };
+    } catch (_) {
+      if (opts.onClose) opts.onClose();
+    }
+
+    return {
+      isSubscribed() {
+        return subscribed && !closed && ws && ws.readyState === 1;
+      },
+      publish(payloadObj) {
+        if (!this.isSubscribed()) return false;
+        sendBytes(mqttPacketPublish(opts.topic, JSON.stringify(payloadObj)));
+        return true;
+      },
+      close() {
+        if (closed) return;
+        closed = true;
+        clearInterval(pingTimer);
+        pingTimer = null;
+        if (ws) {
+          try {
+            if (ws.readyState === 1) ws.send(mqttPacketDisconnect());
+            ws.close();
+          } catch (_) {}
+        }
+        subscribed = false;
+      }
+    };
+  }
+
+  function createMultiBrokerSignalBus(opts) {
+    const topic = SIGNAL_MQTT_PREFIX + normalizeRoomCode(opts.roomCode);
+    const urls = Array.isArray(opts.brokers) && opts.brokers.length > 0 ? opts.brokers : SIGNAL_BROKERS;
+    const clients = [];
+    const waitResolvers = [];
+    let closed = false;
+    let readyFired = false;
+    let deadCount = 0;
+
+    function resolveWaiters(ok) {
+      while (waitResolvers.length > 0) {
+        const fn = waitResolvers.shift();
+        fn(ok);
+      }
+    }
+
+    for (const url of urls) {
+      let failedOnce = false;
+      const cli = createMqttBrokerClient({
+        url,
+        topic,
+        wsFactory: opts.wsFactory,
+        onReady() {
+          if (closed) return;
+          if (!readyFired) {
+            readyFired = true;
+            if (opts.onReady) opts.onReady();
+          }
+          resolveWaiters(true);
+        },
+        onMessage(payload) {
+          if (!closed && opts.onMessage) opts.onMessage(payload);
+        },
+        onClose() {
+          if (failedOnce || closed) return;
+          failedOnce = true;
+          deadCount += 1;
+          if (deadCount >= urls.length) {
+            resolveWaiters(false);
+            if (!clients.some((c) => c.isSubscribed()) && opts.onOffline) {
+              opts.onOffline();
+            }
+          }
+        }
+      });
+      clients.push(cli);
+    }
+
+    return {
+      hasReady() {
+        return clients.some((c) => c.isSubscribed());
+      },
+      waitUntilReady(timeoutMs) {
+        if (this.hasReady()) return Promise.resolve(true);
+        if (deadCount >= urls.length) return Promise.resolve(false);
+        return new Promise((resolve) => {
+          const done = (ok) => {
+            clearTimeout(timer);
+            resolve(ok);
+          };
+          const timer = setTimeout(() => done(this.hasReady()), timeoutMs || 5000);
+          waitResolvers.push(done);
+        });
+      },
+      publish(payloadObj) {
+        let sent = 0;
+        for (const c of clients) {
+          if (c.publish(payloadObj)) sent += 1;
+        }
+        return sent;
+      },
+      close() {
+        closed = true;
+        resolveWaiters(false);
+        for (const c of clients) c.close();
+      }
+    };
+  }
+
+  function buildLegacyTopicUrl(roomCode) {
+    return `https://ntfy.sh/${SIGNAL_TOPIC_PREFIX}${normalizeRoomCode(roomCode)}`;
+  }
+
+  async function postLegacyTopicSignal(fetchFn, roomCode, payload) {
+    const resp = await fetchFn(buildLegacyTopicUrl(roomCode), {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
       body: JSON.stringify(payload)
@@ -54,8 +336,8 @@
     }
   }
 
-  async function pollTopicSignals(fetchFn, roomCode, since) {
-    const url = `${buildTopicUrl(roomCode)}/json?poll=1&since=${encodeURIComponent(since || '2m')}`;
+  async function pollLegacyTopicSignals(fetchFn, roomCode, since) {
+    const url = `${buildLegacyTopicUrl(roomCode)}/json?poll=1&since=${encodeURIComponent(since || '2m')}`;
     const resp = await fetchFn(url, { method: 'GET' });
     if (!resp || !resp.ok) return [];
     const text = await resp.text();
@@ -222,11 +504,17 @@
   function createHostServer(options) {
     const opts = options || {};
     const rtcFactory = opts.rtcFactory || null;
+    const wsFactory = resolveWsFactory(opts);
     const fetchFn = resolveFetch(opts);
-    const shouldAutoSignal = Boolean(fetchFn) && (
+    const shouldAutoSignalWs = Boolean(wsFactory) && (
       opts.autoSignaling === true ||
-      (opts.autoSignaling !== false && (Boolean(opts.fetchFn) || !opts.rtcFactory))
+      (opts.autoSignaling !== false && (Boolean(opts.wsFactory) || !opts.rtcFactory))
     );
+    const shouldAutoSignalFetch = !shouldAutoSignalWs && Boolean(fetchFn) && (
+      opts.autoSignaling === true ||
+      (opts.autoSignaling !== false && Boolean(opts.fetchFn))
+    );
+    const shouldAutoSignal = shouldAutoSignalWs || shouldAutoSignalFetch;
     const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 950);
     const hostName = String(opts.hostName || 'HOST').trim().slice(0, 20) || 'HOST';
     const roomCode = normalizeRoomCode(opts.roomCode) || generateRoomCode(4);
@@ -271,6 +559,7 @@
     let nextPeerSeq = 2;
     let attackNonce = 1;
     let signalingStatus = shouldAutoSignal ? 'connecting' : 'manual';
+    let signalBus = null;
     let pollTimer = null;
     let blitzTimer = null;
     let closed = false;
@@ -673,10 +962,33 @@
       evaluateRoundEnd();
     }
 
+    async function handleIncomingSignalMsg(msg, replyFn) {
+      if (closed || !msg || typeof msg !== 'object') return;
+      if (msg.roomCode && normalizeRoomCode(msg.roomCode) !== room.roomCode) return;
+
+      if (msg.kind === 'join_req' && msg.clientId && !seenClientReqs.has(msg.clientId)) {
+        seenClientReqs.add(msg.clientId);
+        const invite = await createInvite(msg.name || 'PLAYER');
+        await replyFn({
+          kind: 'offer',
+          roomCode: room.roomCode,
+          to: msg.clientId,
+          peerId: invite.peerId,
+          roomName: room.roomName,
+          hostName,
+          offer: invite.code
+        });
+      } else if (msg.kind === 'answer' && msg.peerId && msg.answer && !seenAnswerPeerIds.has(msg.peerId)) {
+        if (!pendingOffers.has(msg.peerId)) return;
+        seenAnswerPeerIds.add(msg.peerId);
+        await acceptAnswer(msg.peerId, msg.answer);
+      }
+    }
+
     async function pollAutoSignalingOnce() {
-      if (closed || !shouldAutoSignal) return;
+      if (closed || !shouldAutoSignalFetch) return;
       try {
-        const items = await pollTopicSignals(fetchFn, room.roomCode, '2m');
+        const items = await pollLegacyTopicSignals(fetchFn, room.roomCode, '2m');
         if (signalingStatus !== 'online') {
           signalingStatus = 'online';
           notify('signaling_ready');
@@ -687,27 +999,7 @@
             if (seenEventIds.has(item.id)) continue;
             seenEventIds.add(item.id);
           }
-          const msg = item.payload;
-          if (!msg || typeof msg !== 'object') continue;
-          if (msg.roomCode && normalizeRoomCode(msg.roomCode) !== room.roomCode) continue;
-
-          if (msg.kind === 'join_req' && msg.clientId && !seenClientReqs.has(msg.clientId)) {
-            seenClientReqs.add(msg.clientId);
-            const invite = await createInvite(msg.name || 'PLAYER');
-            await postTopicSignal(fetchFn, room.roomCode, {
-              kind: 'offer',
-              roomCode: room.roomCode,
-              to: msg.clientId,
-              peerId: invite.peerId,
-              roomName: room.roomName,
-              hostName,
-              offer: invite.code
-            });
-          } else if (msg.kind === 'answer' && msg.peerId && msg.answer && !seenAnswerPeerIds.has(msg.peerId)) {
-            if (!pendingOffers.has(msg.peerId)) continue;
-            seenAnswerPeerIds.add(msg.peerId);
-            await acceptAnswer(msg.peerId, msg.answer);
-          }
+          await handleIncomingSignalMsg(item.payload, (out) => postLegacyTopicSignal(fetchFn, room.roomCode, out));
         }
       } catch (_) {
         if (signalingStatus !== 'offline') {
@@ -718,20 +1010,47 @@
     }
 
     function scheduleAutoPoll(delay) {
-      if (closed || !shouldAutoSignal) return;
+      if (closed || !shouldAutoSignalFetch) return;
       pollTimer = setTimeout(async () => {
         await pollAutoSignalingOnce();
         scheduleAutoPoll(pollIntervalMs);
       }, delay);
     }
 
-    if (shouldAutoSignal) {
+    if (shouldAutoSignalWs) {
+      signalBus = createMultiBrokerSignalBus({
+        roomCode: room.roomCode,
+        brokers: opts.brokers,
+        wsFactory,
+        onReady() {
+          if (!closed && signalingStatus !== 'online') {
+            signalingStatus = 'online';
+            notify('signaling_ready');
+          }
+        },
+        onOffline() {
+          if (!closed && signalingStatus !== 'offline') {
+            signalingStatus = 'offline';
+            notify('signaling_offline');
+          }
+        },
+        onMessage(msg) {
+          handleIncomingSignalMsg(msg, (out) => {
+            if (signalBus) signalBus.publish(out);
+          });
+        }
+      });
+    } else if (shouldAutoSignalFetch) {
       scheduleAutoPoll(25);
     }
 
     function close() {
       closed = true;
       clearBlitzTimer();
+      if (signalBus) {
+        signalBus.close();
+        signalBus = null;
+      }
       if (pollTimer) {
         clearTimeout(pollTimer);
         pollTimer = null;
@@ -780,9 +1099,10 @@
   function createClientPeer(options) {
     const opts = options || {};
     const rtcFactory = opts.rtcFactory || null;
+    const wsFactory = resolveWsFactory(opts);
     const fetchFn = resolveFetch(opts);
     const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 650);
-    const joinTimeoutMs = Math.max(500, Number(opts.joinTimeoutMs) || 25000);
+    const joinTimeoutMs = Math.max(500, Number(opts.joinTimeoutMs) || 15000);
     const playerName = String(opts.playerName || 'PLAYER').trim().slice(0, 20) || 'PLAYER';
 
     let pc = null;
@@ -791,6 +1111,7 @@
     let connected = false;
     let ready = true;
     let closed = false;
+    let activeSignalBus = null;
     let room = {
       roomCode: '',
       roomName: 'FOXMOD P2P ROOM',
@@ -898,10 +1219,19 @@
         room.roomName = decoded.roomName;
       }
       pc = createDefaultPeerConnection(rtcFactory);
+      pc.oniceconnectionstatechange = () => {
+        if (!connected && pc && pc.iceConnectionState === 'failed') {
+          notify('webrtc_failed', { reason: 'ICE failed (strict NAT or firewall)' });
+        }
+      };
       pc.ondatachannel = (ev) => {
         channel = ev.channel;
         channel.onopen = () => {
           connected = true;
+          if (activeSignalBus) {
+            activeSignalBus.close();
+            activeSignalBus = null;
+          }
           send({ type: 'hello', name: playerName });
           notify('connected');
         };
@@ -924,6 +1254,92 @@
       });
     }
 
+    async function joinViaWsBus(code, clientId) {
+      if (activeSignalBus) {
+        activeSignalBus.close();
+        activeSignalBus = null;
+      }
+      let offerResolve = null;
+      let offerReject = null;
+      let offerSettled = false;
+
+      const finishOffer = (fn, arg) => {
+        if (offerSettled) return;
+        offerSettled = true;
+        clearTimeout(overallTimer);
+        clearTimeout(retryTimer);
+        fn(arg);
+      };
+
+      const offerPromise = new Promise((resolve, reject) => {
+        offerResolve = resolve;
+        offerReject = reject;
+      });
+
+      const bus = createMultiBrokerSignalBus({
+        roomCode: code,
+        brokers: opts.brokers,
+        wsFactory,
+        onMessage(msg) {
+          if (!msg || msg.kind !== 'offer' || msg.to !== clientId || !msg.offer) return;
+          finishOffer(offerResolve, msg);
+        },
+        onOffline() {
+          finishOffer(offerReject, new Error('Signaling relay unavailable. Try MANUAL P2P FALLBACK.'));
+        }
+      });
+      activeSignalBus = bus;
+
+      const overallTimer = setTimeout(() => {
+        finishOffer(offerReject, new Error(`Room #${code} did not respond. Verify the Host room is open or use MANUAL P2P FALLBACK.`));
+      }, joinTimeoutMs);
+
+      let retryTimer = null;
+      const relayOk = await bus.waitUntilReady(6000);
+      if (closed) {
+        finishOffer(offerReject, new Error('Room join cancelled.'));
+        throw await offerPromise;
+      }
+      if (!relayOk) {
+        finishOffer(offerReject, new Error('Could not connect to signaling relay. Use MANUAL P2P FALLBACK.'));
+      } else {
+        const reqPayload = { kind: 'join_req', roomCode: code, clientId, name: playerName };
+        bus.publish(reqPayload);
+        retryTimer = setTimeout(() => {
+          if (!closed && !offerSettled) bus.publish(reqPayload);
+        }, 2500);
+      }
+
+      let offerMsg;
+      try {
+        offerMsg = await offerPromise;
+      } catch (err) {
+        if (activeSignalBus === bus) {
+          bus.close();
+          activeSignalBus = null;
+        }
+        throw err;
+      }
+
+      if (offerMsg.roomName) room.roomName = offerMsg.roomName;
+      notify('exchanging_sdp', { roomCode: code, roomName: room.roomName });
+      const answerCode = await joinFromInvite(offerMsg.offer);
+      bus.publish({
+        kind: 'answer',
+        roomCode: code,
+        peerId: offerMsg.peerId,
+        clientId,
+        name: playerName,
+        answer: answerCode
+      });
+      return {
+        mode: 'auto',
+        roomCode: code,
+        roomName: room.roomName,
+        peerId: offerMsg.peerId
+      };
+    }
+
     /**
      * Joins via either a 4-char #CODE (automatic WebRTC handshake) or manual FOX1/FOX0 fallback.
      */
@@ -939,9 +1355,9 @@
 
       const code = normalizeRoomCode(text);
       if (!code) {
-        throw new Error('Invalid room code. Use a 4-char code (e.g. #K7M4) or FOX1:... invite.');
+        throw new Error('Invalid room code. Use a 4-char code (e.g. K7M4 or #K7M4) or FOX1:... invite.');
       }
-      if (!fetchFn) {
+      if (!wsFactory && !fetchFn) {
         throw new Error('Auto-join network unavailable. Use MANUAL P2P FALLBACK with a FOX1:... invite.');
       }
 
@@ -950,7 +1366,11 @@
       room.status = 'connecting';
       notify('connecting', { roomCode: code });
 
-      await postTopicSignal(fetchFn, code, {
+      if (wsFactory) {
+        return await joinViaWsBus(code, clientId);
+      }
+
+      await postLegacyTopicSignal(fetchFn, code, {
         kind: 'join_req',
         roomCode: code,
         clientId,
@@ -966,7 +1386,7 @@
 
         let items = [];
         try {
-          items = await pollTopicSignals(fetchFn, code, '2m');
+          items = await pollLegacyTopicSignals(fetchFn, code, '2m');
         } catch (_) {
           continue;
         }
@@ -976,7 +1396,7 @@
         if (offerMsg) {
           if (offerMsg.roomName) room.roomName = offerMsg.roomName;
           const answerCode = await joinFromInvite(offerMsg.offer);
-          await postTopicSignal(fetchFn, code, {
+          await postLegacyTopicSignal(fetchFn, code, {
             kind: 'answer',
             roomCode: code,
             peerId: offerMsg.peerId,
@@ -1001,6 +1421,10 @@
 
     function close() {
       closed = true;
+      if (activeSignalBus) {
+        activeSignalBus.close();
+        activeSignalBus = null;
+      }
       if (channel) {
         try {
           channel.close();
@@ -1070,6 +1494,7 @@
   root.__TWFOX_INTERNAL__.p2pRoom = {
     ICE_SERVERS,
     ROOM_CODE_ALPHABET,
+    SIGNAL_BROKERS,
     generateRoomCode,
     normalizeRoomCode,
     encodeSignal,
