@@ -854,6 +854,43 @@
 #menus[data-menu-type^='foxmod'] #footer_text {
   color: #ffbe8e;
 }
+.twfox-invite-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.twfox-code-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(18, 12, 28, 0.88);
+  border: 2px solid #634292;
+  border-radius: 4px;
+}
+.twfox-code-value {
+  font-family: HUN, monospace;
+  font-size: 2.2em;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.twfox-code-input {
+  font-family: HUN, monospace;
+  font-size: 1.4em;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.twfox-fallback-panel {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .twfox-native-scroller .hidden,
 .twfox-stage-scroller .hidden,
 #twfoxtetrio-pane-multi .hidden {
@@ -909,6 +946,16 @@
       return true;
     }
     return false;
+  }
+
+  function resolveLocalUsername(runtimeApi, fallback) {
+    const meEl = document.getElementById('me_username');
+    const domName = meEl && typeof meEl.textContent === 'string' ? meEl.textContent.trim() : '';
+    const stateName = runtimeApi && typeof runtimeApi.getState === 'function'
+      ? String(runtimeApi.getState().selfUsername || '').trim()
+      : '';
+    const chosen = domName || stateName || fallback || 'PLAYER';
+    return String(chosen).trim().slice(0, 20).toUpperCase();
   }
 
   function copyToClipboard(text) {
@@ -1387,7 +1434,21 @@
       }
 
       const isHost = snap.role === 'host';
+      const roomCode = (snap.room && snap.room.roomCode) || '';
       multiDom.lobbyRoomTitle.textContent = snap.room.roomName || 'FOXMOD ROOM';
+      if (multiDom.invitePillCode) {
+        multiDom.invitePillCode.textContent = roomCode ? `#${roomCode}` : '#JOIN';
+      }
+      if (multiDom.inviteBannerSub) {
+        multiDom.inviteBannerSub.textContent = isHost
+          ? 'CLICK TO COPY ROOM CODE'
+          : roomCode
+            ? 'ROOM CODE · CLICK TO COPY'
+            : 'ENTER #CODE TO JOIN';
+      }
+      if (multiDom.hostRoomCodeLabel) {
+        multiDom.hostRoomCodeLabel.textContent = roomCode ? `#${roomCode}` : '#----';
+      }
       multiDom.lobbyModeTag.textContent =
         snap.room.pieceSet === 'chaos'
           ? 'CAOS MIX VS'
@@ -1425,10 +1486,14 @@
       multiDom.winnerBanner.textContent = hasWinner
         ? `WINNER RONDA #${snap.room.round}: ${snap.room.winner}`
         : isHost
-          ? 'HOST SERVER ACTIVE'
+          ? (snap.signalingStatus === 'offline'
+              ? 'MANUAL FALLBACK ACTIVE'
+              : roomCode
+                ? `HOST SERVER ACTIVE · CODE #${roomCode}`
+                : 'HOST SERVER ACTIVE')
           : snap.connected
             ? 'CONNECTED TO HOST SERVER'
-            : 'PASTE INVITE TO JOIN';
+            : 'ENTER #CODE TO JOIN';
 
       multiDom.playersList.innerHTML = '';
       for (const p of snap.players || []) {
@@ -1488,16 +1553,17 @@
     }
 
     function buildMultiScroller() {
-      // Top bar (EXIT & clickable INVITE pill matching TETR.IO lobby top chrome)
+      // Top bar (EXIT & clickable room #CODE pill matching TETR.IO lobby top chrome)
       const leaveRoomBtn = createEl('div', {
         id: 'twfoxtetrio-leave-room-btn',
         className: 'ns',
         text: 'EXIT',
         attrs: { 'data-hover': 'hover', 'data-hit': 'back' }
       });
-      const invitePillCode = createEl('div', { className: 'twfox-invite-id', text: '#FOXP2P' });
+      const inviteBannerSub = createEl('div', { className: 'twfox-invite-sub', text: 'CLICK TO COPY ROOM CODE' });
+      const invitePillCode = createEl('div', { id: 'twfoxtetrio-lobby-invite-code', className: 'twfox-invite-id', text: '#----' });
       const inviteBanner = createEl('div', { id: 'twfoxtetrio-lobby-invite-banner', className: 'ns', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } }, [
-        createEl('div', { className: 'twfox-invite-sub', text: 'CLICK TO GENERATE & COPY INVITE' }),
+        inviteBannerSub,
         invitePillCode
       ]);
 
@@ -1516,49 +1582,73 @@
       const tabRoomBtn = createEl('div', { id: 'twfoxtetrio-lobby-tab-room', className: 'twfox-room-tab', text: 'ROOM', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } });
       const tabGameBtn = createEl('div', { id: 'twfoxtetrio-lobby-tab-game', className: 'twfox-room-tab', text: 'GAME', attrs: { 'data-hover': 'tap', 'data-hit': 'click' } });
 
-      // INVITE pane (Host + Client join inside native center well)
-      const hostGenInviteBtn = createEl('button', { id: 'twfoxtetrio-host-gen-invite', className: 'twfox-btn is-pri', text: '+ GENERATE INVITE', type: 'button' });
-      const hostCopyInviteBtn = createEl('button', { id: 'twfoxtetrio-host-copy-invite', className: 'twfox-btn', text: 'COPY INVITE', type: 'button' });
+      // INVITE pane: primary 4-char #CODE card + collapsible manual P2P fallback
+      const hostRoomCodeLabel = createEl('div', { id: 'twfoxtetrio-host-room-code', className: 'twfox-code-value', text: '#----' });
+      const hostCopyCodeBtn = createEl('button', { id: 'twfoxtetrio-host-copy-code', className: 'twfox-btn is-pri', text: 'COPY CODE', type: 'button' });
+      const hostInviteStatus = createEl('p', { style: 'margin:0;color:#b89de0;', text: 'Share this code on Discord — your PC acts as the room server.' });
+
+      const hostGenInviteBtn = createEl('button', { id: 'twfoxtetrio-host-gen-invite', className: 'twfox-btn', text: '+ MANUAL INVITE', type: 'button' });
+      const hostCopyInviteBtn = createEl('button', { id: 'twfoxtetrio-host-copy-invite', className: 'twfox-btn', text: 'COPY FOX1', type: 'button' });
       const hostOfferOutput = createEl('textarea', {
         id: 'twfoxtetrio-host-offer-output',
         className: 'twfox-textarea',
-        attrs: { readonly: 'true', placeholder: 'Generate an invite code to send your friend on Discord...' }
+        attrs: { readonly: 'true', placeholder: 'Manual FOX1:... offer appears here' }
       });
       const hostAnswerInput = createEl('textarea', {
         id: 'twfoxtetrio-host-answer-input',
         className: 'twfox-textarea',
-        attrs: { placeholder: 'Paste FOXR:... reply code from your friend here' }
+        attrs: { placeholder: 'Paste FOXR/FOX1 reply code from friend here' }
       });
       const hostAcceptBtn = createEl('button', { id: 'twfoxtetrio-host-accept-btn', className: 'twfox-btn is-pri', text: 'CONNECT PLAYER', type: 'button' });
-      const hostInviteStatus = createEl('p', { style: 'margin:0;color:#b89de0;', text: '' });
-      const hostInviteBox = createEl('div', { id: 'twfoxtetrio-host-invite-box', style: 'display:flex;flex-direction:column;gap:8px;' }, [
-        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'HOST SERVER P2P — Invite friends over Discord without external servers:' }),
+      const hostManualPanel = createEl('div', { id: 'twfoxtetrio-host-manual-panel', className: 'twfox-fallback-panel hidden' }, [
+        createEl('p', { style: 'margin:0;color:#8c7ba6;', text: 'Manual WebRTC fallback (no signaling server needed):' }),
         createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [hostGenInviteBtn, hostCopyInviteBtn]),
         hostOfferOutput,
         hostAnswerInput,
-        hostAcceptBtn,
-        hostInviteStatus
+        hostAcceptBtn
+      ]);
+      const hostManualToggleBtn = createEl('button', {
+        id: 'twfoxtetrio-host-manual-toggle',
+        className: 'twfox-btn',
+        text: 'MANUAL P2P FALLBACK ▾',
+        type: 'button',
+        style: 'align-self:flex-start;'
+      });
+      hostManualToggleBtn.addEventListener('click', function () {
+        setClass(hostManualPanel, 'hidden', !hostManualPanel.classList.contains('hidden'));
+      });
+
+      const hostInviteBox = createEl('div', { id: 'twfoxtetrio-host-invite-box', className: 'twfox-invite-stack' }, [
+        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'ROOM INVITE CODE — Friends enter this #CODE in JOIN LOBBY:' }),
+        createEl('div', { className: 'twfox-code-card' }, [hostRoomCodeLabel, hostCopyCodeBtn]),
+        hostInviteStatus,
+        hostManualToggleBtn,
+        hostManualPanel
       ]);
 
-      const joinOfferInput = createEl('textarea', {
+      const joinOfferInput = createEl('input', {
         id: 'twfoxtetrio-join-offer-input',
-        className: 'twfox-textarea',
-        attrs: { placeholder: 'Paste your friend Host FOX1:... invite code here' }
+        className: 'twfox-input twfox-code-input',
+        attrs: { type: 'text', placeholder: '#K7M4  (or paste FOX1:... invite)' }
       });
-      const joinGenerateBtn = createEl('button', { id: 'twfoxtetrio-join-generate-btn', className: 'twfox-btn is-pri', text: 'GENERATE REPLY', type: 'button' });
+      const joinGenerateBtn = createEl('button', { id: 'twfoxtetrio-join-generate-btn', className: 'twfox-btn is-pri', text: 'JOIN ROOM', type: 'button' });
+      const joinStatus = createEl('p', { id: 'twfoxtetrio-join-status', style: 'margin:0;color:#b89de0;', text: '' });
       const joinAnswerOutput = createEl('textarea', {
         id: 'twfoxtetrio-join-answer-output',
         className: 'twfox-textarea',
-        attrs: { readonly: 'true', placeholder: 'Send this generated FOXR:... code back to Host' }
+        attrs: { readonly: 'true', placeholder: 'Send this generated FOX1 reply back to Host' }
       });
       const joinCopyBtn = createEl('button', { id: 'twfoxtetrio-join-copy-btn', className: 'twfox-btn', text: 'COPY REPLY', type: 'button' });
-      const joinStatus = createEl('p', { id: 'twfoxtetrio-join-status', style: 'margin:0;color:#b89de0;', text: '' });
-      const joinBox = createEl('div', { id: 'twfoxtetrio-multi-join', className: 'hidden', style: 'display:flex;flex-direction:column;gap:8px;' }, [
-        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'JOIN P2P LOBBY — Paste Host invite, copy reply & wait for Host accept:' }),
-        joinOfferInput,
-        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [joinGenerateBtn, joinCopyBtn]),
+      const joinManualReplyBox = createEl('div', { id: 'twfoxtetrio-join-manual-reply', className: 'twfox-fallback-panel hidden' }, [
         joinAnswerOutput,
-        joinStatus
+        joinCopyBtn
+      ]);
+      const joinBox = createEl('div', { id: 'twfoxtetrio-multi-join', className: 'twfox-invite-stack hidden' }, [
+        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'ENTER ROOM CODE (#XXXX) TO JOIN AUTOMATICALLY:' }),
+        joinOfferInput,
+        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [joinGenerateBtn]),
+        joinStatus,
+        joinManualReplyBox
       ]);
 
       const centerTabInvite = createEl('div', { id: 'twfoxtetrio-center-invite' }, [hostInviteBox, joinBox]);
@@ -1683,6 +1773,9 @@
         lobbyView,
         gameView,
         lobbyRoomTitle,
+        inviteBannerSub,
+        invitePillCode,
+        hostRoomCodeLabel,
         lobbyModeTag,
         playersHeading,
         startCountSub,
@@ -1716,7 +1809,7 @@
         { id: 'twfoxtetrio-join-room-btn', className: 'scroller_item ns', attrs: { 'data-hover': 'hover', 'data-hit': 'hit2' } },
         [
           createEl('h1', { text: 'JOIN LOBBY' }),
-          createEl('p', { text: 'connect to a friend room using their FOX1 invite code' })
+          createEl('p', { text: 'connect to a friend room using their short #CODE' })
         ]
       );
       const reqBackBtn = createEl('div', { id: 'twfoxtetrio-req-back', className: 'ns', text: 'BACK', attrs: { 'data-hover': 'hover', 'data-hit': 'back' } });
@@ -1734,15 +1827,37 @@
       if (menusHost) menusHost.appendChild(multiRequestEl);
 
       let pendingInvitePeerId = null;
+      let copyNoticeTimer = null;
+
+      function copyRoomShortCode() {
+        const snap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
+        const code = snap && snap.room && snap.room.roomCode ? '#' + snap.room.roomCode : '';
+        if (!code) return false;
+        copyToClipboard(code);
+        inviteBannerSub.textContent = `COPIED ${code}!`;
+        if (snap && snap.role === 'host') {
+          hostInviteStatus.textContent = `Code ${code} copied! Share it with friends to join.`;
+        }
+        if (typeof root.clearTimeout === 'function') root.clearTimeout(copyNoticeTimer);
+        if (typeof root.setTimeout === 'function') {
+          copyNoticeTimer = root.setTimeout(function () {
+            inviteBannerSub.textContent = 'CLICK TO COPY ROOM CODE';
+          }, 1600);
+          if (copyNoticeTimer && typeof copyNoticeTimer.unref === 'function') copyNoticeTimer.unref();
+        }
+        return true;
+      }
 
       createBtn.addEventListener('click', function () {
         closeMultiRequest();
         if (!p2pRoom) return;
-        const hostName = (runtimeApi.getState().selfUsername || 'HOST').toUpperCase();
+        const hostName = resolveLocalUsername(runtimeApi, 'HOST');
         bindPeerSession(p2pRoom.createHostServer({ hostName }));
         hostOfferOutput.value = '';
         hostAnswerInput.value = '';
-        hostInviteStatus.textContent = '';
+        setClass(hostManualPanel, 'hidden', true);
+        setClass(joinManualReplyBox, 'hidden', true);
+        hostInviteStatus.textContent = 'Share the #CODE above — waiting for players to connect...';
         setCenterTab('invite');
         showMultiSubMode('lobby');
         navigateMenu('foxmod_multi');
@@ -1754,16 +1869,21 @@
         joinOfferInput.value = '';
         joinAnswerOutput.value = '';
         joinStatus.textContent = '';
+        setClass(joinManualReplyBox, 'hidden', true);
+        joinGenerateBtn.disabled = false;
+        invitePillCode.textContent = '#JOIN';
+        inviteBannerSub.textContent = 'ENTER #CODE TO JOIN';
         lobbyRoomTitle.textContent = 'JOIN FOXMOD ROOM';
         playersHeading.textContent = 'PLAYERS (0)';
         playersList.innerHTML = '';
         chatLog.innerHTML = '';
-        winnerBanner.textContent = 'PASTE HOST INVITE TO JOIN';
+        winnerBanner.textContent = 'ENTER #CODE TO JOIN';
         showMultiSubMode('join');
         navigateMenu('foxmod_multi');
       });
 
       leaveRoomBtn.addEventListener('click', function () {
+        if (typeof root.clearTimeout === 'function') root.clearTimeout(copyNoticeTimer);
         teardownPeerSession();
         navigateMenu('foxmod');
       });
@@ -1774,34 +1894,26 @@
 
       async function generateHostInvite() {
         if (!peerSession || peerSession.getSnapshot().role !== 'host') return;
-        hostInviteStatus.textContent = 'Generating WebRTC invite code...';
+        hostInviteStatus.textContent = 'Generating manual WebRTC invite code...';
         try {
           const invite = await peerSession.createInvite();
           pendingInvitePeerId = invite.peerId;
           hostOfferOutput.value = invite.code;
           copyToClipboard(invite.code);
-          hostInviteStatus.textContent = 'Invite copied! Send on Discord and paste friend FOXR reply below.';
+          hostInviteStatus.textContent = 'Manual FOX1 invite copied! Paste your friend reply below.';
         } catch (err) {
           hostInviteStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
         }
       }
 
+      hostCopyCodeBtn.addEventListener('click', copyRoomShortCode);
+      inviteBanner.addEventListener('click', copyRoomShortCode);
       hostGenInviteBtn.addEventListener('click', generateHostInvite);
-      inviteBanner.addEventListener('click', function () {
-        if (peerSession && peerSession.getSnapshot().role === 'host') {
-          if (hostOfferOutput.value) {
-            copyToClipboard(hostOfferOutput.value);
-            hostInviteStatus.textContent = 'Invite copied to clipboard!';
-          } else {
-            generateHostInvite();
-          }
-        }
-      });
 
       hostCopyInviteBtn.addEventListener('click', function () {
         if (hostOfferOutput.value) {
           copyToClipboard(hostOfferOutput.value);
-          hostInviteStatus.textContent = 'Invite copied to clipboard.';
+          hostInviteStatus.textContent = 'Manual FOX1 invite copied to clipboard.';
         }
       });
 
@@ -1818,20 +1930,39 @@
         }
       });
 
-      joinGenerateBtn.addEventListener('click', async function () {
+      async function handleJoinSubmit() {
         if (!p2pRoom) return;
-        joinStatus.textContent = 'Generating reply code...';
+        const rawCode = String(joinOfferInput.value || '').trim();
+        if (!rawCode) {
+          joinStatus.textContent = 'Enter a #CODE (e.g. K7M4) or FOX1 invite.';
+          return;
+        }
+        joinGenerateBtn.disabled = true;
+        setClass(joinManualReplyBox, 'hidden', true);
+        joinStatus.textContent = 'Connecting to room...';
         try {
-          const playerName = (runtimeApi.getState().selfUsername || 'PLAYER').toUpperCase();
+          const playerName = resolveLocalUsername(runtimeApi, 'PLAYER');
           const client = p2pRoom.createClientPeer({ playerName });
           bindPeerSession(client);
-          const answerCode = await client.joinFromInvite(joinOfferInput.value);
-          joinAnswerOutput.value = answerCode;
-          copyToClipboard(answerCode);
-          joinStatus.textContent = 'Reply copied! Send to Host on Discord and wait for accept.';
+          const res = await client.joinByCode(rawCode);
+          if (res && res.mode === 'manual' && res.answerCode) {
+            joinAnswerOutput.value = res.answerCode;
+            copyToClipboard(res.answerCode);
+            setClass(joinManualReplyBox, 'hidden', false);
+            joinStatus.textContent = 'Manual reply copied! Send it to the Host to finish connecting.';
+          } else {
+            joinStatus.textContent = `Connected to #${res.roomCode}! Opening WebRTC tunnel...`;
+          }
         } catch (err) {
           joinStatus.textContent = 'Error: ' + (err && err.message ? err.message : err);
+        } finally {
+          joinGenerateBtn.disabled = false;
         }
+      }
+
+      joinGenerateBtn.addEventListener('click', handleJoinSubmit);
+      joinOfferInput.addEventListener('keydown', function (ev) {
+        if (ev && (ev.key === 'Enter' || ev.code === 'Enter')) handleJoinSubmit();
       });
 
       joinCopyBtn.addEventListener('click', function () {

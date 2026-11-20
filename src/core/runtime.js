@@ -497,6 +497,18 @@
     observePbElement('pbdisplay_blitz_inner');
     observePbElement('pbdisplay_40l_inner');
 
+    const meEl = document.getElementById('me_username');
+    if (meEl) {
+      const meObserver = new MutationObserver(() => {
+        refreshSelfUsername();
+      });
+      meObserver.observe(meEl, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    }
+
     for (const [name, featureInit] of features.entries()) {
       try {
         featureInit(api);
@@ -509,6 +521,7 @@
   const api = {
     version: '0.5.0',
     getState() {
+      refreshSelfUsername();
       return {
         ...state,
         leaderboard: state.leaderboard.slice()

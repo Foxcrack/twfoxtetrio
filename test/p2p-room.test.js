@@ -153,3 +153,84 @@ test('HostServer runs custom P2P room lifecycle, relays settings/boards/attacks,
   client.close();
   host.close();
 });
+
+test('host and client connect automatically via 4-char #CODE topic signaling and sync player names', async () => {
+  const rtcFactory = createLoopbackRtcFactory();
+  const topics = new Map();
+  let seq = 1;
+
+  async function mockFetch(url, init) {
+    const method = (init && init.method) || 'GET';
+    const topicMatch = String(url).match(/\/(twfoxtetrio-v1-[A-Z0-9]+)/);
+    const topic = topicMatch ? topicMatch[1] : 'unknown';
+    if (!topics.has(topic)) topics.set(topic, []);
+    const list = topics.get(topic);
+
+    if (method === 'POST') {
+      list.push(
+        JSON.stringify({
+          id: 'm' + seq++,
+          event: 'message',
+          topic,
+          message: String(init.body || '')
+        })
+      );
+      return { ok: true, status: 200, text: async () => '' };
+    }
+
+    const bodyText = list.join('\n') + (list.length ? '\n' : '');
+    return {
+      ok: true,
+      status: 200,
+      text: async () => bodyText
+    };
+  }
+
+  const host = p2p.createHostServer({
+    hostName: 'TWFoxcrack',
+    rtcFactory,
+    fetchFn: mockFetch,
+    pollIntervalMs: 25
+  });
+  const roomCode = host.getSnapshot().room.roomCode;
+  assert.match(roomCode, /^[2-9A-HJ-NP-Z]{4}$/);
+  assert.equal(host.getSnapshot().room.roomName, "TWFoxcrack'S FOXROOM");
+
+  const client = p2p.createClientPeer({
+    playerName: 'Maekrix',
+    rtcFactory,
+    fetchFn: mockFetch,
+    pollIntervalMs: 25,
+    joinTimeoutMs: 3000
+  });
+
+  const joinRes = await client.joinByCode('#' + roomCode.toLowerCase());
+  assert.equal(joinRes.mode, 'auto');
+  assert.equal(joinRes.roomCode, roomCode);
+
+  await new Promise((r) => setTimeout(r, 80));
+
+  const clientSnap = client.getSnapshot();
+  const hostSnap = host.getSnapshot();
+  assert.equal(clientSnap.connected, true);
+  assert.equal(clientSnap.room.roomCode, roomCode);
+  assert.equal(hostSnap.players.length, 2);
+  assert.deepEqual(
+    hostSnap.players.map((p) => p.name),
+    ['TWFoxcrack', 'Maekrix']
+  );
+  assert.deepEqual(
+    clientSnap.players.map((p) => p.name),
+    ['TWFoxcrack', 'Maekrix']
+  );
+
+  host.sendChat('bienvenido');
+  client.sendChat('hola');
+  await new Promise((r) => setTimeout(r, 30));
+  const messages = client.getSnapshot().chat.map((c) => `${c.author}:${c.text}`);
+  assert.ok(messages.includes('TWFoxcrack:bienvenido'));
+  assert.ok(messages.includes('Maekrix:hola'));
+
+  client.close();
+  host.close();
+});

@@ -6,6 +6,79 @@
     { urls: 'stun:stun1.l.google.com:19302' }
   ];
 
+  const ROOM_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const SIGNAL_BASE_URL = 'https://ntfy.sh';
+  const SIGNAL_TOPIC_PREFIX = 'twfoxtetrio-v1-';
+
+  function generateRoomCode(length) {
+    const size = Math.max(4, Math.min(8, Number(length) || 4));
+    let out = '';
+    for (let i = 0; i < size; i++) {
+      const idx = Math.floor(Math.random() * ROOM_CODE_ALPHABET.length);
+      out += ROOM_CODE_ALPHABET[idx];
+    }
+    return out;
+  }
+
+  function normalizeRoomCode(raw) {
+    const cleaned = String(raw || '')
+      .trim()
+      .toUpperCase()
+      .replace(/^#+/, '')
+      .replace(/[^0-9A-Z]/g, '');
+    return /^[2-9A-HJ-NP-Z]{4,8}$/.test(cleaned) ? cleaned : '';
+  }
+
+  function isManualSignalCode(raw) {
+    return /^FOX[01]:/i.test(String(raw || '').trim());
+  }
+
+  function resolveFetch(opts) {
+    if (opts && typeof opts.fetchFn === 'function') return opts.fetchFn;
+    if (typeof root.fetch === 'function') return root.fetch.bind(root);
+    return null;
+  }
+
+  function buildTopicUrl(roomCode) {
+    return `${SIGNAL_BASE_URL}/${SIGNAL_TOPIC_PREFIX}${normalizeRoomCode(roomCode)}`;
+  }
+
+  async function postTopicSignal(fetchFn, roomCode, payload) {
+    const resp = await fetchFn(buildTopicUrl(roomCode), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp || !resp.ok) {
+      throw new Error(`Signaling server error (${resp ? resp.status : 'network'})`);
+    }
+  }
+
+  async function pollTopicSignals(fetchFn, roomCode, since) {
+    const url = `${buildTopicUrl(roomCode)}/json?poll=1&since=${encodeURIComponent(since || '2m')}`;
+    const resp = await fetchFn(url, { method: 'GET' });
+    if (!resp || !resp.ok) return [];
+    const text = await resp.text();
+    if (!text) return [];
+    const out = [];
+    for (const rawLine of text.split('\n')) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      try {
+        const envelope = JSON.parse(line);
+        if (envelope && envelope.event === 'message' && typeof envelope.message === 'string') {
+          const payload = JSON.parse(envelope.message);
+          out.push({ id: envelope.id || '', payload });
+        }
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  function delayMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   function toBase64(bytes) {
     let bin = '';
     for (let i = 0; i < bytes.length; i++) {
@@ -149,9 +222,17 @@
   function createHostServer(options) {
     const opts = options || {};
     const rtcFactory = opts.rtcFactory || null;
+    const fetchFn = resolveFetch(opts);
+    const shouldAutoSignal = Boolean(fetchFn) && (
+      opts.autoSignaling === true ||
+      (opts.autoSignaling !== false && (Boolean(opts.fetchFn) || !opts.rtcFactory))
+    );
+    const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 950);
     const hostName = String(opts.hostName || 'HOST').trim().slice(0, 20) || 'HOST';
+    const roomCode = normalizeRoomCode(opts.roomCode) || generateRoomCode(4);
 
     const room = {
+      roomCode,
       roomName: String(opts.roomName || (hostName + "'S FOXROOM")).slice(0, 32),
       pieceSet: 'pentomino',
       garbageMultiplier: 1,
@@ -177,14 +258,22 @@
 
     const connections = new Map();
     const pendingOffers = new Map();
+    const announcedPeers = new Set();
+    const seenEventIds = new Set();
+    const seenClientReqs = new Set();
+    const seenAnswerPeerIds = new Set();
     const chat = [];
     const listeners = new Set();
     let nextPeerSeq = 2;
     let attackNonce = 1;
+    let signalingStatus = shouldAutoSignal ? 'connecting' : 'manual';
+    let pollTimer = null;
+    let closed = false;
 
     function getSnapshot() {
       return {
         role: 'host',
+        signalingStatus,
         room: { ...room },
         players: Array.from(players.values()).map((p) => ({ ...p })),
         chat: chat.slice(),
@@ -307,7 +396,12 @@
       switch (msg.type) {
         case 'hello':
           player.name = String(msg.name || player.name).trim().slice(0, 20) || player.name;
-          pushChat('SYS', `${player.name} joined the room.`, true);
+          if (!announcedPeers.has(peerId)) {
+            announcedPeers.add(peerId);
+            pushChat('SYS', `${player.name} joined the room.`, true);
+          } else {
+            broadcastRoomState();
+          }
           break;
         case 'ready':
           player.ready = Boolean(msg.ready);
@@ -345,8 +439,9 @@
       }
     }
 
-    function attachPeerChannel(peerId, pc, channel) {
-      const slotName = 'PLAYER ' + peerId.slice(1);
+    function attachPeerChannel(peerId, pc, channel, initialName) {
+      const cleanedInitial = initialName ? String(initialName).trim().slice(0, 20) : '';
+      const slotName = cleanedInitial || ('PLAYER ' + peerId.slice(1));
       connections.set(peerId, { pc, channel });
       channel.onopen = () => {
         if (!players.has(peerId)) {
@@ -371,6 +466,7 @@
         const left = players.get(peerId);
         connections.delete(peerId);
         players.delete(peerId);
+        announcedPeers.delete(peerId);
         if (left) {
           pushChat('SYS', `${left.name} disconnected.`, true);
         } else {
@@ -394,6 +490,7 @@
         code: await encodeSignal({
           role: 'offer',
           peerId,
+          roomCode: room.roomCode,
           roomName: room.roomName,
           hostName,
           sdp: pc.localDescription
@@ -421,7 +518,8 @@
         throw new Error('No pending invite slot found. Generate an invite code first.');
       }
       pendingOffers.delete(targetPeerId);
-      attachPeerChannel(targetPeerId, entry.pc, entry.channel);
+      const initialName = decoded.name || (entry.label !== targetPeerId ? entry.label : '');
+      attachPeerChannel(targetPeerId, entry.pc, entry.channel, initialName);
       await entry.pc.setRemoteDescription(decoded.sdp);
       notify('peer_accepted', { peerId: targetPeerId });
       return targetPeerId;
@@ -504,7 +602,68 @@
       evaluateRoundEnd();
     }
 
+    async function pollAutoSignalingOnce() {
+      if (closed || !shouldAutoSignal) return;
+      try {
+        const items = await pollTopicSignals(fetchFn, room.roomCode, '2m');
+        if (signalingStatus !== 'online') {
+          signalingStatus = 'online';
+          notify('signaling_ready');
+        }
+        for (const item of items) {
+          if (closed) break;
+          if (item.id) {
+            if (seenEventIds.has(item.id)) continue;
+            seenEventIds.add(item.id);
+          }
+          const msg = item.payload;
+          if (!msg || typeof msg !== 'object') continue;
+          if (msg.roomCode && normalizeRoomCode(msg.roomCode) !== room.roomCode) continue;
+
+          if (msg.kind === 'join_req' && msg.clientId && !seenClientReqs.has(msg.clientId)) {
+            seenClientReqs.add(msg.clientId);
+            const invite = await createInvite(msg.name || 'PLAYER');
+            await postTopicSignal(fetchFn, room.roomCode, {
+              kind: 'offer',
+              roomCode: room.roomCode,
+              to: msg.clientId,
+              peerId: invite.peerId,
+              roomName: room.roomName,
+              hostName,
+              offer: invite.code
+            });
+          } else if (msg.kind === 'answer' && msg.peerId && msg.answer && !seenAnswerPeerIds.has(msg.peerId)) {
+            if (!pendingOffers.has(msg.peerId)) continue;
+            seenAnswerPeerIds.add(msg.peerId);
+            await acceptAnswer(msg.peerId, msg.answer);
+          }
+        }
+      } catch (_) {
+        if (signalingStatus !== 'offline') {
+          signalingStatus = 'offline';
+          notify('signaling_offline');
+        }
+      }
+    }
+
+    function scheduleAutoPoll(delay) {
+      if (closed || !shouldAutoSignal) return;
+      pollTimer = setTimeout(async () => {
+        await pollAutoSignalingOnce();
+        scheduleAutoPoll(pollIntervalMs);
+      }, delay);
+    }
+
+    if (shouldAutoSignal) {
+      scheduleAutoPoll(25);
+    }
+
     function close() {
+      closed = true;
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
       for (const entry of pendingOffers.values()) {
         try {
           entry.pc.close();
@@ -548,6 +707,9 @@
   function createClientPeer(options) {
     const opts = options || {};
     const rtcFactory = opts.rtcFactory || null;
+    const fetchFn = resolveFetch(opts);
+    const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 650);
+    const joinTimeoutMs = Math.max(500, Number(opts.joinTimeoutMs) || 25000);
     const playerName = String(opts.playerName || 'PLAYER').trim().slice(0, 20) || 'PLAYER';
 
     let pc = null;
@@ -555,7 +717,9 @@
     let selfId = null;
     let connected = false;
     let ready = true;
+    let closed = false;
     let room = {
+      roomCode: '',
       roomName: 'FOXMOD P2P ROOM',
       pieceSet: 'pentomino',
       garbageMultiplier: 1,
@@ -651,6 +815,9 @@
       if (!decoded || !decoded.sdp || decoded.sdp.type !== 'offer') {
         throw new Error('Invalid invite code. Expected a host FOX1/FOX0 offer.');
       }
+      if (decoded.roomCode) {
+        room.roomCode = decoded.roomCode;
+      }
       if (decoded.roomName) {
         room.roomName = decoded.roomName;
       }
@@ -681,7 +848,83 @@
       });
     }
 
+    /**
+     * Joins via either a 4-char #CODE (automatic WebRTC handshake) or manual FOX1/FOX0 fallback.
+     */
+    async function joinByCode(rawInput) {
+      const text = String(rawInput || '').trim();
+      if (!text) {
+        throw new Error('Enter a #CODE (e.g. K7M4) or FOX1 invite code.');
+      }
+      if (isManualSignalCode(text)) {
+        const answerCode = await joinFromInvite(text);
+        return { mode: 'manual', answerCode };
+      }
+
+      const code = normalizeRoomCode(text);
+      if (!code) {
+        throw new Error('Invalid room code. Use a 4-char code (e.g. #K7M4) or FOX1:... invite.');
+      }
+      if (!fetchFn) {
+        throw new Error('Auto-join network unavailable. Use MANUAL P2P FALLBACK with a FOX1:... invite.');
+      }
+
+      const clientId = 'c_' + Math.random().toString(36).slice(2, 10) + '_' + Date.now().toString(36);
+      room.roomCode = code;
+      room.status = 'connecting';
+      notify('connecting', { roomCode: code });
+
+      await postTopicSignal(fetchFn, code, {
+        kind: 'join_req',
+        roomCode: code,
+        clientId,
+        name: playerName
+      });
+
+      const deadline = Date.now() + joinTimeoutMs;
+      let firstWait = Math.min(80, pollIntervalMs);
+      while (!closed && Date.now() < deadline) {
+        await delayMs(firstWait);
+        firstWait = pollIntervalMs;
+        if (closed) break;
+
+        let items = [];
+        try {
+          items = await pollTopicSignals(fetchFn, code, '2m');
+        } catch (_) {
+          continue;
+        }
+        const offerMsg = items
+          .map((item) => item && item.payload)
+          .find((msg) => msg && msg.kind === 'offer' && msg.to === clientId && msg.offer);
+        if (offerMsg) {
+          if (offerMsg.roomName) room.roomName = offerMsg.roomName;
+          const answerCode = await joinFromInvite(offerMsg.offer);
+          await postTopicSignal(fetchFn, code, {
+            kind: 'answer',
+            roomCode: code,
+            peerId: offerMsg.peerId,
+            clientId,
+            name: playerName,
+            answer: answerCode
+          });
+          return {
+            mode: 'auto',
+            roomCode: code,
+            roomName: room.roomName,
+            peerId: offerMsg.peerId
+          };
+        }
+      }
+
+      if (closed) {
+        throw new Error('Room join cancelled.');
+      }
+      throw new Error(`Room #${code} did not respond. Verify the Host room is open or use MANUAL P2P FALLBACK.`);
+    }
+
     function close() {
+      closed = true;
       if (channel) {
         try {
           channel.close();
@@ -704,6 +947,7 @@
       },
       getSnapshot,
       joinFromInvite,
+      joinByCode,
       setReady(val) {
         ready = Boolean(val);
         send({ type: 'ready', ready });
@@ -734,6 +978,9 @@
   root.__TWFOX_INTERNAL__ = root.__TWFOX_INTERNAL__ || {};
   root.__TWFOX_INTERNAL__.p2pRoom = {
     ICE_SERVERS,
+    ROOM_CODE_ALPHABET,
+    generateRoomCode,
+    normalizeRoomCode,
     encodeSignal,
     decodeSignal,
     pickAttackTarget,

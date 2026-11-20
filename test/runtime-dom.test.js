@@ -233,6 +233,7 @@ function createFakeDomEnvironment(protocol) {
   const storage = new Map();
   const intervals = new Map();
   const openedExternalUrls = [];
+  const copiedTexts = [];
   let nextIntervalId = 1;
   let fakeNow = 1000;
 
@@ -262,6 +263,16 @@ function createFakeDomEnvironment(protocol) {
     OPEN_EXTERNAL(url) {
       openedExternalUrls.push(url);
     },
+    navigator: {
+      clipboard: {
+        writeText(text) {
+          copiedTexts.push(String(text || ''));
+          return Promise.resolve();
+        }
+      }
+    },
+    setTimeout,
+    clearTimeout,
     setInterval(fn) {
       const id = nextIntervalId++;
       intervals.set(id, fn);
@@ -298,6 +309,7 @@ function createFakeDomEnvironment(protocol) {
     },
     storage,
     openedExternalUrls,
+    copiedTexts,
     meUsername,
     pbBlitz,
     pb40l,
@@ -708,6 +720,10 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
   assert.equal(foxView.classList.contains('hidden'), false);
 
+  // Delayed TETR.IO login populates #me_username -> runtime MutationObserver updates selfUsername automatically
+  env.meUsername.textContent = 'TWFoxcrack';
+  assert.equal(env.context.__TWFOX_TETRIO__.getState().selfUsername, 'TWFoxcrack');
+
   // Enter MULTIJUGADOR -> opens #list_request style CREATE LOBBY / JOIN LOBBY picker
   env.elements.get('twfoxtetrio-card-multi').click();
   const multiReq = env.elements.get('twfoxtetrio-multi-request');
@@ -715,18 +731,47 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.elements.get('twfoxtetrio-create-room-btn').querySelector('h1').textContent, 'CREATE LOBBY');
   assert.equal(env.elements.get('twfoxtetrio-join-room-btn').querySelector('h1').textContent, 'JOIN LOBBY');
 
-  // Clicking CREATE LOBBY opens the 3-column TETR.IO room lobby as Host Server
+  // Clicking CREATE LOBBY opens the 3-column TETR.IO room lobby as Host Server with real name & 4-char #CODE
   env.elements.get('twfoxtetrio-create-room-btn').click();
   assert.equal(multiReq.classList.contains('is-open'), false);
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
   assert.equal(multiPane.classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), false);
-  assert.equal(env.elements.get('twfoxtetrio-lobby-players').children.length, 1);
+  assert.equal(env.elements.get('twfoxtetrio-multi-join').classList.contains('hidden'), true);
+  assert.equal(env.elements.get('twfoxtetrio-multi-join').getAttribute('style'), null);
+  assert.equal(env.elements.get('twfoxtetrio-host-invite-box').getAttribute('style'), null);
+  assert.equal(env.elements.get('twfoxtetrio-lobby-room-title').textContent, "TWFOXCRACK'S FOXROOM");
+  const playersBox = env.elements.get('twfoxtetrio-lobby-players');
+  assert.equal(playersBox.children.length, 1);
+  assert.equal(playersBox.children[0].children[0].textContent, 'TWFOXCRACK');
+
+  // Top #CODE banner matches Host code card and clicking copies #CODE
+  const topBannerCode = env.elements.get('twfoxtetrio-lobby-invite-code').textContent;
+  const hostCardCode = env.elements.get('twfoxtetrio-host-room-code').textContent;
+  assert.match(topBannerCode, /^#[2-9A-HJ-NP-Z]{4}$/);
+  assert.equal(topBannerCode, hostCardCode);
+  env.elements.get('twfoxtetrio-lobby-invite-banner').click();
+  assert.equal(env.copiedTexts[env.copiedTexts.length - 1], topBannerCode);
+
+  // Manual P2P fallback starts collapsed and toggles cleanly
+  const manualPanel = env.elements.get('twfoxtetrio-host-manual-panel');
+  assert.equal(manualPanel.classList.contains('hidden'), true);
+  env.elements.get('twfoxtetrio-host-manual-toggle').click();
+  assert.equal(manualPanel.classList.contains('hidden'), false);
 
   // Switch center lobby tab to GAME -> shows room PIECE SET selector
   env.elements.get('twfoxtetrio-lobby-tab-game').click();
   assert.equal(env.elements.get('twfoxtetrio-center-game').classList.contains('hidden'), false);
+
+  // EXIT -> MULTIJUGADOR -> JOIN LOBBY shows only clean Join UI with #JOIN top banner
+  env.elements.get('twfoxtetrio-leave-room-btn').click();
+  env.elements.get('twfoxtetrio-card-multi').click();
+  env.elements.get('twfoxtetrio-join-room-btn').click();
+  assert.equal(env.elements.get('twfoxtetrio-lobby-invite-code').textContent, '#JOIN');
+  assert.equal(env.elements.get('twfoxtetrio-multi-join').classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), true);
+  assert.equal(env.elements.get('twfoxtetrio-join-manual-reply').classList.contains('hidden'), true);
 
   // Navigate to CONFIG via EXIT -> card -> toggle Blitz & maxRows -> reset defaults
   env.elements.get('twfoxtetrio-leave-room-btn').click();
