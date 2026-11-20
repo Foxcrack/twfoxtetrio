@@ -403,30 +403,67 @@
   display: block;
 }
 .twfox-stage-scroller {
-  padding-left: 0 !important;
+  position: fixed !important;
+  inset: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
   background: transparent !important;
   text-align: center;
 }
 .twfox-stage-inner {
+  width: 100%;
+  height: 100%;
   min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
-.twfox-stage-bar {
+.twfox-stage-corner-controls {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 6;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  margin-bottom: 6px;
+}
+.twfox-corner-back-btn {
+  position: fixed;
+  left: 0;
+  top: 0.35em;
+  z-index: 8;
+  transform: translateX(-1.2em);
+  background-color: #120e18;
+  border: 0;
+  border-top: 3px solid #2b2238;
+  border-right: 3px solid #211a2c;
+  border-bottom: 3px solid #09070d;
+  color: #fffb;
+  font-family: HUN, sans-serif;
+  font-size: 1.5em;
+  padding: .3em .85em .28em 2em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: .25s transform, .25s filter;
+}
+.twfox-corner-back-btn:hover {
+  transform: translateX(-.4em);
+  filter: brightness(1.25);
+}
+body.twfox-ingame #header,
+body.twfox-ingame #footer,
+body.twfox-ingame #menus > #header_text,
+body.twfox-ingame #menus > #footer {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 .twfox-game-canvas {
   background: transparent;
   display: block;
   max-width: 96vw;
-  max-height: 76vh;
+  max-height: 94vh;
 }
 .twfox-native-scroller > .scroller_block {
   box-sizing: border-box;
@@ -1063,6 +1100,14 @@
     let multiRequestOpen = false;
     let multiDom = null;
 
+    function syncIngameChromeClass() {
+      if (!document.body || !document.body.classList) return;
+      const inStage =
+        activeFoxView === 'foxmod_pentomino' ||
+        (activeFoxView === 'foxmod_multi' && multiSubMode === 'playing');
+      setClass(document.body, 'twfox-ingame', inStage);
+    }
+
     function stopPlayControllers() {
       if (practiceController) practiceController.stop();
       if (multiController) multiController.stop();
@@ -1100,6 +1145,7 @@
     function hideFoxmodScrollersImmediately() {
       closeMultiRequest();
       activeFoxView = null;
+      syncIngameChromeClass();
       stopPlayControllers();
       for (const scroller of scrollerMap.values()) {
         scroller.classList.add('hidden');
@@ -1115,6 +1161,7 @@
       const meta = VIEW_META[targetView] || VIEW_META.home;
       const isFoxTarget = targetView !== 'home';
       activeFoxView = isFoxTarget ? targetView : null;
+      syncIngameChromeClass();
 
       stopPlayControllers();
 
@@ -1319,7 +1366,7 @@
       practiceCanvas = createEl('canvas', {
         id: 'twfoxtetrio-practice-canvas',
         className: 'twfox-game-canvas',
-        attrs: { width: '620', height: '560' }
+        attrs: { width: '640', height: '620' }
       });
 
       if (pentominoEngine && foxmodCanvas) {
@@ -1359,8 +1406,8 @@
         },
         [
           createEl('div', { className: 'twfox-stage-inner' }, [
-            createEl('div', { className: 'twfox-stage-bar' }, [pieceSelect, modeSelect, restartBtn]),
-            practiceCanvas
+            practiceCanvas,
+            createEl('div', { className: 'twfox-stage-corner-controls' }, [pieceSelect, modeSelect, restartBtn])
           ])
         ]
       );
@@ -1378,10 +1425,12 @@
       }
       multiGame = null;
       multiSubMode = 'lobby';
+      syncIngameChromeClass();
     }
 
     function showMultiSubMode(nextSub) {
       multiSubMode = nextSub;
+      syncIngameChromeClass();
       if (!multiDom) return;
       setClass(multiDom.joinBox, 'hidden', nextSub !== 'join');
       setClass(multiDom.hostInviteBox, 'hidden', nextSub === 'join');
@@ -1749,12 +1798,18 @@
       multiCanvas = createEl('canvas', {
         id: 'twfoxtetrio-multi-canvas',
         className: 'twfox-game-canvas',
-        attrs: { width: '580', height: '540' }
+        attrs: { width: '640', height: '620' }
       });
       const opponentsGrid = createEl('div', { id: 'twfoxtetrio-multi-opponents', className: 'twfox-opponents-grid' });
-      const backLobbyBtn = createEl('button', { id: 'twfoxtetrio-back-lobby-btn', className: 'twfox-btn', text: 'BACK TO LOBBY', type: 'button' });
+      const backLobbyBtn = createEl('button', {
+        id: 'twfoxtetrio-back-lobby-btn',
+        className: 'twfox-corner-back-btn ns',
+        text: 'LOBBY',
+        type: 'button',
+        attrs: { 'data-hover': 'hover', 'data-hit': 'back' }
+      });
       const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'twfox-stage-inner hidden' }, [
-        createEl('div', { className: 'twfox-stage-bar' }, [createEl('span', { className: 'twfox-badge', text: 'VS LIVE P2P' }), backLobbyBtn]),
+        backLobbyBtn,
         createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, opponentsGrid])
       ]);
 

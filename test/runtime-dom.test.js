@@ -703,6 +703,7 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   env.elements.get('twfoxtetrio-prac-pentomino').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_pentomino');
   assert.equal(pentominoStagePane.classList.contains('hidden'), false);
+  assert.equal(env.body.classList.contains('twfox-ingame'), true);
   assert.equal(env.elements.get('twfoxtetrio-practice-pieces').value, 'pentomino');
 
   // Custom keybinds read from userConfig (DIGIT8 hard-drops, J/L/Z/C work cleanly)
@@ -713,8 +714,9 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
 
   env.dispatchDocEvent('keydown', { key: '8', code: 'Digit8' });
 
-  // Back returns PENTOMINOS -> PRACTICA -> FOXMOD
+  // Back returns PENTOMINOS -> PRACTICA -> FOXMOD (exits twfox-ingame chrome cleanly)
   env.backBtn.click();
+  assert.equal(env.body.classList.contains('twfox-ingame'), false);
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
   env.backBtn.click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
@@ -763,6 +765,17 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   // Switch center lobby tab to GAME -> shows room PIECE SET selector
   env.elements.get('twfoxtetrio-lobby-tab-game').click();
   assert.equal(env.elements.get('twfoxtetrio-center-game').classList.contains('hidden'), false);
+
+  // Starting VS match enters twfox-ingame and uses corner LOBBY button with no above-board bar
+  const backLobbyBtn = env.elements.get('twfoxtetrio-back-lobby-btn');
+  assert.equal(backLobbyBtn.classList.contains('twfox-corner-back-btn'), true);
+  assert.equal(env.elements.get('twfoxtetrio-multi-game').querySelectorAll('.twfox-stage-bar').length, 0);
+  env.elements.get('twfoxtetrio-host-start-btn').click();
+  assert.equal(env.body.classList.contains('twfox-ingame'), true);
+  assert.equal(env.elements.get('twfoxtetrio-multi-game').classList.contains('hidden'), false);
+  backLobbyBtn.click();
+  assert.equal(env.body.classList.contains('twfox-ingame'), false);
+  assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
 
   // EXIT -> MULTIJUGADOR -> JOIN LOBBY shows only clean Join UI with #JOIN top banner
   env.elements.get('twfoxtetrio-leave-room-btn').click();

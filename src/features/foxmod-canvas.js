@@ -316,11 +316,15 @@
     ctx.clearRect(0, 0, w, h);
 
     const wingW = 112;
-    const cell = Math.floor(Math.min((w - wingW * 2 - 36) / snap.width, (h - 32) / snap.visibleHeight));
+    const skyRows = 3.2;
+    const cell = Math.floor(
+      Math.min((w - wingW * 2 - 36) / snap.width, (h - 20) / (snap.visibleHeight + skyRows))
+    );
     const boardW = cell * snap.width;
     const boardH = cell * snap.visibleHeight;
     const boardX = Math.floor((w - boardW) / 2);
-    const boardY = Math.floor((h - boardH) / 2);
+    const bottomPad = Math.max(10, Math.floor((h - boardH) * 0.16));
+    const boardY = Math.max(Math.ceil(cell * skyRows), h - boardH - bottomPad);
 
     // Pure TETR.IO black well backdrop + subtle grid
     ctx.fillStyle = `rgba(0, 0, 0, ${vOpts.boardOpacity})`;
@@ -361,9 +365,12 @@
       ctx.fillRect(boardX - 6, boardY + boardH - gh, 5, gh);
     }
 
-    // Placed blocks with real TETR.IO mino texture
-    for (let vy = 0; vy < snap.visibleHeight; vy++) {
-      const row = snap.board[vy + snap.bufferHeight];
+    // Placed blocks (including blocks protruding above skyline buffer)
+    for (let rowIdx = 0; rowIdx < snap.board.length; rowIdx++) {
+      const vy = rowIdx - snap.bufferHeight;
+      if (vy >= snap.visibleHeight) continue;
+      const row = snap.board[rowIdx];
+      if (!row) continue;
       for (let x = 0; x < snap.width; x++) {
         if (row[x]) {
           drawTetrioMino(ctx, boardX + x * cell, boardY + vy * cell, cell, row[x], 1, false);
@@ -371,14 +378,14 @@
       }
     }
 
-    // Ghost & Active piece
+    // Ghost & Active piece (including all spawn/buffer rows above skyline)
     if (snap.active && engine.PIECE_DEFS[snap.active.key]) {
       const def = engine.PIECE_DEFS[snap.active.key];
       const matrix = def.rotations[snap.active.rot];
       for (const [cx, cy] of matrix) {
         const vx = snap.active.x + cx;
         const gvy = snap.ghostY + cy - snap.bufferHeight;
-        if (gvy >= 0 && gvy < snap.visibleHeight) {
+        if (gvy >= -snap.bufferHeight && gvy < snap.visibleHeight) {
           drawTetrioMino(
             ctx,
             boardX + vx * cell,
@@ -393,7 +400,7 @@
       for (const [cx, cy] of matrix) {
         const vx = snap.active.x + cx;
         const avy = snap.active.y + cy - snap.bufferHeight;
-        if (avy >= -1 && avy < snap.visibleHeight) {
+        if (avy >= -snap.bufferHeight && avy < snap.visibleHeight) {
           drawTetrioMino(ctx, boardX + vx * cell, boardY + avy * cell, cell, def.slot, 1, false);
         }
       }

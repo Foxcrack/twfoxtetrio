@@ -4,7 +4,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('../src/features/pentomino-engine.js');
+require('../src/features/foxmod-canvas.js');
 const engine = globalThis.__TWFOX_INTERNAL__.pentominoEngine;
+const foxmodCanvas = globalThis.__TWFOX_INTERNAL__.foxmodCanvas;
 
 test('all 12 pentominoes have 5 unique cells and 7 tetrominoes have 4 unique cells across rotations', () => {
   assert.equal(engine.PENTOMINO_KEYS.length, 12);
@@ -90,4 +92,55 @@ test('gameplay supports movement, wall-kick rotation, hold, garbage cancellation
   const pAttack = engine.computeLineAttack(5, 0, false, false);
   assert.equal(pAttack.callout, 'PENTA!');
   assert.equal(pAttack.attack, 6);
+});
+
+test('renderPlayfield keeps sky buffer pieces (avy <= -2) completely visible with positive canvas coordinates', () => {
+  const fills = [];
+  const mockCtx = {
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: 'left',
+    globalAlpha: 1,
+    save() {},
+    restore() {},
+    clearRect() {},
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    fill() {},
+    stroke() {},
+    fillText() {},
+    fillRect(x, y, w, h) {
+      fills.push({ x, y, w, h, style: String(this.fillStyle) });
+    }
+  };
+  const mockCanvas = {
+    width: 640,
+    height: 620,
+    getContext() {
+      return mockCtx;
+    }
+  };
+
+  const game = engine.createGame({ pieceSet: 'pentomino', mode: 'zen', seed: 7 });
+  const snap = game.getSnapshot();
+  // Force PT active piece into spawn buffer row (y=2 => avy=-2, -1, 0)
+  snap.active = { key: 'PT', rot: 0, x: 3, y: 2 };
+  snap.holdKey = null;
+  snap.nextKeys = [];
+  foxmodCanvas.renderPlayfield(mockCanvas, snap, {
+    gridOpacity: 0.1,
+    boardOpacity: 0.85,
+    shadowOpacity: 0.32
+  });
+
+  // Active piece 'PT' uses color '#c352ce' (distinct from ghost/backdrop)
+  const ptBlocks = fills.filter((f) => f.style === '#c352ce');
+  assert.equal(ptBlocks.length, 5, 'All 5 blocks of PT in spawn buffer must render');
+  for (const b of ptBlocks) {
+    assert.ok(b.y >= 4, `Active block at y=${b.y} must never be clipped above canvas top`);
+  }
 });
