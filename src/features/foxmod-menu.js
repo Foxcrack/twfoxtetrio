@@ -632,6 +632,42 @@ body.twfox-ingame #menus > #footer {
 }
 #twfoxtetrio-multi-request .scroller_item > h1 { color: #dac8e7; }
 #twfoxtetrio-multi-request .scroller_item > p { color: #7c6b88; }
+#twfoxtetrio-multi-request .hidden { display: none; }
+#twfoxtetrio-multi-request.is-open .right_scroller.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(30vw);
+}
+.twfox-join-modal-wrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  pointer-events: all;
+}
+.twfox-join-modal {
+  width: min(460px, 92vw);
+  background: linear-gradient(180deg, #1b1526 0%, #120e1a 100%);
+  border: 2px solid #5c3f84;
+  border-bottom-color: #0b0711;
+  border-radius: 6px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.78);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.twfox-join-modal h2 {
+  margin: 0;
+  font-family: HUN, sans-serif;
+  font-size: 1.9em;
+  color: #ffffff;
+  letter-spacing: 0.05em;
+}
 #menus[data-menu-type='foxmod_multi'] #header_text,
 #menus[data-menu-type='foxmod_multi'] #back,
 #menus[data-menu-type='foxmod_multi'] #footer {
@@ -659,6 +695,7 @@ body.twfox-ingame #menus > #footer {
 #twfoxtetrio-multi-lobby {
   width: 100%;
   height: 100%;
+  padding-top: 3.6em;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1197,6 +1234,8 @@ body.twfox-ingame #menus > #footer {
     let multiCanvas = null;
     let multiSubMode = 'lobby';
     let multiRequestEl = null;
+    let multiReqScrollerEl = null;
+    let joinDialogEl = null;
     let multiRequestOpen = false;
     let multiDom = null;
 
@@ -1228,8 +1267,14 @@ body.twfox-ingame #menus > #footer {
       }
     }
 
+    function resetMultiRequestModalView(showJoinDialog) {
+      if (multiReqScrollerEl) setClass(multiReqScrollerEl, 'hidden', Boolean(showJoinDialog));
+      if (joinDialogEl) setClass(joinDialogEl, 'hidden', !showJoinDialog);
+    }
+
     function closeMultiRequest() {
       multiRequestOpen = false;
+      resetMultiRequestModalView(false);
       if (multiRequestEl) {
         multiRequestEl.classList.remove('is-open');
       }
@@ -1238,6 +1283,7 @@ body.twfox-ingame #menus > #footer {
     function openMultiRequest() {
       ensureNativeScrollers();
       if (!multiRequestEl) return;
+      resetMultiRequestModalView(false);
       multiRequestOpen = true;
       multiRequestEl.classList.add('is-open');
     }
@@ -1532,13 +1578,8 @@ body.twfox-ingame #menus > #footer {
       multiSubMode = nextSub;
       syncIngameChromeClass();
       if (!multiDom) return;
-      setClass(multiDom.joinBox, 'hidden', nextSub !== 'join');
-      setClass(multiDom.hostInviteBox, 'hidden', nextSub === 'join');
       setClass(multiDom.lobbyView, 'hidden', nextSub === 'playing');
       setClass(multiDom.gameView, 'hidden', nextSub !== 'playing');
-      if (nextSub === 'join') {
-        multiDom.setCenterTab('invite');
-      }
       if (multiController) {
         if (nextSub === 'playing' && activeFoxView === 'foxmod_multi') {
           multiController.reloadUserSettings();
@@ -1586,8 +1627,13 @@ body.twfox-ingame #menus > #footer {
         showMultiSubMode('lobby');
       }
 
-      if (evType === 'connected' && multiSubMode === 'join') {
+      if (evType === 'connected' && snap.role !== 'host') {
+        closeMultiRequest();
+        multiDom.setCenterTab('invite');
         showMultiSubMode('lobby');
+        if (activeFoxView !== 'foxmod_multi') {
+          navigateMenu('foxmod_multi');
+        }
       }
 
       const isHost = snap.role === 'host';
@@ -1614,9 +1660,12 @@ body.twfox-ingame #menus > #footer {
       multiDom.roomInfoOwner.textContent = isHost ? 'YOU (HOST SERVER)' : 'REMOTE HOST SERVER';
       multiDom.roomInfoStatus.textContent = String(snap.room.status || 'lobby').toUpperCase();
 
-      if (multiSubMode !== 'join') {
-        setClass(multiDom.joinBox, 'hidden', true);
-        setClass(multiDom.hostInviteBox, 'hidden', !isHost);
+      setClass(multiDom.hostInviteBox, 'hidden', false);
+      if (multiDom.hostManualToggleBtn) {
+        setClass(multiDom.hostManualToggleBtn, 'hidden', !isHost);
+      }
+      if (!isHost && multiDom.hostManualPanel) {
+        setClass(multiDom.hostManualPanel, 'hidden', true);
       }
       setClass(multiDom.hostStartBtn, 'hidden', !isHost);
       setClass(multiDom.clientReadyBtn, 'hidden', isHost);
@@ -1826,9 +1875,10 @@ body.twfox-ingame #menus > #footer {
       const joinOfferInput = createEl('input', {
         id: 'twfoxtetrio-join-offer-input',
         className: 'twfox-input twfox-code-input',
-        attrs: { type: 'text', placeholder: '#K7M4  (or paste FOX1:... invite)' }
+        attrs: { type: 'text', placeholder: 'Q3BE  o  #Q3BE' }
       });
       const joinGenerateBtn = createEl('button', { id: 'twfoxtetrio-join-generate-btn', className: 'twfox-btn is-pri', text: 'JOIN ROOM', type: 'button' });
+      const joinCancelBtn = createEl('button', { id: 'twfoxtetrio-join-cancel-btn', className: 'twfox-btn', text: 'BACK', type: 'button' });
       const joinStatus = createEl('p', { id: 'twfoxtetrio-join-status', style: 'margin:0;color:#b89de0;', text: '' });
       const joinAnswerOutput = createEl('textarea', {
         id: 'twfoxtetrio-join-answer-output',
@@ -1840,15 +1890,8 @@ body.twfox-ingame #menus > #footer {
         joinAnswerOutput,
         joinCopyBtn
       ]);
-      const joinBox = createEl('div', { id: 'twfoxtetrio-multi-join', className: 'twfox-invite-stack hidden' }, [
-        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'ENTER ROOM CODE (#XXXX) TO JOIN AUTOMATICALLY:' }),
-        joinOfferInput,
-        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [joinGenerateBtn]),
-        joinStatus,
-        joinManualReplyBox
-      ]);
 
-      const centerTabInvite = createEl('div', { id: 'twfoxtetrio-center-invite' }, [hostInviteBox, joinBox]);
+      const centerTabInvite = createEl('div', { id: 'twfoxtetrio-center-invite' }, [hostInviteBox]);
 
       // ROOM pane
       const roomInfoOwner = createEl('span', { text: 'HOST SERVER' });
@@ -2001,7 +2044,8 @@ body.twfox-ingame #menus > #footer {
         roomInfoOwner,
         roomInfoStatus,
         hostInviteBox,
-        joinBox,
+        hostManualToggleBtn,
+        hostManualPanel,
         hostStartBtn,
         clientReadyBtn,
         modeSelect,
@@ -2017,7 +2061,7 @@ body.twfox-ingame #menus > #footer {
         setCenterTab
       };
 
-      // #list_request style picker overlay (CREATE LOBBY / JOIN LOBBY)
+      // #list_request style picker overlay (CREATE LOBBY / JOIN LOBBY + Join Room Code Modal)
       const createBtn = createEl(
         'div',
         { id: 'twfoxtetrio-create-room-btn', className: 'scroller_item ns', attrs: { 'data-hover': 'hover', 'data-hit': 'hit2' } },
@@ -2035,14 +2079,55 @@ body.twfox-ingame #menus > #footer {
         ]
       );
       const reqBackBtn = createEl('div', { id: 'twfoxtetrio-req-back', className: 'ns', text: 'BACK', attrs: { 'data-hover': 'hover', 'data-hit': 'back' } });
-      reqBackBtn.addEventListener('click', closeMultiRequest);
+      multiReqScrollerEl = createEl('div', { className: 'right_scroller ns' }, [createBtn, joinBtn]);
+
+      const joinModalBox = createEl('div', { className: 'twfox-join-modal' }, [
+        createEl('h2', { text: 'JOIN BY ROOM CODE' }),
+        createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'Enter the room code from your friend (with or without #):' }),
+        joinOfferInput,
+        createEl('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;' }, [joinGenerateBtn, joinCancelBtn]),
+        joinStatus,
+        joinManualReplyBox
+      ]);
+      joinDialogEl = createEl('div', { id: 'twfoxtetrio-join-dialog', className: 'twfox-join-modal-wrap hidden' }, [joinModalBox]);
+
+      function cancelJoinFlow(backToPicker) {
+        if (activeFoxView !== 'foxmod_multi') {
+          teardownPeerSession();
+        }
+        joinGenerateBtn.disabled = false;
+        joinStatus.textContent = '';
+        setClass(joinManualReplyBox, 'hidden', true);
+        if (backToPicker) {
+          resetMultiRequestModalView(false);
+        } else {
+          closeMultiRequest();
+        }
+      }
+
+      reqBackBtn.addEventListener('click', function () {
+        if (joinDialogEl && !joinDialogEl.classList.contains('hidden')) {
+          cancelJoinFlow(true);
+        } else {
+          cancelJoinFlow(false);
+        }
+      });
+      joinCancelBtn.addEventListener('click', function () {
+        cancelJoinFlow(true);
+      });
+      joinDialogEl.addEventListener('click', function (ev) {
+        if (ev && ev.target === joinDialogEl) {
+          cancelJoinFlow(true);
+        }
+      });
 
       multiRequestEl = createEl('div', { id: 'twfoxtetrio-multi-request' }, [
         reqBackBtn,
-        createEl('div', { className: 'right_scroller ns' }, [createBtn, joinBtn])
+        multiReqScrollerEl,
+        joinDialogEl
       ]);
       multiRequestEl.addEventListener('click', function (ev) {
-        if (ev && ev.target === multiRequestEl) closeMultiRequest();
+        if (ev && ev.target === multiRequestEl) cancelJoinFlow(false);
       });
 
       const menusHost = document.getElementById('menus') || document.body;
@@ -2086,22 +2171,18 @@ body.twfox-ingame #menus > #footer {
       });
 
       joinBtn.addEventListener('click', function () {
-        closeMultiRequest();
-        teardownPeerSession();
+        if (activeFoxView !== 'foxmod_multi') {
+          teardownPeerSession();
+        }
         joinOfferInput.value = '';
         joinAnswerOutput.value = '';
         joinStatus.textContent = '';
         setClass(joinManualReplyBox, 'hidden', true);
         joinGenerateBtn.disabled = false;
-        invitePillCode.textContent = '#JOIN';
-        inviteBannerSub.textContent = 'ENTER #CODE TO JOIN';
-        lobbyRoomTitle.textContent = 'JOIN FOXMOD ROOM';
-        playersHeading.textContent = 'PLAYERS (0)';
-        playersList.innerHTML = '';
-        chatLog.innerHTML = '';
-        winnerBanner.textContent = 'ENTER #CODE TO JOIN';
-        showMultiSubMode('join');
-        navigateMenu('foxmod_multi');
+        resetMultiRequestModalView(true);
+        if (typeof joinOfferInput.focus === 'function') {
+          joinOfferInput.focus();
+        }
       });
 
       leaveRoomBtn.addEventListener('click', function () {

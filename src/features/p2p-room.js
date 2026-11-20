@@ -24,7 +24,7 @@
     const cleaned = String(raw || '')
       .trim()
       .toUpperCase()
-      .replace(/^#+/, '')
+      .replace(/^(?:[#№]|N[º°O])+/i, '')
       .replace(/[^0-9A-Z]/g, '');
     return /^[2-9A-HJ-NP-Z]{4,8}$/.test(cleaned) ? cleaned : '';
   }

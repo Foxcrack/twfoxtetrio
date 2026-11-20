@@ -195,6 +195,9 @@ test('host and client connect automatically via 4-char #CODE topic signaling and
   const roomCode = host.getSnapshot().room.roomCode;
   assert.match(roomCode, /^[2-9A-HJ-NP-Z]{4}$/);
   assert.equal(host.getSnapshot().room.roomName, "TWFoxcrack'S FOXROOM");
+  assert.equal(p2p.normalizeRoomCode(roomCode), roomCode);
+  assert.equal(p2p.normalizeRoomCode('#' + roomCode.toLowerCase()), roomCode);
+  assert.equal(p2p.normalizeRoomCode('Nº' + roomCode.toLowerCase()), roomCode);
 
   const client = p2p.createClientPeer({
     playerName: 'Maekrix',
@@ -204,7 +207,8 @@ test('host and client connect automatically via 4-char #CODE topic signaling and
     joinTimeoutMs: 3000
   });
 
-  const joinRes = await client.joinByCode('#' + roomCode.toLowerCase());
+  // Works identically when entered WITHOUT '#'
+  const joinRes = await client.joinByCode(roomCode.toLowerCase());
   assert.equal(joinRes.mode, 'auto');
   assert.equal(joinRes.roomCode, roomCode);
 

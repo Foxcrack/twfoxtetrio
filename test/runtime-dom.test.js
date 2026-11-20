@@ -746,8 +746,6 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(multiPane.classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), false);
-  assert.equal(env.elements.get('twfoxtetrio-multi-join').classList.contains('hidden'), true);
-  assert.equal(env.elements.get('twfoxtetrio-multi-join').getAttribute('style'), null);
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').getAttribute('style'), null);
   assert.equal(env.elements.get('twfoxtetrio-lobby-room-title').textContent, "TWFOXCRACK'S FOXROOM");
   const playersBox = env.elements.get('twfoxtetrio-lobby-players');
@@ -865,17 +863,23 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.body.classList.contains('twfox-ingame'), false);
   assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
 
-  // EXIT -> MULTIJUGADOR -> JOIN LOBBY shows only clean Join UI with #JOIN top banner
+  // EXIT -> MULTIJUGADOR -> JOIN LOBBY opens dedicated code prompt (does NOT enter empty PLAYERS(0) lobby)
   env.elements.get('twfoxtetrio-leave-room-btn').click();
   env.elements.get('twfoxtetrio-card-multi').click();
   env.elements.get('twfoxtetrio-join-room-btn').click();
-  assert.equal(env.elements.get('twfoxtetrio-lobby-invite-code').textContent, '#JOIN');
-  assert.equal(env.elements.get('twfoxtetrio-multi-join').classList.contains('hidden'), false);
-  assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), true);
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
+  assert.ok(multiReq.classList.contains('is-open'));
+  assert.equal(env.elements.get('twfoxtetrio-join-dialog').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-join-manual-reply').classList.contains('hidden'), true);
+  assert.equal(env.context.__TWFOX_INTERNAL__.p2pRoom.normalizeRoomCode('k7m4'), 'K7M4');
+  assert.equal(env.context.__TWFOX_INTERNAL__.p2pRoom.normalizeRoomCode('#k7m4'), 'K7M4');
+  env.elements.get('twfoxtetrio-join-cancel-btn').click();
+  assert.equal(env.elements.get('twfoxtetrio-join-dialog').classList.contains('hidden'), true);
+  assert.ok(multiReq.classList.contains('is-open'));
+  env.elements.get('twfoxtetrio-req-back').click();
+  assert.equal(multiReq.classList.contains('is-open'), false);
 
-  // Navigate to CONFIG via EXIT -> card -> toggle Blitz & maxRows -> reset defaults
-  env.elements.get('twfoxtetrio-leave-room-btn').click();
+  // Navigate to CONFIG via card -> toggle Blitz & maxRows -> reset defaults
   env.elements.get('twfoxtetrio-card-config').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_config');
   assert.equal(configPane.classList.contains('hidden'), false);
