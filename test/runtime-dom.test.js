@@ -273,6 +273,10 @@ function createFakeDomEnvironment(protocol) {
     },
     setTimeout,
     clearTimeout,
+    TextEncoder,
+    TextDecoder,
+    btoa: (bin) => Buffer.from(String(bin), 'binary').toString('base64'),
+    atob: (b64) => Buffer.from(String(b64), 'base64').toString('binary'),
     setInterval(fn) {
       const id = nextIntervalId++;
       intervals.set(id, fn);
@@ -617,7 +621,7 @@ test('bundled mod displays and sorts live multiplayer VS leaderboard on the righ
   assert.equal(env.body.classList.contains('twfox-multi-lb-active'), false);
 });
 
-test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide, Pentominoes, Marathon), userConfig keybinds, Multi P2P, Config, and Credits', () => {
+test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide, Pentominoes, Marathon), userConfig keybinds, Multi P2P, Config, and Credits', async () => {
   const env = createFakeDomEnvironment('https:');
   // Configure real custom TETR.IO controls (like TWFoxcrack: KEYJ/KEYL/KEYK/DIGIT8/KEYZ) + instant handling
   env.storage.set(
@@ -762,17 +766,99 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   env.elements.get('twfoxtetrio-host-manual-toggle').click();
   assert.equal(manualPanel.classList.contains('hidden'), false);
 
-  // Switch center lobby tab to GAME -> shows room PIECE SET selector
+  // Switch center lobby tab to GAME -> default is normal tetrominoes, add Blitz option, and require 2+ players to start
   env.elements.get('twfoxtetrio-lobby-tab-game').click();
   assert.equal(env.elements.get('twfoxtetrio-center-game').classList.contains('hidden'), false);
+  const roomPieces = env.elements.get('twfoxtetrio-room-pieces');
+  const roomMode = env.elements.get('twfoxtetrio-room-mode');
+  const startBtn = env.elements.get('twfoxtetrio-host-start-btn');
+  assert.equal(roomPieces.value, 'tetromino');
+  assert.equal(roomMode.value, 'vs');
+  assert.equal(startBtn.disabled, true);
+  assert.equal(startBtn.classList.contains('is-disabled'), true);
 
-  // Starting VS match enters twfox-ingame and uses corner LOBBY button with no above-board bar
+  // Clicking START with only 1 player stays in lobby and refuses to start
+  startBtn.click();
+  assert.equal(env.body.classList.contains('twfox-ingame'), false);
+  assert.equal(env.elements.get('twfoxtetrio-multi-game').classList.contains('hidden'), true);
+  assert.equal(env.elements.get('twfoxtetrio-multi-winner').textContent, 'NEED AT LEAST 2 PLAYERS TO START');
+
+  // Switch room mode to BLITZ (2:00)
+  roomMode.value = 'blitz';
+  roomMode.dispatchEvent('change');
+
+  // Connect a 2nd player via loopback WebRTC in the sandbox -> START unlocks and Leaderboard renders scores on right
   const backLobbyBtn = env.elements.get('twfoxtetrio-back-lobby-btn');
   assert.equal(backLobbyBtn.classList.contains('twfox-corner-back-btn'), true);
   assert.equal(env.elements.get('twfoxtetrio-multi-game').querySelectorAll('.twfox-stage-bar').length, 0);
-  env.elements.get('twfoxtetrio-host-start-btn').click();
+
+  const rtcEndpoints = new Map();
+  let rtcSeq = 1;
+  env.context.RTCPeerConnection = function FakeRtc() {
+    const id = 'rtcdom-' + rtcSeq++;
+    const pc = {
+      id,
+      iceGatheringState: 'complete',
+      localDescription: null,
+      remoteDescription: null,
+      ondatachannel: null,
+      _pendingOpen: null,
+      createDataChannel(label) {
+        const ch = { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null };
+        pc._pendingChannel = ch;
+        return ch;
+      },
+      async createOffer() { return { type: 'offer', sdp: 'v=0\r\nfrom=' + id }; },
+      async createAnswer() { return { type: 'answer', sdp: 'v=0\r\nfrom=' + id }; },
+      async setLocalDescription(desc) { pc.localDescription = desc; },
+      async setRemoteDescription(desc) {
+        pc.remoteDescription = desc;
+        if (desc.type === 'answer') {
+          const remotePc = rtcEndpoints.get(desc.sdp.split('from=')[1]);
+          const hostCh = pc._pendingChannel;
+          const cliCh = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+          hostCh.send = (d) => { if (cliCh.onmessage) queueMicrotask(() => cliCh.onmessage({ data: d })); };
+          cliCh.send = (d) => { if (hostCh.onmessage) queueMicrotask(() => hostCh.onmessage({ data: d })); };
+          hostCh.close = () => { hostCh.readyState = 'closed'; if (hostCh.onclose) hostCh.onclose(); };
+          cliCh.close = hostCh.close;
+          hostCh.readyState = 'open';
+          if (remotePc.ondatachannel) remotePc.ondatachannel({ channel: cliCh });
+          if (hostCh.onopen) hostCh.onopen();
+          if (cliCh.onopen) cliCh.onopen();
+        }
+      },
+      close() {}
+    };
+    rtcEndpoints.set(id, pc);
+    return pc;
+  };
+
+  env.elements.get('twfoxtetrio-host-gen-invite').click();
+  await new Promise((r) => setTimeout(r, 10));
+  const peerClient = env.context.__TWFOX_INTERNAL__.p2pRoom.createClientPeer({ playerName: 'Maekrix' });
+  const manualAns = await peerClient.joinFromInvite(env.elements.get('twfoxtetrio-host-offer-output').value);
+  env.elements.get('twfoxtetrio-host-answer-input').value = manualAns;
+  env.elements.get('twfoxtetrio-host-accept-btn').click();
+  await new Promise((r) => setTimeout(r, 30));
+
+  assert.equal(startBtn.disabled, false);
+  assert.equal(startBtn.classList.contains('is-disabled'), false);
+  assert.equal(env.elements.get('twfoxtetrio-lobby-players').children.length, 2);
+
+  startBtn.click();
   assert.equal(env.body.classList.contains('twfox-ingame'), true);
   assert.equal(env.elements.get('twfoxtetrio-multi-game').classList.contains('hidden'), false);
+
+  peerClient.updateSelfBoard({ compactBoard: null, score: 4200, lines: 5, attackSent: 0, vs: 0 });
+  await new Promise((r) => setTimeout(r, 30));
+
+  const lbRows = env.elements.get('twfoxtetrio-multi-lb-rows');
+  assert.equal(lbRows.children.length, 2);
+  assert.match(lbRows.children[0].children[0].textContent, /MAEKRIX|Maekrix/);
+  assert.equal(lbRows.children[0].children[1].textContent, '4,200');
+  assert.match(lbRows.children[1].children[0].textContent, /TWFOXCRACK/);
+
+  peerClient.close();
   backLobbyBtn.click();
   assert.equal(env.body.classList.contains('twfox-ingame'), false);
   assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);

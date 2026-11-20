@@ -842,6 +842,17 @@ body.twfox-ingame #menus > #footer {
   transition: .2s filter, .1s transform;
 }
 .twfox-footer-start-btn:hover { filter: brightness(1.22); }
+.twfox-footer-start-btn.is-disabled,
+.twfox-footer-start-btn:disabled {
+  opacity: 0.42;
+  filter: grayscale(0.45);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.twfox-footer-start-btn.is-disabled:hover,
+.twfox-footer-start-btn:disabled:hover {
+  filter: grayscale(0.45);
+}
 .twfox-footer-start-btn span {
   display: block;
   font-size: 0.42em;
@@ -862,6 +873,58 @@ body.twfox-ingame #menus > #footer {
   align-items: center;
   justify-content: center;
   gap: 18px;
+}
+.twfox-multi-side-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 245px;
+  max-width: 340px;
+}
+.twfox-score-lb {
+  background: rgba(18, 22, 34, 0.88);
+  border: 1px solid #354160;
+  border-radius: 5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  text-align: left;
+  font-family: HUN, sans-serif;
+}
+.twfox-score-lb-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(31, 39, 60, 0.9);
+  border-bottom: 1px solid #354160;
+  font-size: 1.05em;
+  font-weight: 800;
+  color: #dbe4ff;
+  letter-spacing: 0.06em;
+}
+.twfox-score-lb-rows {
+  display: flex;
+  flex-direction: column;
+}
+.twfox-score-lb-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 1.02em;
+  font-weight: 800;
+  color: #e6ecff;
+}
+.twfox-score-lb-row:first-child { border-top: 0; }
+.twfox-score-lb-row.is-first { color: #ffe066; }
+.twfox-score-lb-row.is-self { background: rgba(30, 86, 132, 0.65); }
+.twfox-score-lb-row.is-ko { opacity: 0.58; }
+.twfox-score-lb-val {
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
 }
 .twfox-opponents-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .twfox-opp-card {
@@ -1453,17 +1516,25 @@ body.twfox-ingame #menus > #footer {
       if (!multiDom || !snap) return;
 
       if (evType === 'match_start' && detail && pentominoEngine && foxmodCanvas) {
+        const cfg = detail.config || {};
+        const matchMode = cfg.gameMode === 'blitz' ? 'blitz' : 'vs';
         multiGame = pentominoEngine.createGame({
-          pieceSet: (detail.config && detail.config.pieceSet) || 'pentomino',
-          mode: 'vs',
+          pieceSet: cfg.pieceSet || 'tetromino',
+          mode: matchMode,
           seed: detail.seed,
-          gravityLevel: (detail.config && detail.config.gravityLevel) || 1,
-          garbageMultiplier: (detail.config && detail.config.garbageMultiplier) || 1,
+          blitzDurationMs: cfg.blitzDurationMs || 120000,
+          gravityLevel: cfg.gravityLevel || 1,
+          garbageMultiplier: cfg.garbageMultiplier || 1,
           onAttack(amount, callout) {
-            if (peerSession) peerSession.sendSelfAttack(amount, callout);
+            if (peerSession && matchMode === 'vs') peerSession.sendSelfAttack(amount, callout);
           },
           onTopOut() {
             if (peerSession) peerSession.reportSelfKo();
+          },
+          onFinish(gSnap) {
+            if (peerSession && typeof peerSession.reportSelfFinish === 'function') {
+              peerSession.reportSelfFinish(gSnap);
+            }
           }
         });
         multiController.setGame(multiGame);
@@ -1484,6 +1555,8 @@ body.twfox-ingame #menus > #footer {
 
       const isHost = snap.role === 'host';
       const roomCode = (snap.room && snap.room.roomCode) || '';
+      const activeMode = (snap.room && snap.room.gameMode) === 'blitz' ? 'blitz' : 'vs';
+      const activeSet = (snap.room && snap.room.pieceSet) || 'tetromino';
       multiDom.lobbyRoomTitle.textContent = snap.room.roomName || 'FOXMOD ROOM';
       if (multiDom.invitePillCode) {
         multiDom.invitePillCode.textContent = roomCode ? `#${roomCode}` : '#JOIN';
@@ -1498,12 +1571,9 @@ body.twfox-ingame #menus > #footer {
       if (multiDom.hostRoomCodeLabel) {
         multiDom.hostRoomCodeLabel.textContent = roomCode ? `#${roomCode}` : '#----';
       }
-      multiDom.lobbyModeTag.textContent =
-        snap.room.pieceSet === 'chaos'
-          ? 'CAOS MIX VS'
-          : snap.room.pieceSet === 'tetromino'
-            ? 'TETROMINOS VS'
-            : 'PENTOMINOS VS';
+      const setLabel = activeSet === 'chaos' ? 'CAOS MIX' : activeSet === 'pentomino' ? 'PENTOMINOS' : 'NORMAL';
+      const modeLabel = activeMode === 'blitz' ? 'BLITZ' : 'VS';
+      multiDom.lobbyModeTag.textContent = `${setLabel} ${modeLabel}`;
       multiDom.roomInfoOwner.textContent = isHost ? 'YOU (HOST SERVER)' : 'REMOTE HOST SERVER';
       multiDom.roomInfoStatus.textContent = String(snap.room.status || 'lobby').toUpperCase();
 
@@ -1515,12 +1585,21 @@ body.twfox-ingame #menus > #footer {
       setClass(multiDom.clientReadyBtn, 'hidden', isHost);
 
       const count = (snap.players || []).length;
+      const canStart = count >= 2;
       multiDom.playersHeading.textContent = `PLAYERS (${count})`;
-      multiDom.startCountSub.textContent = `${count} PLAYER${count === 1 ? '' : 'S'}`;
+      multiDom.hostStartBtn.disabled = !canStart;
+      setClass(multiDom.hostStartBtn, 'is-disabled', !canStart);
+      multiDom.startCountSub.textContent = canStart
+        ? `${count} PLAYERS`
+        : `NEED 2+ PLAYERS (${count}/2)`;
 
       if (multiDom.pieceSelect) {
-        multiDom.pieceSelect.value = snap.room.pieceSet || 'pentomino';
+        multiDom.pieceSelect.value = activeSet;
         multiDom.pieceSelect.disabled = !isHost;
+      }
+      if (multiDom.modeSelect) {
+        multiDom.modeSelect.value = activeMode;
+        multiDom.modeSelect.disabled = !isHost;
       }
       if (multiDom.garbageSelect) {
         multiDom.garbageSelect.value = String(snap.room.garbageMultiplier ?? 1);
@@ -1532,17 +1611,19 @@ body.twfox-ingame #menus > #footer {
       }
 
       const hasWinner = snap.room.status === 'results' && snap.room.winner;
-      multiDom.winnerBanner.textContent = hasWinner
-        ? `WINNER RONDA #${snap.room.round}: ${snap.room.winner}`
-        : isHost
-          ? (snap.signalingStatus === 'offline'
-              ? 'MANUAL FALLBACK ACTIVE'
-              : roomCode
-                ? `HOST SERVER ACTIVE · CODE #${roomCode}`
-                : 'HOST SERVER ACTIVE')
-          : snap.connected
-            ? 'CONNECTED TO HOST SERVER'
-            : 'ENTER #CODE TO JOIN';
+      multiDom.winnerBanner.textContent = evType === 'start_blocked'
+        ? 'NEED AT LEAST 2 PLAYERS TO START'
+        : hasWinner
+          ? `WINNER RONDA #${snap.room.round}: ${snap.room.winner}`
+          : isHost
+            ? (snap.signalingStatus === 'offline'
+                ? 'MANUAL FALLBACK ACTIVE'
+                : roomCode
+                  ? `HOST SERVER ACTIVE · CODE #${roomCode}`
+                  : 'HOST SERVER ACTIVE')
+            : snap.connected
+              ? 'CONNECTED TO HOST SERVER'
+              : 'ENTER #CODE TO JOIN';
 
       multiDom.playersList.innerHTML = '';
       for (const p of snap.players || []) {
@@ -1576,6 +1657,35 @@ body.twfox-ingame #menus > #footer {
 
       if (multiSubMode === 'playing' && foxmodCanvas) {
         const selfId = isHost ? 'host' : snap.selfId;
+        const rankedPlayers = (snap.players || []).slice().sort(
+          (a, b) => ((Number(b.score) || 0) - (Number(a.score) || 0)) || ((b.lines || 0) - (a.lines || 0))
+        );
+        if (multiDom.scoreLbCount) {
+          multiDom.scoreLbCount.textContent = String(rankedPlayers.length);
+        }
+        if (multiDom.scoreLbRows) {
+          multiDom.scoreLbRows.innerHTML = '';
+          rankedPlayers.forEach((pl, idx) => {
+            const isSelf = pl.id === selfId;
+            const classes = [
+              'twfox-score-lb-row',
+              idx === 0 ? 'is-first' : '',
+              isSelf ? 'is-self' : '',
+              pl.alive === false ? 'is-ko' : ''
+            ].filter(Boolean).join(' ');
+            const koTag = pl.alive === false ? ' [KO]' : '';
+            multiDom.scoreLbRows.appendChild(
+              createEl('div', { className: classes }, [
+                createEl('span', { text: `Nº${idx + 1} ${pl.name}${koTag}` }),
+                createEl('span', {
+                  className: 'twfox-score-lb-val',
+                  text: Math.round(Number(pl.score) || 0).toLocaleString('en-US')
+                })
+              ])
+            );
+          });
+        }
+
         const opponents = (snap.players || []).filter((p) => p.id !== selfId);
         multiDom.opponentsGrid.innerHTML = '';
         for (const opp of opponents) {
@@ -1584,11 +1694,12 @@ body.twfox-ingame #menus > #footer {
             style: 'background:#000;display:block;'
           });
           foxmodCanvas.renderMiniBoard(miniCanvas, opp.board, opp.alive);
+          const oppScore = Math.round(Number(opp.score) || 0).toLocaleString('en-US');
           multiDom.opponentsGrid.appendChild(
             createEl('div', { className: 'twfox-opp-card' }, [
               createEl('div', { style: 'font-weight:800;margin-bottom:4px;color:#fff', text: opp.name }),
               miniCanvas,
-              createEl('div', { style: 'margin-top:4px;color:#9aa8cf', text: `L:${opp.lines || 0} · ATK:${opp.attack || 0}` })
+              createEl('div', { style: 'margin-top:4px;color:#9aa8cf', text: `${oppScore} PTS · L:${opp.lines || 0}` })
             ])
           );
         }
@@ -1712,9 +1823,13 @@ body.twfox-ingame #menus > #footer {
       ]);
 
       // GAME pane
+      const modeSelect = createEl('select', { id: 'twfoxtetrio-room-mode', className: 'twfox-select' }, [
+        createEl('option', { text: 'VERSUS KO', attrs: { value: 'vs' } }),
+        createEl('option', { text: 'BLITZ (2:00)', attrs: { value: 'blitz' } })
+      ]);
       const pieceSelect = createEl('select', { id: 'twfoxtetrio-room-pieces', className: 'twfox-select' }, [
+        createEl('option', { text: 'NORMAL (7 TETROMINOS)', attrs: { value: 'tetromino' } }),
         createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
-        createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
         createEl('option', { text: 'CAOS MIX (19)', attrs: { value: 'chaos' } })
       ]);
       const garbageSelect = createEl('select', { id: 'twfoxtetrio-room-garbage', className: 'twfox-select' }, [
@@ -1730,6 +1845,7 @@ body.twfox-ingame #menus > #footer {
         createEl('option', { text: 'LEVEL 5', attrs: { value: '5' } })
       ]);
       const centerTabGame = createEl('div', { id: 'twfoxtetrio-center-game', className: 'hidden' }, [
+        createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'GAME MODE' }), modeSelect]),
         createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'PIECE SET' }), pieceSelect]),
         createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'GARBAGE MULTIPLIER' }), garbageSelect]),
         createEl('div', { className: 'twfox-room-opt-row' }, [createEl('span', { text: 'GRAVITY LEVEL' }), gravitySelect])
@@ -1764,12 +1880,13 @@ body.twfox-ingame #menus > #footer {
         createEl('div', { text: 'READY' }),
         createEl('span', { text: 'CLICK TO TOGGLE READY STATUS' })
       ]);
-      const startCountSub = createEl('span', { text: '1 PLAYER' });
-      const hostStartBtn = createEl('button', { id: 'twfoxtetrio-host-start-btn', className: 'twfox-footer-start-btn', type: 'button', attrs: { 'data-hover': 'hover', 'data-hit': 'confirm' } }, [
+      const startCountSub = createEl('span', { text: 'NEED 2+ PLAYERS (1/2)' });
+      const hostStartBtn = createEl('button', { id: 'twfoxtetrio-host-start-btn', className: 'twfox-footer-start-btn is-disabled', type: 'button', attrs: { 'data-hover': 'hover', 'data-hit': 'confirm' } }, [
         createEl('div', { text: 'START' }),
         startCountSub
       ]);
-      const lobbyModeTag = createEl('div', { className: 'twfox-footer-mode-tag', text: 'PENTOMINOS VS' });
+      hostStartBtn.disabled = true;
+      const lobbyModeTag = createEl('div', { className: 'twfox-footer-mode-tag', text: 'NORMAL VS' });
 
       const lobbyView = createEl('div', { id: 'twfoxtetrio-multi-lobby' }, [
         createEl('div', { id: 'twfoxtetrio-lobby-top' }, [leaveRoomBtn, inviteBanner]),
@@ -1794,13 +1911,23 @@ body.twfox-ingame #menus > #footer {
         ])
       ]);
 
-      // In-game VS stage
+      // In-game VS / BLITZ stage with right-side score leaderboard & opponent mini boards
       multiCanvas = createEl('canvas', {
         id: 'twfoxtetrio-multi-canvas',
         className: 'twfox-game-canvas',
         attrs: { width: '640', height: '620' }
       });
+      const scoreLbCount = createEl('span', { id: 'twfoxtetrio-multi-lb-count', text: '2' });
+      const scoreLbRows = createEl('div', { id: 'twfoxtetrio-multi-lb-rows', className: 'twfox-score-lb-rows' });
+      const scoreLeaderboard = createEl('div', { id: 'twfoxtetrio-multi-leaderboard', className: 'twfox-score-lb' }, [
+        createEl('div', { className: 'twfox-score-lb-hdr' }, [
+          createEl('span', { text: 'SCORE LEADERBOARD' }),
+          scoreLbCount
+        ]),
+        scoreLbRows
+      ]);
       const opponentsGrid = createEl('div', { id: 'twfoxtetrio-multi-opponents', className: 'twfox-opponents-grid' });
+      const sideCol = createEl('div', { className: 'twfox-multi-side-col' }, [scoreLeaderboard, opponentsGrid]);
       const backLobbyBtn = createEl('button', {
         id: 'twfoxtetrio-back-lobby-btn',
         className: 'twfox-corner-back-btn ns',
@@ -1810,7 +1937,7 @@ body.twfox-ingame #menus > #footer {
       });
       const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'twfox-stage-inner hidden' }, [
         backLobbyBtn,
-        createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, opponentsGrid])
+        createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, sideCol])
       ]);
 
       if (foxmodCanvas) {
@@ -1840,9 +1967,12 @@ body.twfox-ingame #menus > #footer {
         joinBox,
         hostStartBtn,
         clientReadyBtn,
+        modeSelect,
         pieceSelect,
         garbageSelect,
         gravitySelect,
+        scoreLbCount,
+        scoreLbRows,
         winnerBanner,
         playersList,
         chatLog,
@@ -2030,12 +2160,14 @@ body.twfox-ingame #menus > #footer {
       function pushRoomConfigPatch() {
         if (!peerSession || peerSession.getSnapshot().role !== 'host') return;
         peerSession.updateSettings({
+          gameMode: modeSelect.value,
           pieceSet: pieceSelect.value,
           garbageMultiplier: Number(garbageSelect.value),
           gravityLevel: Number(gravitySelect.value)
         });
       }
 
+      modeSelect.addEventListener('change', pushRoomConfigPatch);
       pieceSelect.addEventListener('change', pushRoomConfigPatch);
       garbageSelect.addEventListener('change', pushRoomConfigPatch);
       gravitySelect.addEventListener('change', pushRoomConfigPatch);

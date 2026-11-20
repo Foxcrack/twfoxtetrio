@@ -418,38 +418,53 @@
 
     // Right-aligned left-side TETR.IO stats below HOLD wing
     const statRightX = boardX - 14;
-    const statsBaseY = boardY + boardH - 135;
+    const isBlitz = snap.mode === 'blitz';
+    const rowStep = isBlitz ? 44 : 48;
+    const statsBaseY = boardY + boardH - (isBlitz ? 174 : 135);
     ctx.textAlign = 'right';
 
-    ctx.fillStyle = '#d4d9e8';
-    ctx.font = '700 12px HUN, Segoe UI, sans-serif';
-    ctx.fillText('PIECES', statRightX, statsBaseY);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 22px HUN, Segoe UI, sans-serif';
-    ctx.fillText(`${snap.pieces}, ${snap.pps.toFixed(2)}/S`, statRightX, statsBaseY + 22);
+    let statOffset = 0;
+    if (isBlitz) {
+      ctx.fillStyle = '#d4d9e8';
+      ctx.font = '700 12px HUN, Segoe UI, sans-serif';
+      ctx.fillText('SCORE', statRightX, statsBaseY);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 22px HUN, Segoe UI, sans-serif';
+      ctx.fillText(Math.round(snap.score || 0).toLocaleString('en-US'), statRightX, statsBaseY + 22);
+      statOffset += rowStep;
+    }
 
     ctx.fillStyle = '#d4d9e8';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
-    ctx.fillText(snap.mode === '40l' ? 'LINES LEFT' : 'LINES', statRightX, statsBaseY + 48);
+    ctx.fillText('PIECES', statRightX, statsBaseY + statOffset);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 22px HUN, Segoe UI, sans-serif';
+    ctx.fillText(`${snap.pieces}, ${snap.pps.toFixed(2)}/S`, statRightX, statsBaseY + statOffset + 22);
+    statOffset += rowStep;
+
+    ctx.fillStyle = '#d4d9e8';
+    ctx.font = '700 12px HUN, Segoe UI, sans-serif';
+    ctx.fillText(snap.mode === '40l' ? 'LINES LEFT' : 'LINES', statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 22px HUN, Segoe UI, sans-serif';
     ctx.fillText(
       snap.mode === '40l' ? String(snap.sprintRemaining) : String(snap.lines),
       statRightX,
-      statsBaseY + 70
+      statsBaseY + statOffset + 22
     );
+    statOffset += rowStep;
 
     ctx.fillStyle = '#d4d9e8';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
-    ctx.fillText(snap.mode === 'vs' ? 'ATTACK' : 'TIME', statRightX, statsBaseY + 96);
+    ctx.fillText(snap.mode === 'vs' ? 'ATTACK' : 'TIME', statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 22px HUN, Segoe UI, sans-serif';
     ctx.fillText(
       snap.mode === 'vs'
         ? `${snap.attackSent}, ${snap.apm.toFixed(1)}/M`
-        : formatDuration(snap.mode === 'blitz' ? snap.remainingMs : snap.elapsedMs),
+        : formatDuration(isBlitz ? snap.remainingMs : snap.elapsedMs),
       statRightX,
-      statsBaseY + 118
+      statsBaseY + statOffset + 22
     );
 
     if (snap.lastCallout) {

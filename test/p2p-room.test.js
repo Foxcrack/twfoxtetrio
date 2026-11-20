@@ -234,3 +234,59 @@ test('host and client connect automatically via 4-char #CODE topic signaling and
   client.close();
   host.close();
 });
+
+test('room defaults to normal tetrominoes, blocks <2 players from starting, and crowns Blitz score winner', async () => {
+  const rtcFactory = createLoopbackRtcFactory();
+  const host = p2p.createHostServer({ hostName: 'TWFoxcrack', rtcFactory });
+  const events = [];
+  host.subscribe((snap, ev, detail) => events.push({ ev, detail }));
+
+  // Default piece set is normal tetrominoes (7) and VS mode
+  assert.equal(host.getSnapshot().room.pieceSet, 'tetromino');
+  assert.equal(host.getSnapshot().room.gameMode, 'vs');
+
+  // Cannot start alone (< 2 players)
+  const blocked = host.startMatch();
+  assert.equal(blocked, null);
+  assert.equal(host.getSnapshot().room.status, 'lobby');
+  assert.ok(events.some((e) => e.ev === 'start_blocked' && e.detail && e.detail.reason === 'need_2_players'));
+
+  // Connect 2nd player, switch to BLITZ mode, sync scores, and verify highest score wins
+  const client = p2p.createClientPeer({ playerName: 'Maekrix', rtcFactory });
+  const invite = await host.createInvite();
+  const answer = await client.joinFromInvite(invite.code);
+  await host.acceptAnswer(invite.peerId, answer);
+  await new Promise((r) => setTimeout(r, 30));
+
+  host.updateSettings({ gameMode: 'blitz' });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(client.getSnapshot().room.gameMode, 'blitz');
+
+  const started = host.startMatch();
+  assert.ok(started);
+  assert.equal(started.config.gameMode, 'blitz');
+  await new Promise((r) => setTimeout(r, 20));
+
+  host.updateSelfBoard({ compactBoard: null, score: 2400, lines: 4, attackSent: 0, vs: 0 });
+  client.updateSelfBoard({ compactBoard: null, score: 5800, lines: 9, attackSent: 0, vs: 0 });
+  await new Promise((r) => setTimeout(r, 25));
+
+  const ranked = host
+    .getSnapshot()
+    .players.slice()
+    .sort((a, b) => b.score - a.score);
+  assert.deepEqual(
+    ranked.map((p) => `${p.name}:${p.score}`),
+    ['Maekrix:5800', 'TWFoxcrack:2400']
+  );
+
+  host.reportSelfFinish({ score: 2400 });
+  client.reportSelfFinish({ score: 5800 });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(host.getSnapshot().room.status, 'results');
+  assert.equal(host.getSnapshot().room.winner, 'Maekrix');
+  assert.equal(client.getSnapshot().room.winner, 'Maekrix');
+
+  client.close();
+  host.close();
+});

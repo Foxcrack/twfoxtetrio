@@ -152,7 +152,8 @@
         blitzDurationMs: 120000,
         sprintLines: 40,
         onAttack: null,
-        onTopOut: null
+        onTopOut: null,
+        onFinish: null
       },
       initialOptions || {}
     );
@@ -178,7 +179,16 @@
     let finished = false;
     let toppedOut = false;
     let winReason = null;
+    let finishNotified = false;
     let incomingGarbage = [];
+
+    function emitFinishOnce() {
+      if (finishNotified) return;
+      finishNotified = true;
+      if (typeof opts.onFinish === 'function') {
+        opts.onFinish(getSnapshot());
+      }
+    }
 
     function refillBag() {
       const pool = shuffleArray(getPiecePool(opts.pieceSet), rng);
@@ -238,6 +248,7 @@
         if (typeof opts.onTopOut === 'function') {
           opts.onTopOut(getSnapshot());
         }
+        emitFinishOnce();
       }
     }
 
@@ -342,6 +353,7 @@
         finished = true;
         winReason = '40l_complete';
         active = null;
+        emitFinishOnce();
         return;
       }
 
@@ -452,6 +464,7 @@
         finished = true;
         winReason = 'time_up';
         active = null;
+        emitFinishOnce();
         return;
       }
 
@@ -506,6 +519,7 @@
       finished = false;
       toppedOut = false;
       winReason = null;
+      finishNotified = false;
       incomingGarbage = [];
       spawnPiece();
     }

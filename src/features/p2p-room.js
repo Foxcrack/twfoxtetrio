@@ -234,7 +234,9 @@
     const room = {
       roomCode,
       roomName: String(opts.roomName || (hostName + "'S FOXROOM")).slice(0, 32),
-      pieceSet: 'pentomino',
+      pieceSet: 'tetromino',
+      gameMode: 'vs',
+      blitzDurationMs: Math.max(5000, Number(opts.blitzDurationMs) || 120000),
       garbageMultiplier: 1,
       gravityLevel: 1,
       status: 'lobby',
@@ -249,6 +251,8 @@
       isHost: true,
       ready: true,
       alive: true,
+      finished: false,
+      score: 0,
       lines: 0,
       attack: 0,
       vs: 0,
@@ -268,6 +272,7 @@
     let attackNonce = 1;
     let signalingStatus = shouldAutoSignal ? 'connecting' : 'manual';
     let pollTimer = null;
+    let blitzTimer = null;
     let closed = false;
 
     function getSnapshot() {
@@ -328,37 +333,58 @@
       notify('room_state');
     }
 
+    function clearBlitzTimer() {
+      if (blitzTimer) {
+        clearTimeout(blitzTimer);
+        blitzTimer = null;
+      }
+    }
+
+    function finalizeRound(winnerPlayer, chatMessage) {
+      if (room.status !== 'playing') return;
+      clearBlitzTimer();
+      if (winnerPlayer) {
+        winnerPlayer.wins += 1;
+        room.winner = winnerPlayer.name;
+      } else {
+        room.winner = 'DRAW';
+      }
+      room.status = 'results';
+      const endPacket = {
+        type: 'round_end',
+        winner: room.winner,
+        players: getSnapshot().players
+      };
+      broadcast(endPacket);
+      pushChat('SYS', chatMessage || `${room.winner} wins round #${room.round}!`, true);
+      broadcastRoomState();
+      notify('round_end', endPacket);
+    }
+
+    function pickBlitzWinner() {
+      const ranked = Array.from(players.values()).sort(
+        (a, b) => (b.score - a.score) || (b.lines - a.lines) || (Number(b.alive) - Number(a.alive))
+      );
+      return ranked[0] || null;
+    }
+
     function evaluateRoundEnd() {
       if (room.status !== 'playing') return;
+      if (room.gameMode === 'blitz') {
+        const everyoneDone = Array.from(players.values()).every((p) => !p.alive || p.finished);
+        if (everyoneDone) {
+          const top = pickBlitzWinner();
+          const pts = top ? Math.round(top.score || 0).toLocaleString('en-US') : '0';
+          finalizeRound(top, `BLITZ COMPLETE! ${top ? top.name : 'DRAW'} wins (${pts} PTS)!`);
+        }
+        return;
+      }
+
       const alivePlayers = Array.from(players.values()).filter((p) => p.alive);
       if (players.size >= 2 && alivePlayers.length <= 1) {
-        const winner = alivePlayers[0] || null;
-        if (winner) {
-          winner.wins += 1;
-          room.winner = winner.name;
-        } else {
-          room.winner = 'DRAW';
-        }
-        room.status = 'results';
-        const endPacket = {
-          type: 'round_end',
-          winner: room.winner,
-          players: getSnapshot().players
-        };
-        broadcast(endPacket);
-        pushChat('SYS', `${room.winner} wins round #${room.round}!`, true);
-        broadcastRoomState();
-        notify('round_end', endPacket);
+        finalizeRound(alivePlayers[0] || null);
       } else if (players.size === 1 && alivePlayers.length === 0) {
-        room.status = 'results';
-        room.winner = hostName;
-        const soloEndPacket = {
-          type: 'round_end',
-          winner: room.winner,
-          players: getSnapshot().players
-        };
-        broadcastRoomState();
-        notify('round_end', soloEndPacket);
+        finalizeRound(players.get('host') || null);
       }
     }
 
@@ -412,6 +438,7 @@
           break;
         case 'board_state':
           player.board = Array.isArray(msg.board) ? msg.board : null;
+          player.score = Number(msg.score) || 0;
           player.lines = Number(msg.lines) || 0;
           player.attack = Number(msg.attack) || 0;
           player.vs = Number(msg.vs) || 0;
@@ -419,6 +446,7 @@
             type: 'peer_board',
             id: peerId,
             board: player.board,
+            score: player.score,
             lines: player.lines,
             attack: player.attack,
             vs: player.vs,
@@ -429,9 +457,16 @@
         case 'attack':
           routeAttack(peerId, Number(msg.amount) || 0, msg.callout || '');
           break;
+        case 'finish_match':
+          player.finished = true;
+          if (msg.score !== undefined) player.score = Number(msg.score) || 0;
+          broadcastRoomState();
+          evaluateRoundEnd();
+          break;
         case 'ko':
           if (player.alive) {
             player.alive = false;
+            player.finished = true;
             broadcastRoomState();
             evaluateRoundEnd();
           }
@@ -451,6 +486,8 @@
             isHost: false,
             ready: true,
             alive: room.status !== 'playing',
+            finished: false,
+            score: 0,
             lines: 0,
             attack: 0,
             vs: 0,
@@ -533,6 +570,9 @@
       if (patch.pieceSet === 'pentomino' || patch.pieceSet === 'tetromino' || patch.pieceSet === 'chaos') {
         room.pieceSet = patch.pieceSet;
       }
+      if (patch.gameMode === 'vs' || patch.gameMode === 'blitz') {
+        room.gameMode = patch.gameMode;
+      }
       if (patch.garbageMultiplier !== undefined) {
         const mult = Number(patch.garbageMultiplier);
         if (Number.isFinite(mult) && mult >= 0 && mult <= 4) room.garbageMultiplier = mult;
@@ -545,16 +585,30 @@
     }
 
     function startMatch() {
+      if (players.size < 2) {
+        notify('start_blocked', { reason: 'need_2_players' });
+        return null;
+      }
+      clearBlitzTimer();
       room.round += 1;
       room.status = 'playing';
       room.winner = null;
       const seed = (Date.now() ^ (room.round * 2654435761)) >>> 0;
       for (const p of players.values()) {
         p.alive = true;
+        p.finished = false;
+        p.score = 0;
         p.lines = 0;
         p.attack = 0;
         p.vs = 0;
         p.board = null;
+      }
+      if (room.gameMode === 'blitz') {
+        blitzTimer = setTimeout(() => {
+          const top = pickBlitzWinner();
+          const pts = top ? Math.round(top.score || 0).toLocaleString('en-US') : '0';
+          finalizeRound(top, `BLITZ TIME UP! ${top ? top.name : 'DRAW'} wins (${pts} PTS)!`);
+        }, room.blitzDurationMs);
       }
       const startPacket = {
         type: 'match_start',
@@ -562,6 +616,8 @@
         seed,
         config: {
           pieceSet: room.pieceSet,
+          gameMode: room.gameMode,
+          blitzDurationMs: room.blitzDurationMs,
           garbageMultiplier: room.garbageMultiplier,
           gravityLevel: room.gravityLevel
         }
@@ -576,6 +632,7 @@
       const self = players.get('host');
       if (!self || !snapshot) return;
       self.board = snapshot.compactBoard;
+      self.score = Number(snapshot.score) || 0;
       self.lines = snapshot.lines || 0;
       self.attack = snapshot.attackSent || 0;
       self.vs = Number(snapshot.vs) || 0;
@@ -583,21 +640,35 @@
         type: 'peer_board',
         id: 'host',
         board: self.board,
+        score: self.score,
         lines: self.lines,
         attack: self.attack,
         vs: self.vs,
         alive: self.alive
       });
+      notify('self_board', { id: 'host' });
     }
 
     function sendSelfAttack(amount, callout) {
       routeAttack('host', amount, callout);
     }
 
+    function reportSelfFinish(snapshot) {
+      const self = players.get('host');
+      if (!self) return;
+      self.finished = true;
+      if (snapshot && snapshot.score !== undefined) self.score = Number(snapshot.score) || 0;
+      broadcastRoomState();
+      if (room.gameMode === 'blitz') {
+        evaluateRoundEnd();
+      }
+    }
+
     function reportSelfKo() {
       const self = players.get('host');
       if (!self || !self.alive) return;
       self.alive = false;
+      self.finished = true;
       broadcastRoomState();
       evaluateRoundEnd();
     }
@@ -660,6 +731,7 @@
 
     function close() {
       closed = true;
+      clearBlitzTimer();
       if (pollTimer) {
         clearTimeout(pollTimer);
         pollTimer = null;
@@ -696,6 +768,7 @@
       },
       updateSelfBoard,
       sendSelfAttack,
+      reportSelfFinish,
       reportSelfKo,
       close
     };
@@ -721,7 +794,9 @@
     let room = {
       roomCode: '',
       roomName: 'FOXMOD P2P ROOM',
-      pieceSet: 'pentomino',
+      pieceSet: 'tetromino',
+      gameMode: 'vs',
+      blitzDurationMs: 120000,
       garbageMultiplier: 1,
       gravityLevel: 1,
       status: 'connecting',
@@ -784,6 +859,7 @@
           const target = players.find((p) => p.id === msg.id);
           if (target) {
             target.board = msg.board;
+            if (msg.score !== undefined) target.score = Number(msg.score) || 0;
             target.lines = msg.lines;
             target.attack = msg.attack;
             target.vs = msg.vs;
@@ -957,16 +1033,31 @@
       },
       updateSelfBoard(snapshot) {
         if (!snapshot) return;
+        const selfPlayer = selfId ? players.find((p) => p.id === selfId) : null;
+        if (selfPlayer) {
+          selfPlayer.score = Number(snapshot.score) || 0;
+          selfPlayer.lines = snapshot.lines || 0;
+          selfPlayer.attack = snapshot.attackSent || 0;
+          selfPlayer.vs = Number(snapshot.vs) || 0;
+        }
         send({
           type: 'board_state',
           board: snapshot.compactBoard,
+          score: Number(snapshot.score) || 0,
           lines: snapshot.lines || 0,
           attack: snapshot.attackSent || 0,
           vs: Number(snapshot.vs) || 0
         });
+        if (selfPlayer) notify('self_board', { id: selfId });
       },
       sendSelfAttack(amount, callout) {
         send({ type: 'attack', amount, callout });
+      },
+      reportSelfFinish(snapshot) {
+        send({
+          type: 'finish_match',
+          score: Number(snapshot && snapshot.score) || 0
+        });
       },
       reportSelfKo() {
         send({ type: 'ko' });
