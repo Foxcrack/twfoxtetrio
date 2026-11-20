@@ -47,17 +47,18 @@ Añade un acceso **`FOXMOD`** en el menú principal (`HOME`, debajo de `ABOUT`) 
 
 ### Opción rápida (1 clic)
 1. Cierra **TETR.IO Desktop** por completo.
-2. Descarga el ZIP desde GitHub (**Code → Download ZIP** y descomprímelo) o clona este repositorio:
+2. Descarga el ZIP desde GitHub (**Code → Download ZIP** y **descomprímelo en una carpeta**) o clona este repositorio:
    ```bash
    git clone https://github.com/Foxcrack/twfoxtetrio.git
    cd twfoxtetrio
    ```
-3. Haz doble clic en **`install.bat`** (o ejecuta `npm run install-mod` en la terminal). Si Windows muestra aviso de consola o ruta, asegúrate de tener Node.js LTS instalado y TETR.IO cerrado.
+3. Entra a esa carpeta descomprimida y haz doble clic en **`install.bat`** (detecta automáticamente `C:\Users\<TuUsuario>\AppData\Local\Programs\tetrio-desktop`).
+   - Si falta Node.js en ese PC, **`install.bat`** te preguntará si deseas instalar **Node.js LTS** automáticamente con `winget` (o puedes descargarlo desde [nodejs.org](https://nodejs.org/)).
 
 El instalador crea automáticamente una copia de seguridad del archivo original (`app.asar.bak`) antes de aplicar el mod y verifica la integridad SHA-256 de todos los archivos dentro de `app.asar`.
 
 ### Ruta personalizada
-Si instalaste TETR.IO Desktop en otra carpeta:
+Si instalaste TETR.IO Desktop en otro disco o carpeta diferente a `AppData\Local\Programs\tetrio-desktop`, arrastra la carpeta de TETR.IO encima de `install.bat`, o abre una terminal **dentro de la carpeta del mod** y ejecuta:
 ```bash
 node scripts/install.js --path "C:\Ruta\A\tetrio-desktop"
 ```

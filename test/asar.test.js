@@ -18,6 +18,7 @@ const {
   stripModSnippet,
   injectModIntoPreload
 } = require('../scripts/build');
+const { parseArgs } = require('../scripts/install');
 
 function createSyntheticAsar(targetPath) {
   const preloadBuf = Buffer.from('window.IS_ELECTRON = true;\nwindow.CLIENT_VERSION = 10;\n', 'utf8');
@@ -120,4 +121,15 @@ test('ASAR round-trip patching preserves files, flags, unpacked metadata, and SH
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+});
+
+test('install.js parseArgs supports flags and positional paths (drag-and-drop)', () => {
+  assert.deepEqual(
+    parseArgs(['C:\\Users\\HP\\AppData\\Local\\Programs\\tetrio-desktop']),
+    { action: 'install', customPath: 'C:\\Users\\HP\\AppData\\Local\\Programs\\tetrio-desktop' }
+  );
+  assert.deepEqual(
+    parseArgs(['--uninstall', '--path', 'D:\\Games\\TETRIO']),
+    { action: 'uninstall', customPath: 'D:\\Games\\TETRIO' }
+  );
 });

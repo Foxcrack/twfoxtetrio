@@ -33,6 +33,8 @@ function parseArgs(argv) {
       opts.customPath = argv[++i];
     } else if (arg.startsWith('--path=')) {
       opts.customPath = arg.slice('--path='.length);
+    } else if (!arg.startsWith('-') && !opts.customPath) {
+      opts.customPath = arg;
     }
   }
   return opts;
@@ -266,6 +268,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  parseArgs,
   findTetrioAsar,
   installMod,
   uninstallMod,
