@@ -42,12 +42,12 @@ Al iniciar TETR.IO Desktop y durante la pantalla de carga inicial (`preload`), m
 
 ### Opción rápida (1 clic)
 1. Cierra **TETR.IO Desktop** por completo.
-2. Descarga o clona este repositorio:
+2. Descarga el ZIP desde GitHub (**Code → Download ZIP** y descomprímelo) o clona este repositorio:
    ```bash
    git clone https://github.com/Foxcrack/twfoxtetrio.git
    cd twfoxtetrio
    ```
-3. Haz doble clic en **`install.bat`** (o ejecuta `npm run install-mod` en la terminal).
+3. Haz doble clic en **`install.bat`** (o ejecuta `npm run install-mod` en la terminal). Si Windows muestra aviso de consola o ruta, asegúrate de tener Node.js LTS instalado y TETR.IO cerrado.
 
 El instalador crea automáticamente una copia de seguridad del archivo original (`app.asar.bak`) antes de aplicar el mod y verifica la integridad SHA-256 de todos los archivos dentro de `app.asar`.
 

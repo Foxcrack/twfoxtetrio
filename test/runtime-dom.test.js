@@ -441,6 +441,7 @@ test('bundled mod displays and sorts live multiplayer VS leaderboard on the righ
   env.body.classList.add('multiplexed');
 
   assert.equal(lbPanel.classList.contains('is-visible'), true);
+  assert.equal(env.body.classList.contains('twfox-multi-lb-active'), true);
   const countEl = lbPanel.querySelector('.twfox-lb-count');
   const rowsEl = lbPanel.querySelector('.twfox-lb-rows');
   assert.equal(countEl.textContent, '2');
@@ -467,4 +468,5 @@ test('bundled mod displays and sorts live multiplayer VS leaderboard on the righ
   env.body.classList.remove('multiplexed');
   env.menus.classList.remove('hidden');
   assert.equal(lbPanel.classList.contains('is-visible'), false);
+  assert.equal(env.body.classList.contains('twfox-multi-lb-active'), false);
 });

@@ -10,6 +10,8 @@
   const STYLE_ID = 'twfoxtetrio-multi-lb-style';
   const PANEL_ID = 'twfoxtetrio-multi-lb';
 
+  const ACTIVE_BODY_CLASS = 'twfox-multi-lb-active';
+
   const LB_CSS = `
 #${PANEL_ID} {
   position: fixed;
@@ -18,9 +20,9 @@
   z-index: 999998;
   pointer-events: none;
   user-select: none;
-  width: 214px;
-  max-width: 24vw;
-  padding: 8px 10px 9px;
+  width: clamp(178px, 14vw, 206px);
+  max-width: 22vw;
+  padding: 6px 8px 7px;
   border-radius: 6px;
   background: rgba(11, 13, 20, 0.78);
   border: 1.5px solid rgba(130, 155, 225, 0.35);
@@ -31,7 +33,16 @@
   color: #edf1ff;
   opacity: 0;
   transform: translateX(12px);
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition: opacity 160ms ease, transform 160ms ease, top 200ms ease;
+}
+body.spectating #${PANEL_ID} {
+  top: calc(3em + 10px);
+}
+body.${ACTIVE_BODY_CLASS} #killfeed {
+  right: calc(clamp(178px, 14vw, 206px) + 22px);
+}
+body.${ACTIVE_BODY_CLASS}.igceriad-mounted_right #killfeed {
+  right: calc(clamp(178px, 14vw, 206px) + 222px);
 }
 #${PANEL_ID}.is-visible {
   opacity: 1;
@@ -213,6 +224,9 @@
       );
 
       if (!shouldShow) {
+        if (document.body) {
+          document.body.classList.remove(ACTIVE_BODY_CLASS);
+        }
         if (panel.classList.contains('is-visible')) {
           panel.classList.remove('is-visible');
         }
@@ -222,6 +236,10 @@
           countEl.textContent = '0';
         }
         return;
+      }
+
+      if (document.body) {
+        document.body.classList.add(ACTIVE_BODY_CLASS);
       }
 
       const maxRows = Math.max(2, Math.min(30, Number(cfg.maxRows) || 12));
