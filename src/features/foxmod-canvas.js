@@ -115,7 +115,11 @@
       binds: { ...DEFAULT_KEYBINDS.guideline },
       dasMs: (10 * 1000) / 60,
       arrMs: (2 * 1000) / 60,
+      dcdMs: 0,
       sdf: 6,
+      cancel: false,
+      may20g: true,
+      safelock: true,
       gridOpacity: 0.1,
       boardOpacity: 0.85,
       shadowOpacity: 0.32
@@ -147,6 +151,7 @@
       if (cfg.handling) {
         const dasFrames = Number(cfg.handling.das);
         const arrFrames = Number(cfg.handling.arr);
+        const dcdFrames = Number(cfg.handling.dcd);
         const sdfVal = Number(cfg.handling.sdf);
         if (Number.isFinite(dasFrames) && dasFrames >= 0) {
           fallback.dasMs = (dasFrames * 1000) / 60;
@@ -154,8 +159,20 @@
         if (Number.isFinite(arrFrames) && arrFrames >= 0) {
           fallback.arrMs = (arrFrames * 1000) / 60;
         }
+        if (Number.isFinite(dcdFrames) && dcdFrames >= 0) {
+          fallback.dcdMs = (dcdFrames * 1000) / 60;
+        }
         if (Number.isFinite(sdfVal) && sdfVal >= 1) {
           fallback.sdf = sdfVal;
+        }
+        if (cfg.handling.cancel !== undefined) {
+          fallback.cancel = Boolean(cfg.handling.cancel);
+        }
+        if (cfg.handling.may20g !== undefined) {
+          fallback.may20g = cfg.handling.may20g !== false;
+        }
+        if (cfg.handling.safelock !== undefined) {
+          fallback.safelock = cfg.handling.safelock !== false;
         }
       }
 
@@ -562,21 +579,34 @@
     let userSettings = readTetrioUserSettings();
 
     const held = {
-      left: false,
-      right: false,
+      lShift: { held: false, dasMs: 0, arrMs: 0, dir: -1 },
+      rShift: { held: false, dasMs: 0, arrMs: 0, dir: 1 },
       down: false,
-      dir: 0,
-      dasAcc: 0,
-      arrAcc: 0
+      dir: 0
     };
 
     function resetKeys() {
-      held.left = false;
-      held.right = false;
+      held.lShift.held = false;
+      held.lShift.dasMs = 0;
+      held.lShift.arrMs = 0;
+      held.rShift.held = false;
+      held.rShift.dasMs = 0;
+      held.rShift.arrMs = 0;
       held.down = false;
       held.dir = 0;
-      held.dasAcc = 0;
-      held.arrAcc = 0;
+    }
+
+    function is20gSoftDrop() {
+      return Boolean(held.down && userSettings.sdf >= 41 && userSettings.may20g !== false);
+    }
+
+    function applyDcdTrim() {
+      if (userSettings.dcdMs <= 0) return;
+      const cap = Math.max(0, userSettings.dasMs - userSettings.dcdMs);
+      held.lShift.dasMs = Math.min(held.lShift.dasMs, cap);
+      held.lShift.arrMs = userSettings.arrMs;
+      held.rShift.dasMs = Math.min(held.rShift.dasMs, cap);
+      held.rShift.arrMs = userSettings.arrMs;
     }
 
     function matchesAction(evCandidates, actionName) {
@@ -593,38 +623,42 @@
       let handled = true;
 
       if (matchesAction(candidates, 'moveLeft')) {
-        if (!held.left) {
-          held.left = true;
+        if (!held.lShift.held) {
+          held.lShift.held = true;
+          held.lShift.dasMs = 0;
+          held.lShift.arrMs = userSettings.arrMs;
           held.dir = -1;
-          held.dasAcc = 0;
-          held.arrAcc = 0;
-          game.move(-1, 0);
+          game.move(-1, 0, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
         }
       } else if (matchesAction(candidates, 'moveRight')) {
-        if (!held.right) {
-          held.right = true;
+        if (!held.rShift.held) {
+          held.rShift.held = true;
+          held.rShift.dasMs = 0;
+          held.rShift.arrMs = userSettings.arrMs;
           held.dir = 1;
-          held.dasAcc = 0;
-          held.arrAcc = 0;
-          game.move(1, 0);
+          game.move(1, 0, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
         }
       } else if (matchesAction(candidates, 'softDrop')) {
         if (!held.down) {
           held.down = true;
           if (userSettings.sdf >= 41 && typeof game.sonicDrop === 'function') {
-            game.sonicDrop();
+            game.sonicDrop(true);
           } else {
             game.move(0, 1);
           }
         }
       } else if (matchesAction(candidates, 'rotateCW') && !ev.repeat) {
-        game.rotate(1);
+        const rotated = game.rotate(1, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
+        if (rotated) applyDcdTrim();
       } else if (matchesAction(candidates, 'rotateCCW') && !ev.repeat) {
-        game.rotate(-1);
+        const rotated = game.rotate(-1, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
+        if (rotated) applyDcdTrim();
       } else if (matchesAction(candidates, 'rotate180') && !ev.repeat) {
-        game.rotate(2);
+        const rotated = game.rotate(2, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
+        if (rotated) applyDcdTrim();
       } else if (matchesAction(candidates, 'hardDrop') && !ev.repeat) {
         game.hardDrop();
+        applyDcdTrim();
       } else if (matchesAction(candidates, 'hold') && !ev.repeat) {
         game.hold();
       } else if (matchesAction(candidates, 'retry') && !ev.repeat && opts.allowRestart !== false) {
@@ -640,14 +674,30 @@
       if (!ev) return;
       const candidates = buildEventKeyCandidates(ev);
       if (matchesAction(candidates, 'moveLeft')) {
-        held.left = false;
-        held.dir = held.right ? 1 : 0;
-        held.dasAcc = 0;
+        held.lShift.held = false;
+        held.lShift.dasMs = 0;
+        if (held.rShift.held) {
+          held.dir = 1;
+          if (userSettings.cancel) {
+            held.rShift.dasMs = 0;
+            held.rShift.arrMs = userSettings.arrMs;
+          }
+        } else {
+          held.dir = 0;
+        }
       }
       if (matchesAction(candidates, 'moveRight')) {
-        held.right = false;
-        held.dir = held.left ? -1 : 0;
-        held.dasAcc = 0;
+        held.rShift.held = false;
+        held.rShift.dasMs = 0;
+        if (held.lShift.held) {
+          held.dir = -1;
+          if (userSettings.cancel) {
+            held.lShift.dasMs = 0;
+            held.lShift.arrMs = userSettings.arrMs;
+          }
+        } else {
+          held.dir = 0;
+        }
       }
       if (matchesAction(candidates, 'softDrop')) {
         held.down = false;
@@ -661,17 +711,27 @@
       lastTs = ts;
 
       if (game) {
-        if (held.dir !== 0) {
-          held.dasAcc += dt;
-          if (held.dasAcc >= userSettings.dasMs) {
+        const activeShift =
+          held.dir === -1 ? held.lShift : held.dir === 1 ? held.rShift : null;
+        if (activeShift && activeShift.held) {
+          const prevDas = activeShift.dasMs;
+          const remainingDas = Math.max(0, userSettings.dasMs - prevDas);
+          const overflow = Math.max(0, dt - remainingDas);
+          activeShift.dasMs = Math.min(prevDas + dt, userSettings.dasMs);
+
+          if (activeShift.dasMs >= userSettings.dasMs) {
+            const apply20g = is20gSoftDrop();
             if (userSettings.arrMs <= 0 && typeof game.instantMove === 'function') {
-              game.instantMove(held.dir);
+              game.instantMove(activeShift.dir, { apply20g, scoreSoftDrop: true });
             } else {
               const stepArr = Math.max(1, userSettings.arrMs);
-              held.arrAcc += dt;
-              while (held.arrAcc >= stepArr) {
-                held.arrAcc -= stepArr;
-                if (!game.move(held.dir, 0)) break;
+              activeShift.arrMs += overflow;
+              while (activeShift.arrMs >= stepArr) {
+                activeShift.arrMs -= stepArr;
+                if (!game.move(activeShift.dir, 0, { apply20g, scoreSoftDrop: true })) {
+                  activeShift.arrMs = Math.min(activeShift.arrMs, stepArr);
+                  break;
+                }
               }
             }
           }

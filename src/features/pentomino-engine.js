@@ -70,6 +70,89 @@
     [2, -1]
   ];
 
+  // Authentic TETR.IO SRS / SRS+ kick tables (+x right, +y down in board space).
+  const SRS_PLUS_KICKS = Object.freeze({
+    '01': [[-1, 0], [-1, -1], [0, 2], [-1, 2]],
+    '10': [[1, 0], [1, 1], [0, -2], [1, -2]],
+    '12': [[1, 0], [1, 1], [0, -2], [1, -2]],
+    '21': [[-1, 0], [-1, -1], [0, 2], [-1, 2]],
+    '23': [[1, 0], [1, -1], [0, 2], [1, 2]],
+    '32': [[-1, 0], [-1, 1], [0, -2], [-1, -2]],
+    '30': [[-1, 0], [-1, 1], [0, -2], [-1, -2]],
+    '03': [[1, 0], [1, -1], [0, 2], [1, 2]],
+    '02': [[0, -1], [1, -1], [-1, -1], [1, 0], [-1, 0]],
+    '13': [[1, 0], [1, -2], [1, -1], [0, -2], [0, -1]],
+    '20': [[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]],
+    '31': [[-1, 0], [-1, -2], [-1, -1], [0, -2], [0, -1]]
+  });
+
+  const SRS_PLUS_I_KICKS = Object.freeze({
+    '01': [[1, 0], [-2, 0], [-2, 1], [1, -2]],
+    '10': [[-1, 0], [2, 0], [-1, 2], [2, -1]],
+    '12': [[-1, 0], [2, 0], [-1, -2], [2, 1]],
+    '21': [[-2, 0], [1, 0], [-2, -1], [1, 2]],
+    '23': [[2, 0], [-1, 0], [2, -1], [-1, 2]],
+    '32': [[1, 0], [-2, 0], [1, -2], [-2, 1]],
+    '30': [[1, 0], [-2, 0], [1, 2], [-2, -1]],
+    '03': [[-1, 0], [2, 0], [2, 1], [-1, -2]],
+    '02': [[0, -1]],
+    '13': [[1, 0]],
+    '20': [[0, 1]],
+    '31': [[-1, 0]]
+  });
+
+  const SRS_I_KICKS = Object.freeze({
+    '01': [[-2, 0], [1, 0], [-2, 1], [1, -2]],
+    '10': [[2, 0], [-1, 0], [2, -1], [-1, 2]],
+    '12': [[-1, 0], [2, 0], [-1, -2], [2, 1]],
+    '21': [[1, 0], [-2, 0], [1, 2], [-2, -1]],
+    '23': [[2, 0], [-1, 0], [2, -1], [-1, 2]],
+    '32': [[-2, 0], [1, 0], [-2, 1], [1, -2]],
+    '30': [[1, 0], [-2, 0], [1, 2], [-2, -1]],
+    '03': [[-1, 0], [2, 0], [-1, -2], [2, 1]],
+    '02': [],
+    '13': [],
+    '20': [],
+    '31': []
+  });
+
+  const SRS_PLUS_I5_KICKS = Object.freeze({
+    '01': [[-2, 0], [2, 0], [-2, 1], [2, -2]],
+    '10': [[2, 0], [-2, 0], [2, -1], [-2, 2]],
+    '12': [[-2, 0], [2, 0], [-2, -2], [2, 1]],
+    '21': [[2, 0], [-2, 0], [2, 2], [-2, -1]],
+    '23': [[2, 0], [-2, 0], [2, -1], [-2, 2]],
+    '32': [[-2, 0], [2, 0], [-2, 1], [2, -2]],
+    '30': [[2, 0], [-2, 0], [2, 2], [-2, -1]],
+    '03': [[-2, 0], [2, 0], [-2, -2], [2, 1]],
+    '02': [],
+    '13': [],
+    '20': [],
+    '31': []
+  });
+
+  function getKickOffsetsForTransition(pieceKey, def, curRot, nextRot, kicksetName) {
+    const trans = String(curRot) + String(nextRot);
+    if (pieceKey === 'I') {
+      const table = kicksetName === 'SRS' ? SRS_I_KICKS : SRS_PLUS_I_KICKS;
+      return table[trans] || [];
+    }
+    if (def && def.rotations && def.rotations[0] && def.rotations[0].length === 5) {
+      let maxX = 0;
+      for (const [cx] of def.rotations[0]) {
+        if (cx > maxX) maxX = cx;
+      }
+      if (maxX >= 4) {
+        return SRS_PLUS_I5_KICKS[trans] || [];
+      }
+    }
+    const base = SRS_PLUS_KICKS[trans] || [];
+    if (def && def.rotations && def.rotations[0] && def.rotations[0].length > 4) {
+      return base.concat(GENERIC_KICKS);
+    }
+    return base;
+  }
+
   /**
    * Deterministic Mulberry32 PRNG so Solo replays & P2P rooms share fair bags.
    */
@@ -151,6 +234,7 @@
         garbageMultiplier: 1,
         blitzDurationMs: 120000,
         sprintLines: 40,
+        kickset: 'SRS+',
         onAttack: null,
         onTopOut: null,
         onFinish: null
@@ -171,9 +255,10 @@
     let combo = -1;
     let b2b = false;
     let elapsedMs = 0;
-    let gravityAccMs = 0;
+    let gravityAccRows = 0;
     let lockTimerMs = 0;
     let lockResets = 0;
+    let maxYReached = 0;
     let lastCallout = '';
     let calloutTimerMs = 0;
     let finished = false;
@@ -236,9 +321,10 @@
         x: startX,
         y: startY
       };
-      gravityAccMs = 0;
+      gravityAccRows = 0;
       lockTimerMs = 0;
       lockResets = 0;
+      maxYReached = startY;
 
       if (collides(active.key, active.rot, active.x, active.y)) {
         active = null;
@@ -371,33 +457,76 @@
       }
     }
 
-    function move(dx, dy) {
+    function move(dx, dy, moveOpts) {
       if (!active || finished) return false;
       if (!collides(active.key, active.rot, active.x + dx, active.y + dy)) {
         active.x += dx;
         active.y += dy;
-        if (dy === 0) {
-          resetLockDelay();
-        } else if (dy > 0) {
-          score += 1;
+        if (active.y > maxYReached) {
+          maxYReached = active.y;
+          lockResets = 0;
+        }
+        if (dy > 0) {
+          if (!moveOpts || moveOpts.scoreSoftDrop !== false) {
+            score += dy;
+          }
           lockTimerMs = 0;
+          gravityAccRows = 0;
+        } else if (dy === 0) {
+          let dropped20g = 0;
+          if (moveOpts && moveOpts.apply20g) {
+            dropped20g = sonicDrop(moveOpts.scoreSoftDrop !== false);
+          }
+          if (dropped20g === 0) {
+            if (isGrounded()) {
+              resetLockDelay();
+            } else {
+              lockTimerMs = 0;
+            }
+          }
         }
         return true;
       }
       return false;
     }
 
-    function rotate(delta) {
+    function rotate(delta, rotateOpts) {
       if (!active || finished) return false;
       const def = PIECE_DEFS[active.key];
       if (def.noRotate) return true;
-      const nextRot = ((active.rot + delta) % 4 + 4) % 4;
-      for (const [kx, ky] of GENERIC_KICKS) {
-        if (!collides(active.key, nextRot, active.x + kx, active.y - ky)) {
+      const curRot = active.rot;
+      const nextRot = ((curRot + delta) % 4 + 4) % 4;
+      if (nextRot === curRot) return true;
+
+      const kickOffsets = getKickOffsetsForTransition(
+        active.key,
+        def,
+        curRot,
+        nextRot,
+        opts.kickset
+      );
+      const tests = [[0, 0]].concat(kickOffsets);
+
+      for (const [kx, ky] of tests) {
+        if (!collides(active.key, nextRot, active.x + kx, active.y + ky)) {
           active.rot = nextRot;
           active.x += kx;
-          active.y -= ky;
-          resetLockDelay();
+          active.y += ky;
+          if (active.y > maxYReached) {
+            maxYReached = active.y;
+            lockResets = 0;
+          }
+          let dropped20g = 0;
+          if (rotateOpts && rotateOpts.apply20g) {
+            dropped20g = sonicDrop(rotateOpts.scoreSoftDrop !== false);
+          }
+          if (dropped20g === 0) {
+            if (isGrounded()) {
+              resetLockDelay();
+            } else {
+              lockTimerMs = 0;
+            }
+          }
           return true;
         }
       }
@@ -436,16 +565,20 @@
       }
     }
 
-    function instantMove(dx) {
+    function instantMove(dx, moveOpts) {
       let moved = false;
-      while (move(dx, 0)) moved = true;
+      for (let i = 0; i < BOARD_WIDTH; i++) {
+        if (!move(dx, 0, moveOpts)) break;
+        moved = true;
+      }
       return moved;
     }
 
-    function sonicDrop() {
+    function sonicDrop(addScore) {
       if (!active || finished) return 0;
+      const scoreDrop = addScore !== false;
       let dropped = 0;
-      while (move(0, 1)) dropped++;
+      while (move(0, 1, { scoreSoftDrop: scoreDrop })) dropped++;
       return dropped;
     }
 
@@ -471,18 +604,34 @@
       if (!active) return;
 
       if (softDropHeld && Number(sdfMultiplier) >= 41) {
-        sonicDrop();
+        gravityAccRows = 0;
+        sonicDrop(true);
       } else {
         const baseDropMs = Math.max(85, 800 - (opts.gravityLevel - 1) * 70);
+        const baseRowsPerMs = 1 / baseDropMs;
         const sdf = Math.max(1, Number(sdfMultiplier) || 6);
-        const intervalMs = softDropHeld ? Math.max(12, baseDropMs / sdf) : baseDropMs;
-        gravityAccMs += delta;
-        while (gravityAccMs >= intervalMs && active && !finished) {
-          gravityAccMs -= intervalMs;
-          if (!collides(active.key, active.rot, active.x, active.y + 1)) {
-            active.y += 1;
-            if (softDropHeld) score += 1;
-            lockTimerMs = 0;
+        const rowsPerMs = softDropHeld
+          ? Math.max(baseRowsPerMs * sdf, 0.003 * sdf)
+          : baseRowsPerMs;
+
+        if (collides(active.key, active.rot, active.x, active.y + 1)) {
+          gravityAccRows = 0;
+        } else {
+          gravityAccRows += delta * rowsPerMs;
+          while (gravityAccRows >= 1 && active && !finished) {
+            if (!collides(active.key, active.rot, active.x, active.y + 1)) {
+              gravityAccRows -= 1;
+              active.y += 1;
+              if (active.y > maxYReached) {
+                maxYReached = active.y;
+                lockResets = 0;
+              }
+              if (softDropHeld) score += 1;
+              lockTimerMs = 0;
+            } else {
+              gravityAccRows = 0;
+              break;
+            }
           }
         }
       }
@@ -492,6 +641,8 @@
         if (lockTimerMs >= 500) {
           lockActivePiece();
         }
+      } else {
+        lockTimerMs = 0;
       }
     }
 
@@ -511,9 +662,10 @@
       combo = -1;
       b2b = false;
       elapsedMs = 0;
-      gravityAccMs = 0;
+      gravityAccRows = 0;
       lockTimerMs = 0;
       lockResets = 0;
+      maxYReached = 0;
       lastCallout = '';
       calloutTimerMs = 0;
       finished = false;

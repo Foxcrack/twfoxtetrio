@@ -144,3 +144,189 @@ test('renderPlayfield keeps sky buffer pieces (avy <= -2) completely visible wit
     assert.ok(b.y >= 4, `Active block at y=${b.y} must never be clipped above canvas top`);
   }
 });
+
+test('SRS+ rotation kicks and I-piece / 180 wall kicks follow TETR.IO rules', () => {
+  // Find a deterministic seed starting with T for clean overhang / wall kick test
+  let tSeed = 1;
+  while (tSeed < 200) {
+    const probe = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: tSeed });
+    if (probe.getSnapshot().active.key === 'T') break;
+    tSeed += 1;
+  }
+
+  // Test 180 rotation kick ('02') against stack floor when spawn rot 0 rotates 180 near floor
+  const game = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: tSeed });
+  const startSnap = game.getSnapshot();
+  assert.equal(startSnap.active.key, 'T');
+
+  // Drop T to bottom (rot 0 bottom row is 23 at y=22), then rotate 180 ('02': kicks [0,-1] up to y=21)
+  game.sonicDrop();
+  const groundedY = game.getSnapshot().active.y;
+  assert.equal(game.rotate(2), true, '180 rotation on floor must kick cleanly via SRS+ 02 table');
+  assert.equal(game.getSnapshot().active.rot, 2);
+  assert.equal(game.getSnapshot().active.y, groundedY - 1, 'T rot 2 kicks up 1 via SRS+ 02 [0,-1] kick when on floor');
+
+  // Now move rot-2 T against right/left wall and verify SRS+ 1->2 kick
+  assert.equal(game.rotate(1), true); // rot 3
+  const yBeforeFloorKick = game.getSnapshot().active.y;
+  // Move T against left wall in rot 1 so spine is on x=0 -> rotating 1->2 pushes +1 right ([1,0])
+  game.rotate(2); // rot 1 (empty col 0)
+  for (let i = 0; i < 10; i++) game.move(-1, 0);
+  assert.equal(game.getSnapshot().active.x, -1, 'T in rot 1 aligns spine to x=0 when active.x=-1');
+  assert.equal(game.rotate(1), true, 'T rot 1->2 against left wall kicks +1 right via SRS+ 12 table');
+  assert.equal(game.getSnapshot().active.rot, 2);
+  assert.equal(game.getSnapshot().active.x, 0, 'T must kick right to x=0 so col-0 mino stays inside board');
+  assert.ok(game.getSnapshot().active.y <= yBeforeFloorKick + 2);
+
+  // Verify I-piece SRS+ symmetric kick behavior on left wall
+  let iSeed = 1;
+  while (iSeed < 200) {
+    const probe = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: iSeed });
+    if (probe.getSnapshot().active.key === 'I') break;
+    iSeed += 1;
+  }
+  const iGame = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: iSeed });
+  assert.equal(iGame.rotate(1), true); // rot 1: col 2
+  for (let i = 0; i < 10; i++) iGame.move(-1, 0);
+  assert.equal(iGame.getSnapshot().active.x, -2);
+  assert.equal(iGame.rotate(1), true, 'Vertical I at left wall (x=-2) rotates 1->2 via SRS+ [-1,0]/[2,0] kick');
+  assert.equal(iGame.getSnapshot().active.rot, 2);
+  assert.equal(iGame.getSnapshot().active.x, 0);
+});
+
+test('soft drop speed scales past 12ms cap and SDF=41 drops into wells during horizontal 0-ARR movement', () => {
+  // Verify SDF=40 drops faster than old 12ms artificial floor (~8.33ms/row => >= 6 rows in 60ms)
+  const fastGame = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: 12, gravityLevel: 1 });
+  const y0 = fastGame.getSnapshot().active.y;
+  fastGame.step(60, true, 40);
+  const yAfter = fastGame.getSnapshot().active.y;
+  assert.ok(yAfter - y0 >= 6, `Expected >= 6 rows dropped in 60ms at SDF=40, got ${yAfter - y0}`);
+
+  // Build left & right stacks (rows 22..23) leaving a deep open well in the center
+  let oSeed = 1;
+  while (oSeed < 200) {
+    const probe = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: oSeed });
+    if (probe.getSnapshot().active.key === 'O') break;
+    oSeed += 1;
+  }
+  const wellGame = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: oSeed });
+  assert.equal(wellGame.getSnapshot().active.key, 'O');
+  wellGame.instantMove(1);
+  wellGame.hardDrop(); // right wall on cols 8..9 (rows 22..23)
+  wellGame.instantMove(-1);
+  wellGame.hardDrop(); // left wall on cols 0..3
+
+  // Rest active piece on top of right wall (x=8..9) and sweep left with apply20g=true (ARR=0 + SDF=41)
+  wellGame.instantMove(1);
+  wellGame.sonicDrop();
+  const rightTopY = wellGame.getSnapshot().active.y;
+
+  const moved20g = wellGame.instantMove(-1, { apply20g: true, scoreSoftDrop: true });
+  assert.equal(moved20g, true);
+  const finalSnap = wellGame.getSnapshot();
+  assert.ok(finalSnap.active.y > rightTopY, `Piece must drop down into center well (y=${finalSnap.active.y} > ${rightTopY})`);
+  assert.ok(finalSnap.active.x >= 2, `Piece inside center well must stop at left wall x=${finalSnap.active.x}`);
+
+  // Falling to a deeper row must reset grounded lockResets so tucks don't instantly lock on arrival
+  const tuckGame = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: oSeed });
+  tuckGame.instantMove(1);
+  tuckGame.hardDrop(); // cols 8..9 rows 22..23
+  tuckGame.instantMove(1);
+  tuckGame.sonicDrop(); // resting on right O tower at y=20
+  for (let i = 0; i < 6; i++) {
+    tuckGame.move(-1, 0);
+    tuckGame.move(1, 0);
+  }
+  // Move off tower ledge and drop 2 rows to bottom: lock delay resets fresh so 490ms step doesn't instant-lock
+  tuckGame.move(-1, 0);
+  tuckGame.move(-1, 0);
+  tuckGame.sonicDrop();
+  tuckGame.step(400, false, 6);
+  assert.equal(tuckGame.getSnapshot().pieces, 1, 'After dropping to deeper row, lock timer must still allow full 500ms lock delay');
+});
+
+test('playfield controller fires first ARR immediately at DAS boundary and preserves opposite DAS unless cancel=true', () => {
+  const prevStorage = globalThis.localStorage;
+  const prevRaf = globalThis.requestAnimationFrame;
+  const prevCancelRaf = globalThis.cancelAnimationFrame;
+
+  const mockCtx = {
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: 'left',
+    globalAlpha: 1,
+    save() {},
+    restore() {},
+    clearRect() {},
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    fill() {},
+    stroke() {},
+    fillText() {},
+    fillRect() {}
+  };
+  const mockCanvas = { width: 400, height: 500, getContext: () => mockCtx };
+
+  function runWithConfig(handlingCfg) {
+    let rafCb = null;
+    globalThis.localStorage = {
+      getItem(k) {
+        return k === 'userConfig' ? JSON.stringify({ handling: handlingCfg }) : null;
+      }
+    };
+    globalThis.requestAnimationFrame = (cb) => {
+      rafCb = cb;
+      return 1;
+    };
+    globalThis.cancelAnimationFrame = () => {
+      rafCb = null;
+    };
+
+    const game = engine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: 5 });
+    const ctrl = foxmodCanvas.createPlayfieldController({ canvas: mockCanvas, game });
+    ctrl.start();
+    return {
+      game,
+      ctrl,
+      stepFrame(ts) {
+        if (rafCb) rafCb(ts);
+      }
+    };
+  }
+
+  try {
+    // 1. DAS=6F (100ms), ARR=2F (~33.33ms): at exact DAS completion (100ms), piece must immediately shift an extra column
+    const sim = runWithConfig({ das: 6, arr: 2, sdf: 6, cancel: false });
+    const startX = sim.game.getSnapshot().active.x;
+    sim.ctrl.handleKeyDown({ key: 'ArrowRight', code: 'ArrowRight', repeat: false });
+    assert.equal(sim.game.getSnapshot().active.x, startX + 1, 'Initial tap moves +1');
+    sim.stepFrame(1000); // initialize lastTs = 1000 (dt = 0)
+    sim.stepFrame(1050); // dt = 50 (< 100ms DAS)
+    assert.equal(sim.game.getSnapshot().active.x, startX + 1, 'Before DAS expires, no ARR movement');
+    sim.stepFrame(1100); // dt = 50 (total = 100ms == DAS!)
+    assert.equal(
+      sim.game.getSnapshot().active.x,
+      startX + 2,
+      'First ARR step must trigger immediately when DAS completes without waiting +1 extra ARR'
+    );
+
+    // 2. When cancel=false, briefly tapping Left while Right was already charged must keep Right DAS charged
+    sim.ctrl.handleKeyDown({ key: 'ArrowLeft', code: 'ArrowLeft', repeat: false });
+    const xAfterLeftTap = sim.game.getSnapshot().active.x;
+    sim.ctrl.handleKeyUp({ key: 'ArrowLeft', code: 'ArrowLeft' });
+    sim.stepFrame(1134); // dt = 34ms -> Right already charged >= DAS and overflows arrMs immediately
+    assert.ok(
+      sim.game.getSnapshot().active.x > xAfterLeftTap,
+      'Releasing opposite tap with cancel=false must preserve existing Right DAS charge'
+    );
+    sim.ctrl.stop();
+  } finally {
+    globalThis.localStorage = prevStorage;
+    globalThis.requestAnimationFrame = prevRaf;
+    globalThis.cancelAnimationFrame = prevCancelRaf;
+  }
+});
