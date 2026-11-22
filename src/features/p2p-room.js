@@ -150,9 +150,10 @@
     return concatUint8([new Uint8Array([0x82]), mqttEncodeVarLen(body.length), body]);
   }
 
-  function mqttPacketPublish(topic, text) {
+  function mqttPacketPublish(topic, text, retain) {
     const body = concatUint8([mqttUtfString(topic), encodeUtf8(text)]);
-    return concatUint8([new Uint8Array([0x30]), mqttEncodeVarLen(body.length), body]);
+    const headerByte = retain ? 0x31 : 0x30;
+    return concatUint8([new Uint8Array([headerByte]), mqttEncodeVarLen(body.length), body]);
   }
 
   function mqttPacketPingReq() {
@@ -1670,6 +1671,12 @@
     ICE_SERVERS,
     ROOM_CODE_ALPHABET,
     SIGNAL_BROKERS,
+    mqttPacketConnect,
+    mqttPacketSubscribe,
+    mqttPacketPublish,
+    mqttPacketPingReq,
+    mqttPacketDisconnect,
+    createMqttFrameReader,
     generateRoomCode,
     normalizeRoomCode,
     encodeSignal,

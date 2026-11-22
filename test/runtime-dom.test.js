@@ -978,7 +978,7 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(configPane.classList.contains('hidden'), false);
 
   const checkboxes = configPane.querySelectorAll('.twfox-toggle-input');
-  assert.equal(checkboxes.length, 10);
+  assert.equal(checkboxes.length, 11);
   checkboxes[0].checked = false;
   checkboxes[0].dispatchEvent('change');
   assert.equal(env.context.__TWFOX_TETRIO__.getConfig().blitzTracker.enabled, false);
@@ -1718,4 +1718,296 @@ test('Explore catalog renders static strip previews for raster/SVG skins and laz
   assert.ok(connectedImg && !connectedImg.classList.contains('hidden'));
   assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(connectedImg.getAttribute('src')), { width: 308, height: 28 });
   assert.equal(stripDraws.length, 10); // 10 minos drawn (Minos only pack skips ghost slot)
+});
+
+function encodeMqttVarLenTest(len) {
+  const bytes = [];
+  let value = len;
+  do {
+    let encoded = value % 128;
+    value = Math.floor(value / 128);
+    if (value > 0) encoded |= 128;
+    bytes.push(encoded);
+  } while (value > 0);
+  return Uint8Array.from(bytes);
+}
+
+function buildMqttConnackFrame() {
+  return Uint8Array.from([0x20, 0x02, 0x00, 0x00]);
+}
+
+function buildMqttPublishFrame(topic, text, retain) {
+  const topicBytes = Buffer.from(topic, 'utf8');
+  const payloadBytes = Buffer.from(text, 'utf8');
+  const body = Buffer.concat([
+    Buffer.from([(topicBytes.length >> 8) & 0xff, topicBytes.length & 0xff]),
+    topicBytes,
+    payloadBytes
+  ]);
+  const remLen = encodeMqttVarLenTest(body.length);
+  return new Uint8Array(Buffer.concat([Buffer.from([retain ? 0x31 : 0x30]), Buffer.from(remLen), body]));
+}
+
+function parseMqttClientFrame(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const type = u8[0] & 0xf0;
+  const flags = u8[0] & 0x0f;
+  let len = 0;
+  let mult = 1;
+  let idx = 1;
+  while (idx < u8.length) {
+    const b = u8[idx++];
+    len += (b & 0x7f) * mult;
+    mult *= 128;
+    if ((b & 0x80) === 0) break;
+  }
+  const body = u8.slice(idx, idx + len);
+  if (type === 0x80 && body.length >= 4) {
+    const tLen = (body[2] << 8) | body[3];
+    const topic = Buffer.from(body.slice(4, 4 + tLen)).toString('utf8');
+    return { type: 'SUBSCRIBE', topic };
+  }
+  if (type === 0x30 && body.length >= 2) {
+    const tLen = (body[0] << 8) | body[1];
+    const topic = Buffer.from(body.slice(2, 2 + tLen)).toString('utf8');
+    const text = Buffer.from(body.slice(2 + tLen)).toString('utf8');
+    return { type: 'PUBLISH', retain: (flags & 1) === 1, topic, text };
+  }
+  if (type === 0x10) return { type: 'CONNECT' };
+  if (type === 0xe0) return { type: 'DISCONNECT' };
+  return { type: 'OTHER', rawType: type };
+}
+
+test('fox-paw-badge discovers FOXMOD users via MQTT retain, marks DOM without altering textContent, and respects config toggle', async () => {
+  const sentFrames = [];
+  let activeSocket = null;
+
+  class MockMqttWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.binaryType = 'arraybuffer';
+      activeSocket = this;
+      setTimeout(() => {
+        if (this.readyState !== 0) return;
+        this.readyState = 1;
+        if (this.onopen) this.onopen({});
+      }, 2);
+    }
+    send(bytes) {
+      const parsed = parseMqttClientFrame(bytes);
+      sentFrames.push(parsed);
+      if (parsed.type === 'CONNECT') {
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: buildMqttConnackFrame().buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'SUBSCRIBE' && parsed.topic === 'twfoxtetrio/v1/foxers/+') {
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            const retained = buildMqttPublishFrame(
+              'twfoxtetrio/v1/foxers/amigo_fox',
+              JSON.stringify({ u: 'amigo_fox', v: '0.5.0', ts: Date.now() }),
+              true
+            );
+            this.onmessage({ data: retained.buffer });
+          }
+        }, 2);
+      }
+    }
+    close() {
+      this.readyState = 3;
+      if (this.onclose) this.onclose({});
+    }
+  }
+
+  const env = createFakeDomEnvironment('https:', {
+    WebSocket: MockMqttWebSocket
+  });
+  const doc = env.context.document;
+  const FakeEl = env.elements.get('me_username').constructor;
+
+  // Set logged-in user and populate realistic TETR.IO DOM nodes before init
+  const meEl = env.elements.get('me_username');
+  meEl.textContent = 'TWFoxcrack';
+
+  const roomPlayers = new FakeEl('div', 'room_players', '');
+  const spAmigo = new FakeEl('div', '', 'scroller_player');
+  spAmigo.setAttribute('data-username', 'amigo_fox');
+  const spAmigoH1 = new FakeEl('h1', '', '');
+  spAmigoH1.textContent = 'AMIGO_FOX';
+  spAmigo.appendChild(spAmigoH1);
+
+  const spOther = new FakeEl('div', '', 'scroller_player');
+  spOther.setAttribute('data-username', 'sinmod');
+  const spOtherH1 = new FakeEl('h1', '', '');
+  spOtherH1.textContent = 'SINMOD';
+  spOther.appendChild(spOtherH1);
+
+  roomPlayers.appendChild(spAmigo);
+  roomPlayers.appendChild(spOther);
+  doc.body.appendChild(roomPlayers);
+
+  const chatTagAmigo = new FakeEl('h1', '', 'chat_tag');
+  chatTagAmigo.textContent = 'AMIGO_FOX';
+  const chatTagOther = new FakeEl('h1', '', 'chat_tag');
+  chatTagOther.textContent = 'SINMOD';
+  const mentionNuevo = new FakeEl('a', '', 'chatlink tetra_pop');
+  mentionNuevo.setAttribute('data-username', 'nuevo_fox');
+  mentionNuevo.textContent = 'nuevo_fox';
+  const resultOwner = new FakeEl('div', '', 'playerresult');
+  const ownerSpan = new FakeEl('div', '', 'record_owner');
+  ownerSpan.textContent = 'TWFOXCRACK';
+  resultOwner.appendChild(ownerSpan);
+
+  doc.body.appendChild(chatTagAmigo);
+  doc.body.appendChild(chatTagOther);
+  doc.body.appendChild(mentionNuevo);
+  doc.body.appendChild(resultOwner);
+
+  env.triggerDOMContentLoaded();
+
+  try {
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+
+    // Verify MQTT handshake + retained self presence publish
+    assert.ok(sentFrames.some((f) => f.type === 'CONNECT'));
+    assert.ok(sentFrames.some((f) => f.type === 'SUBSCRIBE' && f.topic === 'twfoxtetrio/v1/foxers/+'));
+    const selfPub = sentFrames.find((f) => f.type === 'PUBLISH' && f.topic === 'twfoxtetrio/v1/foxers/twfoxcrack' && f.text !== '');
+    assert.ok(selfPub && selfPub.retain === true);
+    assert.equal(JSON.parse(selfPub.text).u, 'twfoxcrack');
+
+    // Verify self + discovered amigo_fox get paw attribute with unchanged textContent
+    assert.equal(meEl.getAttribute('data-twfox-paw'), '1');
+    assert.equal(meEl.textContent, 'TWFoxcrack');
+    assert.equal(spAmigoH1.getAttribute('data-twfox-paw'), '1');
+    assert.equal(spAmigoH1.textContent, 'AMIGO_FOX');
+    assert.equal(chatTagAmigo.getAttribute('data-twfox-paw'), '1');
+    assert.equal(ownerSpan.getAttribute('data-twfox-paw'), '1');
+
+    // Non-FOXMOD player does not receive paw
+    assert.equal(spOtherH1.getAttribute('data-twfox-paw'), null);
+    assert.equal(chatTagOther.getAttribute('data-twfox-paw'), null);
+    assert.equal(mentionNuevo.getAttribute('data-twfox-paw'), null);
+
+    // Live incoming MQTT publish for nuevo_fox immediately badges nuevo_fox mention
+    const incomingNuevo = buildMqttPublishFrame(
+      'twfoxtetrio/v1/foxers/nuevo_fox',
+      JSON.stringify({ u: 'nuevo_fox', v: '0.5.0', ts: Date.now() }),
+      true
+    );
+    activeSocket.onmessage({ data: incomingNuevo.buffer });
+    await new Promise((r) => setTimeout(r, 70));
+    assert.equal(mentionNuevo.getAttribute('data-twfox-paw'), '1');
+
+    // Live VS Leaderboard displays fox paw on FOXMOD players only
+    vm.runInContext(`
+      window.__gamesMap = new Map();
+      window.__g1 = {
+        id: 'g1',
+        getOwner: () => 'twfoxcrack',
+        getFrame: () => 600,
+        isPlaying: () => true,
+        state: { time: { zero: false, frameoffset: 0 }, stats: { piecesplaced: 40, garbage: { attack: 18, cleared: 6 } } }
+      };
+      window.__g2 = {
+        id: 'g2',
+        getOwner: () => 'sinmod',
+        getFrame: () => 600,
+        isPlaying: () => true,
+        state: { time: { zero: false, frameoffset: 0 }, stats: { piecesplaced: 35, garbage: { attack: 12, cleared: 4 } } }
+      };
+      window.__g3 = {
+        id: 'g3',
+        getOwner: () => 'amigo_fox',
+        getFrame: () => 600,
+        isPlaying: () => true,
+        state: { time: { zero: false, frameoffset: 0 }, stats: { piecesplaced: 30, garbage: { attack: 8, cleared: 4 } } }
+      };
+      window.__gamesMap.self = window.__g1;
+      window.__gamesMap.set('g1', window.__g1);
+      window.__gamesMap.set('g2', window.__g2);
+      window.__gamesMap.set('g3', window.__g3);
+    `, env.context);
+    env.menus.classList.add('hidden');
+    doc.body.classList.add('multiplexed');
+    const lbRows = env.elements.get('twfoxtetrio-multi-lb').querySelectorAll('.twfox-lb-name');
+    assert.equal(lbRows.length, 3);
+    assert.equal(lbRows[0].getAttribute('data-twfox-paw'), '1');
+    assert.equal(lbRows[1].getAttribute('data-twfox-paw'), null);
+    assert.equal(lbRows[2].getAttribute('data-twfox-paw'), '1');
+
+    // FOXMOD P2P lobby / card targets also pick up paw badge without mutating textContent
+    const p2pNameEl = new FakeEl('span', '', 'twfox-player-name twfox-paw-target');
+    p2pNameEl.setAttribute('data-username', 'amigo_fox');
+    p2pNameEl.textContent = 'amigo_fox';
+    doc.body.appendChild(p2pNameEl);
+    env.context.__TWFOX_INTERNAL__.foxPawBadge.rescan();
+    assert.equal(p2pNameEl.getAttribute('data-twfox-paw'), '1');
+    assert.equal(p2pNameEl.textContent, 'amigo_fox');
+
+    // Toggle FOXMOD Config off in menus -> clears retained presence & removes all badges immediately
+    doc.body.classList.remove('multiplexed');
+    env.menus.classList.remove('hidden');
+    env.elements.get('twfoxtetrio-home-foxmod').click();
+    env.elements.get('twfoxtetrio-card-config').click();
+    const configPane = env.elements.get('twfoxtetrio-pane-config');
+    const toggles = configPane.querySelectorAll('.twfox-toggle-input');
+    assert.equal(toggles.length, 11);
+    const pawToggle = toggles[10];
+    assert.ok(pawToggle, 'Fox Paw config checkbox should be rendered in FOXMOD CONFIG');
+    assert.equal(pawToggle.checked, true);
+    pawToggle.checked = false;
+    pawToggle.dispatchEvent('change');
+    assert.equal(env.context.__TWFOX_TETRIO__.getConfig().foxPawBadge.enabled, false);
+
+    const clearPub = sentFrames.find((f) => f.type === 'PUBLISH' && f.topic === 'twfoxtetrio/v1/foxers/twfoxcrack' && f.text === '' && f.retain === true);
+    assert.ok(clearPub, 'Disabling toggle should clear retained MQTT presence with empty payload');
+    assert.notEqual(meEl.getAttribute('data-twfox-paw'), '1');
+    assert.notEqual(spAmigoH1.getAttribute('data-twfox-paw'), '1');
+    assert.notEqual(mentionNuevo.getAttribute('data-twfox-paw'), '1');
+    assert.notEqual(p2pNameEl.getAttribute('data-twfox-paw'), '1');
+
+    // Entering multiplayer while toggle is OFF keeps VS leaderboard free of badges
+    vm.runInContext(`
+      window.__gamesMap.set('g1', window.__g1);
+      window.__gamesMap.set('g2', window.__g2);
+      window.__gamesMap.set('g3', window.__g3);
+    `, env.context);
+    env.menus.classList.add('hidden');
+    doc.body.classList.add('multiplexed');
+    const offLbRows = env.elements.get('twfoxtetrio-multi-lb').querySelectorAll('.twfox-lb-name');
+    assert.equal(offLbRows.length, 3);
+    assert.notEqual(offLbRows[0].getAttribute('data-twfox-paw'), '1');
+    doc.body.classList.remove('multiplexed');
+    env.menus.classList.remove('hidden');
+
+    // Re-enabling restores retained presence and fox paws across UI & leaderboard
+    pawToggle.checked = true;
+    pawToggle.dispatchEvent('change');
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(meEl.getAttribute('data-twfox-paw'), '1');
+    vm.runInContext(`
+      window.__gamesMap.set('g1', window.__g1);
+      window.__gamesMap.set('g2', window.__g2);
+      window.__gamesMap.set('g3', window.__g3);
+    `, env.context);
+    env.menus.classList.add('hidden');
+    doc.body.classList.add('multiplexed');
+    const restoredLbRows = env.elements.get('twfoxtetrio-multi-lb').querySelectorAll('.twfox-lb-name');
+    assert.equal(restoredLbRows.length, 3);
+    assert.equal(restoredLbRows[0].getAttribute('data-twfox-paw'), '1');
+    assert.notEqual(restoredLbRows[1].getAttribute('data-twfox-paw'), '1');
+    assert.equal(restoredLbRows[2].getAttribute('data-twfox-paw'), '1');
+    doc.body.classList.remove('multiplexed');
+  } finally {
+    if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {
+      env.context.__TWFOX_INTERNAL__.foxPawBadge.destroy();
+    }
+  }
 });

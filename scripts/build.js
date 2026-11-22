@@ -18,6 +18,7 @@ const SOURCE_FILES = [
   'src/features/quickplay-logic.js',
   'src/features/multiplayer-logic.js',
   'src/features/zen-qp-logic.js',
+  'src/features/fox-paw-logic.js',
   'src/core/top-hud.js',
   'src/core/runtime.js',
   'src/features/blitz-pb-tracker.js',
@@ -28,7 +29,8 @@ const SOURCE_FILES = [
   'src/features/p2p-room.js',
   'src/features/foxmod-canvas.js',
   'src/features/foxmod-menu.js',
-  'src/features/zen-qp-mods.js'
+  'src/features/zen-qp-mods.js',
+  'src/features/fox-paw-badge.js'
 ];
 
 /**

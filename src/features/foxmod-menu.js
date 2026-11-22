@@ -418,6 +418,18 @@
         max: 30,
         step: 1
       }
+    },
+    {
+      key: 'foxPawBadge',
+      title: 'PATITA FOXMOD (IDENTIFICADOR DE MOD)',
+      accent: '#ff8b38',
+      toggles: [
+        {
+          field: 'enabled',
+          label: 'Mostrar Patita de Zorro FOXMOD',
+          description: 'Muestra una patita de zorro delante de tu nombre y del nombre de otros jugadores que tengan FOXMOD instalado.'
+        }
+      ]
     }
   ];
 
@@ -2339,7 +2351,11 @@ body.twfox-ingame #menus > #footer {
           [
             createEl('div', { className: 'twfox-res-place', text: `Nº${rank}` }),
             createEl('div', { className: 'twfox-res-player' }, [
-              createEl('span', { text: entry.name + (isSelf ? ' (YOU)' : '') }),
+              createEl('span', {
+                className: 'twfox-paw-target',
+                text: entry.name + (isSelf ? ' (YOU)' : ''),
+                attrs: { 'data-username': entry.name || '' }
+              }),
               createEl('span', { className: 'twfox-badge', text: roleBadgeText })
             ]),
             statCol1,
@@ -2350,6 +2366,11 @@ body.twfox-ingame #menus > #footer {
         );
         multiDom.resultsList.appendChild(row);
       });
+
+      const foxBadge = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.foxPawBadge;
+      if (foxBadge && typeof foxBadge.rescan === 'function') {
+        foxBadge.rescan();
+      }
 
       const playerCount = (snap && snap.players ? snap.players.length : 0);
       if (multiDom.resultsPlayAgainBtn) {
@@ -2581,7 +2602,11 @@ body.twfox-ingame #menus > #footer {
         ].filter(Boolean).join(' ');
         multiDom.playersList.appendChild(
           createEl('div', { className: rowClass }, [
-            createEl('span', { className: 'twfox-player-name', text: p.name, attrs: { 'data-initial': initial } }),
+            createEl('span', {
+              className: 'twfox-player-name twfox-paw-target',
+              text: p.name,
+              attrs: { 'data-initial': initial, 'data-username': p.name || '' }
+            }),
             createEl('span', { className: 'twfox-badge', text: `${roleTag} · ${p.wins || 0}/${snap.room.round || 0}` })
           ])
         );
@@ -2641,7 +2666,11 @@ body.twfox-ingame #menus > #footer {
               : `${Number(pl.vs || 0).toFixed(1)} VS`;
             multiDom.scoreLbRows.appendChild(
               createEl('div', { className: classes }, [
-                createEl('span', { text: `Nº${rankNum} ${pl.name}${koTag}` }),
+                createEl('span', {
+                  className: 'twfox-paw-target',
+                  text: `Nº${rankNum} ${pl.name}${koTag}`,
+                  attrs: { 'data-username': pl.name || '' }
+                }),
                 createEl('span', {
                   className: 'twfox-score-lb-val',
                   text: metricText
@@ -2667,7 +2696,11 @@ body.twfox-ingame #menus > #footer {
           multiDom.opponentsGrid.appendChild(
             createEl('div', { className: opp.alive === false ? 'twfox-opp-card is-ko' : 'twfox-opp-card' }, [
               createEl('div', { className: 'twfox-opp-hdr' }, [
-                createEl('span', { text: opp.name }),
+                createEl('span', {
+                  className: 'twfox-paw-target',
+                  text: opp.name,
+                  attrs: { 'data-username': opp.name || '' }
+                }),
                 createEl('span', { className: 'twfox-opp-rank', text: opp.alive === false ? `KO Nº${oppRank}` : `Nº${oppRank}` })
               ]),
               miniCanvas,
@@ -2675,6 +2708,11 @@ body.twfox-ingame #menus > #footer {
             ])
           );
         }
+      }
+
+      const foxBadge = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.foxPawBadge;
+      if (foxBadge && typeof foxBadge.rescan === 'function') {
+        foxBadge.rescan();
       }
     }
 

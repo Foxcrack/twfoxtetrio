@@ -58,7 +58,10 @@
       maxRows: 12,
       includeQuickPlay: false
     },
-    zenQuickPlayMods: { ...DEFAULT_ZEN_QP_MODS }
+    zenQuickPlayMods: { ...DEFAULT_ZEN_QP_MODS },
+    foxPawBadge: {
+      enabled: true
+    }
   };
 
   function cloneDefaults() {
@@ -67,7 +70,8 @@
       fortyLinesTracker: { ...DEFAULT_CONFIG.fortyLinesTracker },
       quickPlayTracker: { ...DEFAULT_CONFIG.quickPlayTracker },
       multiplayerLeaderboard: { ...DEFAULT_CONFIG.multiplayerLeaderboard },
-      zenQuickPlayMods: zenQpLogic ? zenQpLogic.createEmptySelection() : { ...DEFAULT_ZEN_QP_MODS }
+      zenQuickPlayMods: zenQpLogic ? zenQpLogic.createEmptySelection() : { ...DEFAULT_ZEN_QP_MODS },
+      foxPawBadge: { ...DEFAULT_CONFIG.foxPawBadge }
     };
   }
 
@@ -904,7 +908,8 @@
         fortyLinesTracker: { ...config.fortyLinesTracker },
         quickPlayTracker: { ...config.quickPlayTracker },
         multiplayerLeaderboard: { ...config.multiplayerLeaderboard },
-        zenQuickPlayMods: { ...config.zenQuickPlayMods }
+        zenQuickPlayMods: { ...config.zenQuickPlayMods },
+        foxPawBadge: { ...config.foxPawBadge }
       };
     },
     enterPracticeZen() {

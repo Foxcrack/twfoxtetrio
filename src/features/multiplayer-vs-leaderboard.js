@@ -194,6 +194,13 @@ body.${ACTIVE_BODY_CLASS}.igceriad-mounted_right #killfeed {
     const nameEl = document.createElement('span');
     nameEl.className = 'twfox-lb-name';
     nameEl.textContent = entry.username.toUpperCase() + (entry.alive ? '' : ' [KO]');
+    if (entry.username) {
+      nameEl.setAttribute('data-username', entry.username);
+    }
+    const foxBadge = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.foxPawBadge;
+    if (foxBadge && typeof foxBadge.isEnabled === 'function' && foxBadge.isEnabled() && foxBadge.hasFoxer(entry.username)) {
+      nameEl.setAttribute('data-twfox-paw', '1');
+    }
 
     const vsEl = document.createElement('span');
     vsEl.className = 'twfox-lb-vs';
