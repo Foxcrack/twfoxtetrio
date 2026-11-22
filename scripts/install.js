@@ -139,6 +139,75 @@ function printHelp() {
   ].join('\n'));
 }
 
+const MAIN_MOD_START_MARKER = '// === TWFOXTETRIO MAIN MOD START ===';
+const MAIN_MOD_END_MARKER = '// === TWFOXTETRIO MAIN MOD END ===';
+
+function buildMainSnippet() {
+  return [
+    MAIN_MOD_START_MARKER,
+    '(function(){',
+    '  try {',
+    "    if (global.__TWFOX_MAIN_IPC_READY__) return;",
+    '    global.__TWFOX_MAIN_IPC_READY__ = true;',
+    "    const { ipcMain } = require('electron');",
+    "    const https = require('https');",
+    "    ipcMain.handle('twfoxtetrio-fetch', (_ev, targetUrl) => new Promise((resolve, reject) => {",
+    '      try {',
+    "        const parsed = new URL(String(targetUrl || ''));",
+    "        if (parsed.protocol !== 'https:' || parsed.hostname !== 'you.have.fail') {",
+    "          reject(new Error('Disallowed domain for twfoxtetrio-fetch'));",
+    '          return;',
+    '        }',
+    '        const fetchUrl = (u, depth) => {',
+    "          if (depth > 5) return reject(new Error('Too many redirects'));",
+    "          const p = new URL(u);",
+    "          if (p.protocol !== 'https:') return reject(new Error('Disallowed redirect protocol'));",
+    "          const req = https.get(p.toString(), { headers: { 'User-Agent': 'twfoxtetrio-desktop' } }, (res) => {",
+    '            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {',
+    '              res.resume();',
+    '              fetchUrl(new URL(res.headers.location, p).toString(), depth + 1);',
+    '              return;',
+    '            }',
+    '            const chunks = [];',
+    "            res.on('data', (c) => chunks.push(c));",
+    "            res.on('end', () => {",
+    '              const buf = Buffer.concat(chunks);',
+    '              resolve({',
+    '                ok: res.statusCode >= 200 && res.statusCode < 300,',
+    '                status: res.statusCode || 0,',
+    "                contentType: String(res.headers['content-type'] || 'application/octet-stream'),",
+    "                base64: buf.toString('base64')",
+    '              });',
+    '            });',
+    '          });',
+    "          req.on('error', reject);",
+    "          req.setTimeout(30000, () => { req.destroy(new Error('Request timeout')); });",
+    '        };',
+    '        fetchUrl(parsed.toString(), 0);',
+    '      } catch (err) {',
+    '        reject(err);',
+    '      }',
+    '    }));',
+    '  } catch (_) {}',
+    '})();',
+    MAIN_MOD_END_MARKER
+  ].join('\n');
+}
+
+function stripMainMod(content) {
+  const startIdx = content.indexOf(MAIN_MOD_START_MARKER);
+  const endIdx = content.indexOf(MAIN_MOD_END_MARKER);
+  if (startIdx === -1 || endIdx === -1) return content;
+  const before = content.slice(0, startIdx).replace(/\n+$/, '');
+  const after = content.slice(endIdx + MAIN_MOD_END_MARKER.length).replace(/^\n+/, '');
+  return before + (after ? '\n' + after : '\n');
+}
+
+function injectModIntoMain(baseMain) {
+  const cleaned = stripMainMod(baseMain);
+  return cleaned.replace(/\s*$/, '') + '\n\n' + buildMainSnippet() + '\n';
+}
+
 function installMod(asarPath) {
   if (isTetrioRunning()) {
     throw new Error('TETR.IO.exe is currently running. Please close TETR.IO Desktop before installing the mod.');
@@ -165,10 +234,19 @@ function installMod(asarPath) {
     const basePreload = readAsarFile(sourceAsar, 'preload.js').toString('utf8');
     const modSnippet = buildModSnippet();
     const nextPreload = injectModIntoPreload(basePreload, modSnippet);
+    const replacements = {
+      'preload.js': Buffer.from(nextPreload, 'utf8')
+    };
+    try {
+      const baseMain = readAsarFile(sourceAsar, 'main.js').toString('utf8');
+      if (baseMain) {
+        replacements['main.js'] = Buffer.from(injectModIntoMain(baseMain), 'utf8');
+      }
+    } catch (_) {}
 
     writePatchedAsar(
       sourceAsar,
-      { 'preload.js': Buffer.from(nextPreload, 'utf8') },
+      replacements,
       tempPath
     );
 

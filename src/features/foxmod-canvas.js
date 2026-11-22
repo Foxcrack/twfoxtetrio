@@ -57,26 +57,61 @@
     }
   };
 
+  const CONNECTED_MINO_COORDS = {
+    z: [0, 0],
+    l: [4, 0],
+    o: [8, 0],
+    s: [12, 0],
+    i: [0, 6],
+    j: [4, 6],
+    t: [8, 6],
+    d: [12, 6],
+    gb: [16, 0],
+    gbd: [16, 4]
+  };
+
   let minoSpriteImg = null;
   let ghostSpriteImg = null;
+  let gridSpriteImg = null;
   let spritesInitialized = false;
 
   function ensureSprites() {
     if (spritesInitialized || typeof root.Image !== 'function') return;
     spritesInitialized = true;
     try {
+      const ca = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.customAssets;
+      const custom = ca && typeof ca.getActiveTextures === 'function' ? ca.getActiveTextures() : null;
+
       const mImg = new root.Image();
       mImg.onload = function () {
         minoSpriteImg = mImg;
       };
-      mImg.src = '/res/skins/minos/tetrio.png';
+      mImg.src = (custom && custom.skinDataUrl) || '/res/skins/minos/tetrio.png';
 
       const gImg = new root.Image();
       gImg.onload = function () {
         ghostSpriteImg = gImg;
       };
-      gImg.src = '/res/skins/ghost/tetrio.png';
+      gImg.src = (custom && custom.ghostDataUrl) || '/res/skins/ghost/tetrio.png';
+
+      if (custom && custom.gridDataUrl) {
+        const grImg = new root.Image();
+        grImg.onload = function () {
+          gridSpriteImg = grImg;
+        };
+        grImg.src = custom.gridDataUrl;
+      } else {
+        gridSpriteImg = null;
+      }
     } catch (_) {}
+  }
+
+  function reloadSprites() {
+    spritesInitialized = false;
+    minoSpriteImg = null;
+    ghostSpriteImg = null;
+    gridSpriteImg = null;
+    ensureSprites();
   }
 
   function normalizeBindingToken(raw) {
@@ -224,23 +259,47 @@
     }
 
     if (isGhost && ghostSpriteImg && ghostSpriteImg.complete && ghostSpriteImg.naturalWidth > 0) {
-      const ratio = Math.max(1, Math.round(ghostSpriteImg.naturalWidth / 256));
-      const pad = 1 * ratio;
-      const tile = 46 * ratio;
-      ctx.drawImage(ghostSpriteImg, pad, pad, tile, tile, px, py, size, size);
+      const w = ghostSpriteImg.naturalWidth;
+      const h = ghostSpriteImg.naturalHeight;
+      if (w >= 512 && h >= 512) {
+        const ratio = Math.max(1, Math.round(w / 512));
+        const pad = 1 * ratio;
+        const tile = 46 * ratio;
+        const stride = 48 * ratio;
+        // NM_MID isolated cell in wang24 connected sheet at [0, 3]
+        ctx.drawImage(ghostSpriteImg, pad, pad + 3 * stride, tile, tile, px, py, size, size);
+      } else {
+        const ratio = w >= 256 ? Math.max(1, Math.round(w / 128)) : 1;
+        const pad = 1 * ratio;
+        const tile = 46 * ratio;
+        ctx.drawImage(ghostSpriteImg, pad, pad, tile, tile, px, py, size, size);
+      }
       ctx.restore();
       return;
     }
 
     if (!isGhost && minoSpriteImg && minoSpriteImg.complete && minoSpriteImg.naturalWidth > 0) {
-      const coord = SKIN_COORDS[slot] || SKIN_COORDS.gb;
-      const ratio = Math.max(1, Math.round(minoSpriteImg.naturalWidth / 256));
-      const pad = 1 * ratio;
-      const tile = 46 * ratio;
-      const stride = 48 * ratio;
-      const sx = pad + coord[0] * stride;
-      const sy = pad + coord[1] * stride;
-      ctx.drawImage(minoSpriteImg, sx, sy, tile, tile, px, py, size, size);
+      const w = minoSpriteImg.naturalWidth;
+      const h = minoSpriteImg.naturalHeight;
+      if (w >= 1024 && h >= 1024) {
+        const baseCoord = CONNECTED_MINO_COORDS[slot] || CONNECTED_MINO_COORDS.gb;
+        const ratio = Math.max(1, Math.round(w / 1024));
+        const pad = 1 * ratio;
+        const tile = 46 * ratio;
+        const stride = 48 * ratio;
+        const sx = pad + (baseCoord[0] + 0) * stride;
+        const sy = pad + (baseCoord[1] + 3) * stride;
+        ctx.drawImage(minoSpriteImg, sx, sy, tile, tile, px, py, size, size);
+      } else {
+        const coord = SKIN_COORDS[slot] || SKIN_COORDS.gb;
+        const ratio = Math.max(1, Math.round(w / 256));
+        const pad = 1 * ratio;
+        const tile = 46 * ratio;
+        const stride = 48 * ratio;
+        const sx = pad + coord[0] * stride;
+        const sy = pad + coord[1] * stride;
+        ctx.drawImage(minoSpriteImg, sx, sy, tile, tile, px, py, size, size);
+      }
       ctx.restore();
       return;
     }
@@ -343,23 +402,34 @@
     const bottomPad = Math.max(10, Math.floor((h - boardH) * 0.16));
     const boardY = Math.max(Math.ceil(cell * skyRows), h - boardH - bottomPad);
 
-    // Pure TETR.IO black well backdrop + subtle grid
+    // Pure TETR.IO black well backdrop + subtle grid (or custom grid texture)
     ctx.fillStyle = `rgba(0, 0, 0, ${vOpts.boardOpacity})`;
     ctx.fillRect(boardX, boardY, boardW, boardH);
 
-    ctx.strokeStyle = `rgba(255, 255, 255, ${vOpts.gridOpacity})`;
-    ctx.lineWidth = 1;
-    for (let x = 1; x < snap.width; x++) {
-      ctx.beginPath();
-      ctx.moveTo(boardX + x * cell, boardY);
-      ctx.lineTo(boardX + x * cell, boardY + boardH);
-      ctx.stroke();
-    }
-    for (let y = 1; y < snap.visibleHeight; y++) {
-      ctx.beginPath();
-      ctx.moveTo(boardX, boardY + y * cell);
-      ctx.lineTo(boardX + boardW, boardY + y * cell);
-      ctx.stroke();
+    if (gridSpriteImg && gridSpriteImg.complete && gridSpriteImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.08, Math.min(1, vOpts.gridOpacity * 3));
+      for (let gx = 0; gx < snap.width; gx++) {
+        for (let gy = 0; gy < snap.visibleHeight; gy++) {
+          ctx.drawImage(gridSpriteImg, boardX + gx * cell, boardY + gy * cell, cell, cell);
+        }
+      }
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = `rgba(255, 255, 255, ${vOpts.gridOpacity})`;
+      ctx.lineWidth = 1;
+      for (let x = 1; x < snap.width; x++) {
+        ctx.beginPath();
+        ctx.moveTo(boardX + x * cell, boardY);
+        ctx.lineTo(boardX + x * cell, boardY + boardH);
+        ctx.stroke();
+      }
+      for (let y = 1; y < snap.visibleHeight; y++) {
+        ctx.beginPath();
+        ctx.moveTo(boardX, boardY + y * cell);
+        ctx.lineTo(boardX + boardW, boardY + y * cell);
+        ctx.stroke();
+      }
     }
 
     // HOLD left wing attached flush to board
@@ -794,6 +864,7 @@
     formatDuration,
     renderPlayfield,
     renderMiniBoard,
-    createPlayfieldController
+    createPlayfieldController,
+    reloadSprites
   };
 }(typeof globalThis !== 'undefined' ? globalThis : window));

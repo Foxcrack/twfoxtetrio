@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const { buildModSnippet } = require('../scripts/build');
 
-function createFakeDomEnvironment(protocol) {
+function createFakeDomEnvironment(protocol, extraGlobals) {
   const elements = new Map();
   const observers = [];
 
@@ -320,6 +320,9 @@ function createFakeDomEnvironment(protocol) {
       setItem: (k, v) => storage.set(k, String(v))
     }
   };
+  if (extraGlobals && typeof extraGlobals === 'object') {
+    Object.assign(sandbox, extraGlobals);
+  }
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
 
@@ -1256,4 +1259,211 @@ test('vanilla SOLO -> ZEN stays untouched while FOXMOD -> PRACTICA -> ZEN shows 
   assert.equal(zenSection.classList.contains('hidden'), true);
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
   assert.equal(env.elements.get('twfoxtetrio-pane-practice').classList.contains('hidden'), false);
+});
+
+test('CONFIG Assets Studio connects to you.have.fail/tetrioplus, downloads/installs/uninstalls skins, boards, SFX & animated backgrounds', async () => {
+  const customAssetsLogic = require('../src/features/custom-assets-logic');
+
+  function pngDataUrl(w, h) {
+    const buf = Buffer.alloc(24);
+    buf[0] = 0x89; buf[1] = 0x50; buf[2] = 0x4e; buf[3] = 0x47;
+    buf[4] = 0x0d; buf[5] = 0x0a; buf[6] = 0x1a; buf[7] = 0x0a;
+    buf.writeUInt32BE(13, 8);
+    buf.write('IHDR', 12, 'ascii');
+    buf.writeUInt32BE(w, 16);
+    buf.writeUInt32BE(h, 20);
+    return 'data:image/png;base64,' + buf.toString('base64');
+  }
+
+  const fakeCatalog = [
+    {
+      id: 'skin-4_false-carbon_fiber',
+      name: 'Carbon Fiber',
+      author: '4_false',
+      description: 'Carbon weave minos + board',
+      type: 'skin',
+      format: 'tetrioraster',
+      uploaded: 1620000000000,
+      path: 'content/skin/4_false/carbon_fiber.png',
+      tpsePath: 'tpsefiles/skin/4_false/carbon_fiber.png.tpse'
+    },
+    {
+      id: 'sfx-8bJackie-Tetrio_retro_pack',
+      name: 'Tetrio_retro_pack',
+      author: '8bJackie',
+      description: 'Retro 8bit sounds',
+      type: 'sfx',
+      format: 'tetrio',
+      uploaded: 1630000000000,
+      path: 'content/sfx/8bJackie/Tetrio_retro_pack.zip',
+      tpsePath: null
+    }
+  ];
+  const fakeVotes = { 'skin-4_false-carbon_fiber': { total: 15, active: 2 } };
+  const fakeTpse = {
+    version: '0.23.8',
+    skin: pngDataUrl(2048, 2048),
+    ghost: pngDataUrl(1024, 1024),
+    board: pngDataUrl(512, 512)
+  };
+  const fakeSfxTpse = {
+    version: '0.23.8',
+    sfxEnabled: true,
+    customSounds: 'data:audio/ogg;base64,T2dnUwACAAAA',
+    customSoundAtlas: { move: [0, 50] }
+  };
+
+  class FakeHtmlImage {
+    constructor() { this._src = ''; }
+    get src() { return this._src; }
+    set src(val) { this._src = String(val); }
+  }
+  const origDesc = Object.getOwnPropertyDescriptor(FakeHtmlImage.prototype, 'src');
+
+  class FakeResponse {
+    constructor(bytes, ct) {
+      this._bytes = Buffer.from(bytes);
+      this.ok = true;
+      this.status = 200;
+      this.headers = { get: () => ct || 'application/octet-stream' };
+    }
+    async arrayBuffer() {
+      return this._bytes.buffer.slice(this._bytes.byteOffset, this._bytes.byteOffset + this._bytes.byteLength);
+    }
+  }
+
+  class FakeAudioContext {
+    async decodeAudioData() {
+      const ch = new Float32Array(2205);
+      ch.fill(0.25);
+      return {
+        sampleRate: 44100,
+        numberOfChannels: 1,
+        duration: 0.05,
+        length: 2205,
+        getChannelData: () => ch
+      };
+    }
+    close() { return Promise.resolve(); }
+  }
+
+  const fetchedUrls = [];
+  const env = createFakeDomEnvironment('https:', {
+    URL,
+    Response: FakeResponse,
+    HTMLImageElement: FakeHtmlImage,
+    Image: FakeHtmlImage,
+    AudioContext: FakeAudioContext,
+    fetch: async (url) => {
+      fetchedUrls.push(String(url));
+      if (String(url).includes('data.json')) {
+        return new FakeResponse(Buffer.from(JSON.stringify(fakeCatalog), 'utf8'), 'application/json');
+      }
+      if (String(url).includes('votes.json')) {
+        return new FakeResponse(Buffer.from(JSON.stringify(fakeVotes), 'utf8'), 'application/json');
+      }
+      if (String(url).includes('carbon_fiber.png.tpse')) {
+        return new FakeResponse(Buffer.from(JSON.stringify(fakeTpse), 'utf8'), 'application/json');
+      }
+      if (String(url).includes('Tetrio_retro_pack')) {
+        return new FakeResponse(Buffer.from(JSON.stringify(fakeSfxTpse), 'utf8'), 'application/json');
+      }
+      if (String(url).includes('/sfx/tetrio.desktop.rsd')) {
+        const baseWav = customAssetsLogic.encodeWavPcm16([new Float32Array([0, 0.1, -0.1])], 44100);
+        const baseTrsd = customAssetsLogic.buildTrsd([{ name: 'move', offsetSec: 0 }], 0.05, baseWav);
+        return new FakeResponse(baseTrsd, 'application/octet-stream');
+      }
+      throw new Error('Unexpected fetch ' + url);
+    }
+  });
+  env.triggerDOMContentLoaded();
+
+  // Navigate to FOXMOD -> CONFIG -> triggers automatic catalog load
+  env.elements.get('twfoxtetrio-home-foxmod').click();
+  env.elements.get('twfoxtetrio-card-config').click();
+  assert.ok(env.elements.get('twfoxtetrio-assets-block'));
+
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+
+  assert.ok(fetchedUrls.some((u) => u.includes('https://you.have.fail/tetrioplus/data/data.json')));
+  const exploreList = env.elements.get('twfoxtetrio-assets-explore-list');
+  assert.equal(exploreList.children.length, 2);
+
+  // Filter search -> narrows down to Carbon Fiber and click DESCARGAR E INSTALAR
+  const searchEl = env.elements.get('twfoxtetrio-assets-search');
+  searchEl.value = 'Carbon';
+  searchEl.dispatchEvent('input');
+  assert.equal(exploreList.children.length, 1);
+
+  const dlBtn = exploreList.children[0].querySelector('button');
+  dlBtn.click();
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+
+  // Verify Installed tab shows 1 downloaded asset & HTMLImageElement.prototype.src intercepts TETR.IO connected/board URLs
+  const tabInstalled = env.elements.get('twfoxtetrio-assets-tab-installed');
+  assert.ok(tabInstalled.textContent.includes('(1)'));
+  tabInstalled.click();
+  const installedList = env.elements.get('twfoxtetrio-assets-installed-list');
+  assert.equal(installedList.children.length, 1);
+
+  const testSkinImg = new env.context.HTMLImageElement();
+  testSkinImg.src = '/res/skins/minos/connected.2x.png';
+  assert.ok(origDesc.get.call(testSkinImg).startsWith('data:image/png;base64,'));
+
+  const testBoardImg = new env.context.HTMLImageElement();
+  testBoardImg.src = '/res/skins/board/generic/board.png?v=3';
+  assert.ok(origDesc.get.call(testBoardImg).startsWith('data:image/png;base64,'));
+
+  // Download & activate SFX pack and verify /sfx/tetrio.desktop.rsd fetch rebuilds custom tRSD WAV pack
+  env.elements.get('twfoxtetrio-assets-tab-explore').click();
+  searchEl.value = 'retro';
+  searchEl.dispatchEvent('input');
+  assert.equal(exploreList.children.length, 1);
+  exploreList.children[0].querySelector('button').click();
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  const sfxResp = await env.context.fetch('/sfx/tetrio.desktop.rsd');
+  const parsedSfx = customAssetsLogic.parseTrsd(await sfxResp.arrayBuffer());
+  assert.equal(parsedSfx.entries[0].name, 'move');
+  assert.ok(parsedSfx.audioBytes.length > 44);
+
+  // Switch to FONDO / LOCAL tab -> activate preset + URL video background -> then clear
+  env.elements.get('twfoxtetrio-assets-tab-bg').click();
+  env.elements.get('twfoxtetrio-assets-bg-preset-synth_grid').click();
+  await new Promise((r) => setTimeout(r, 10));
+  const bgLayer = env.elements.get('twfoxtetrio-custom-bg');
+  assert.ok(bgLayer && bgLayer.classList.contains('is-active'));
+  assert.equal(env.body.classList.contains('twfox-has-custom-bg'), true);
+  assert.equal(bgLayer.children[0].tagName, 'CANVAS');
+
+  const urlInput = env.elements.get('twfoxtetrio-assets-bg-url');
+  urlInput.value = 'https://example.com/loop.mp4';
+  env.elements.get('twfoxtetrio-assets-bg-url-apply').click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(bgLayer.children[0].tagName, 'VIDEO');
+  assert.equal(bgLayer.children[0].src, 'https://example.com/loop.mp4');
+
+  env.elements.get('twfoxtetrio-assets-bg-clear').click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(env.body.classList.contains('twfox-has-custom-bg'), false);
+
+  // Return to DESCARGADOS and uninstall Carbon Fiber -> restores Original TETR.IO cleanly
+  tabInstalled.click();
+  assert.ok(tabInstalled.textContent.includes('(2)'));
+  const carbonUninstallBtn = installedList.children.find((card) =>
+    card.querySelectorAll('button').some((b) => b.getAttribute('data-installed-id') === 'skin-4_false-carbon_fiber')
+  ).querySelectorAll('button').find((b) => b.getAttribute('data-installed-action') === 'uninstall');
+  carbonUninstallBtn.click();
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  assert.ok(tabInstalled.textContent.includes('(1)'));
+  const restoredImg = new env.context.HTMLImageElement();
+  restoredImg.src = '/res/skins/minos/connected.2x.png';
+  assert.equal(origDesc.get.call(restoredImg), '/res/skins/minos/connected.2x.png');
 });

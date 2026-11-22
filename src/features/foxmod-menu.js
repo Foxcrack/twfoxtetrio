@@ -166,7 +166,7 @@
       cardId: 'twfoxtetrio-card-config',
       icon: ICONS.config,
       title: 'CONFIG',
-      subtitle: 'tweak Blitz, 40 Lines & Multiplayer VS HUD settings',
+      subtitle: 'skins, tablero, SFX, fondos animados & ajustes HUD',
       bg: '#1c263e',
       top: '#1d3164',
       left: '#1e2a48',
@@ -1477,6 +1477,187 @@ body.twfox-ingame #menus > #footer {
 #twfoxtetrio-pane-multi .hidden {
   display: none;
 }
+.twfox-assets-block {
+  border-top-color: #cf6427 !important;
+}
+.twfox-assets-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.twfox-assets-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.twfox-asset-slot {
+  background: rgba(11, 15, 24, 0.85);
+  border: 1px solid #2b3552;
+  border-radius: 4px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.twfox-asset-slot.is-filled {
+  border-color: #cf6427;
+}
+.twfox-asset-slot-k {
+  font-size: 0.78em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #8f9fc9;
+}
+.twfox-asset-slot-v {
+  font-size: 1em;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.twfox-asset-slot-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.twfox-assets-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 10px;
+}
+.twfox-assets-tab.is-active,
+.twfox-assets-cat.is-active {
+  background-color: #3d2215;
+  border-top-color: #ff9c54;
+  border-left-color: #cf6427;
+  color: #ffbe8e;
+}
+.twfox-assets-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.twfox-assets-toolbar .twfox-input {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+.twfox-assets-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.twfox-btn.is-sm {
+  font-size: 0.85em;
+  padding: 0.32em 0.7em;
+}
+.twfox-btn.is-danger {
+  background-color: #3a171e;
+  border-top-color: #c93b52;
+  border-left-color: #8f2436;
+  color: #ffb0be;
+}
+.twfox-btn.is-ok {
+  background-color: #153823;
+  border-top-color: #34c76a;
+  border-left-color: #218c48;
+  color: #a6ffc5;
+}
+.twfox-assets-status {
+  font-size: 0.92em;
+  color: #9bb0e6;
+  margin-bottom: 8px;
+}
+.twfox-assets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.twfox-asset-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(12, 16, 26, 0.88);
+  border: 1px solid #2b3552;
+  border-radius: 4px;
+}
+.twfox-asset-card.is-active {
+  border-color: #34c76a;
+}
+.twfox-asset-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.twfox-asset-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  object-fit: cover;
+  background: #060810;
+  flex: 0 0 auto;
+}
+.twfox-asset-info {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.twfox-asset-title {
+  font-size: 1.1em;
+  font-weight: 800;
+  color: #ffffff;
+}
+.twfox-asset-meta {
+  font-size: 0.85em;
+  color: #8f9fc9;
+  margin-top: 2px;
+}
+.twfox-asset-desc {
+  font-size: 0.84em;
+  color: #b7c2e2;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 520px;
+}
+.twfox-asset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.twfox-assets-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.twfox-bg-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.twfox-hidden-file {
+  display: none;
+}
 `;
 
   function setClass(el, className, active) {
@@ -1637,6 +1818,7 @@ body.twfox-ingame #menus > #footer {
     let scrollersInjected = false;
     let backHooked = false;
     let statusEl = null;
+    let refreshAssetsStudio = null;
     const scrollerMap = new Map();
     const toggleControls = [];
     const rangeControls = [];
@@ -1794,6 +1976,9 @@ body.twfox-ingame #menus > #footer {
 
       if (targetView === 'foxmod_config') {
         syncConfigControls(runtimeApi.getConfig());
+        if (typeof refreshAssetsStudio === 'function') {
+          refreshAssetsStudio(true);
+        }
       } else if (targetView === 'foxmod_pentomino' && practiceController) {
         practiceController.reloadUserSettings();
         practiceController.start();
@@ -3235,7 +3420,673 @@ body.twfox-ingame #menus > #footer {
         if (statusEl) statusEl.textContent = 'RESET TO DEFAULTS';
       });
 
-      const blocks = CONFIG_SECTIONS.map(buildConfigSection);
+      function buildAssetsStudioBlock() {
+        const assetsApi = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.customAssets;
+        const assetsLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.customAssetsLogic;
+        const presets = (assetsLogic && assetsLogic.BUILTIN_BG_PRESETS) || [
+          { id: 'none', name: 'Original TETR.IO', description: 'Fondo nativo de TETR.IO.' },
+          { id: 'starfield', name: 'Hyper Starfield', description: 'Estrellas neon 3D.' },
+          { id: 'synth_grid', name: 'Synthwave Horizon', description: 'Grilla synthwave animada.' },
+          { id: 'cyber_wave', name: 'Cyber Aurora', description: 'Ondas luminosas animadas.' }
+        ];
+
+        let currentTab = 'explore'; // 'explore' | 'installed' | 'background'
+        let currentCategory = 'all';
+        let currentQuery = '';
+        let currentSort = 'votes';
+        let currentPage = 0;
+        const PAGE_SIZE = 16;
+        const downloadingIds = new Set();
+        let catalogRequested = false;
+        let bgUrlSynced = false;
+
+        const slotsWrap = createEl('div', { id: 'twfoxtetrio-assets-slots', className: 'twfox-assets-slots' });
+        const reloadBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-reload-btn',
+          className: 'twfox-btn is-sm is-pri hidden',
+          text: 'RECARGAR TETR.IO (APLICAR SFX/SKIN)',
+          type: 'button',
+          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        reloadBtn.addEventListener('click', function () {
+          if (root.location && typeof root.location.reload === 'function') {
+            root.location.reload();
+          }
+        });
+
+        const tabExploreBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-tab-explore',
+          className: 'twfox-btn is-sm twfox-assets-tab is-active',
+          text: 'EXPLORAR (TETR.IO+)',
+          type: 'button'
+        });
+        const tabInstalledBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-tab-installed',
+          className: 'twfox-btn is-sm twfox-assets-tab',
+          text: 'DESCARGADOS (0)',
+          type: 'button'
+        });
+        const tabBgBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-tab-bg',
+          className: 'twfox-btn is-sm twfox-assets-tab',
+          text: 'FONDO / LOCAL',
+          type: 'button'
+        });
+
+        // Explore controls
+        const searchInput = createEl('input', {
+          id: 'twfoxtetrio-assets-search',
+          className: 'twfox-input',
+          type: 'text',
+          attrs: { placeholder: 'Buscar skin, tablero, sfx o autor en TETR.IO+...' }
+        });
+        const sortSelect = createEl('select', { id: 'twfoxtetrio-assets-sort', className: 'twfox-select' }, [
+          createEl('option', { text: 'Mas votados', attrs: { value: 'votes' } }),
+          createEl('option', { text: 'Recientes', attrs: { value: 'recent' } }),
+          createEl('option', { text: 'Nombre A-Z', attrs: { value: 'name' } }),
+          createEl('option', { text: 'Autor', attrs: { value: 'author' } })
+        ]);
+        const refreshCatalogBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-refresh',
+          className: 'twfox-btn is-sm',
+          text: 'ACTUALIZAR',
+          type: 'button'
+        });
+        const catDefs = [
+          ['all', 'Todos'],
+          ['skin', 'Piezas'],
+          ['board', 'Tablero'],
+          ['sfx', 'SFX'],
+          ['background', 'Fondos'],
+          ['animated', 'Animados']
+        ];
+        const catWrap = createEl('div', { className: 'twfox-assets-cats' });
+        const catButtons = new Map();
+        for (const [catKey, catLabel] of catDefs) {
+          const btn = createEl('button', {
+            id: `twfoxtetrio-assets-cat-${catKey}`,
+            className: 'twfox-btn is-sm twfox-assets-cat' + (catKey === 'all' ? ' is-active' : ''),
+            text: catLabel,
+            type: 'button'
+          });
+          btn.addEventListener('click', function () {
+            currentCategory = catKey;
+            currentPage = 0;
+            for (const [k, b] of catButtons.entries()) {
+              setClass(b, 'is-active', k === catKey);
+            }
+            renderExploreList();
+          });
+          catButtons.set(catKey, btn);
+          catWrap.appendChild(btn);
+        }
+
+        const exploreStatusEl = createEl('div', {
+          id: 'twfoxtetrio-assets-catalog-status',
+          className: 'twfox-assets-status',
+          text: 'Listo para conectar con https://you.have.fail/tetrioplus/'
+        });
+        const exploreListEl = createEl('div', { id: 'twfoxtetrio-assets-explore-list', className: 'twfox-assets-list' });
+        const pageInfoEl = createEl('span', { id: 'twfoxtetrio-assets-page-info', className: 'twfox-assets-status', text: 'Pagina 1' });
+        const prevPageBtn = createEl('button', { id: 'twfoxtetrio-assets-prev-page', className: 'twfox-btn is-sm', text: 'ANTERIOR', type: 'button' });
+        const nextPageBtn = createEl('button', { id: 'twfoxtetrio-assets-next-page', className: 'twfox-btn is-sm', text: 'SIGUIENTE', type: 'button' });
+        const explorePanel = createEl('div', { id: 'twfoxtetrio-assets-panel-explore' }, [
+          createEl('div', { className: 'twfox-assets-toolbar' }, [searchInput, sortSelect, refreshCatalogBtn]),
+          catWrap,
+          exploreStatusEl,
+          exploreListEl,
+          createEl('div', { className: 'twfox-assets-pager' }, [prevPageBtn, pageInfoEl, nextPageBtn])
+        ]);
+
+        // Installed panel
+        const installedStatusEl = createEl('div', {
+          id: 'twfoxtetrio-assets-installed-status',
+          className: 'twfox-assets-status',
+          text: ''
+        });
+        const installedListEl = createEl('div', { id: 'twfoxtetrio-assets-installed-list', className: 'twfox-assets-list' });
+        const installedPanel = createEl('div', { id: 'twfoxtetrio-assets-panel-installed', className: 'hidden' }, [
+          installedStatusEl,
+          installedListEl
+        ]);
+
+        // Background & Local Import panel
+        const presetWrap = createEl('div', { id: 'twfoxtetrio-assets-bg-presets', className: 'twfox-bg-preset-grid' });
+        const presetButtons = new Map();
+        for (const preset of presets) {
+          const b = createEl('button', {
+            id: `twfoxtetrio-assets-bg-preset-${preset.id}`,
+            className: 'twfox-btn is-sm',
+            text: preset.name,
+            type: 'button'
+          });
+          b.addEventListener('click', function () {
+            if (!assetsApi) return;
+            assetsApi.setBackgroundConfig({
+              mode: preset.id === 'none' ? 'none' : 'preset',
+              presetId: preset.id
+            });
+          });
+          presetButtons.set(preset.id, b);
+          presetWrap.appendChild(b);
+        }
+
+        const bgUrlInput = createEl('input', {
+          id: 'twfoxtetrio-assets-bg-url',
+          className: 'twfox-input',
+          type: 'text',
+          attrs: { placeholder: 'URL imagen, GIF o video (.mp4 / .webm)...' }
+        });
+        const bgUrlApplyBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-bg-url-apply',
+          className: 'twfox-btn is-sm is-pri',
+          text: 'APLICAR URL',
+          type: 'button'
+        });
+        const bgClearBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-bg-clear',
+          className: 'twfox-btn is-sm is-danger',
+          text: 'QUITAR FONDO',
+          type: 'button'
+        });
+        bgUrlApplyBtn.addEventListener('click', function () {
+          if (!assetsApi) return;
+          const url = String(bgUrlInput.value || '').trim();
+          if (!url) {
+            assetsApi.deactivateSlot('background');
+          } else {
+            assetsApi.setBackgroundConfig({ mode: 'url', url });
+          }
+        });
+        bgClearBtn.addEventListener('click', function () {
+          if (!assetsApi) return;
+          bgUrlInput.value = '';
+          assetsApi.deactivateSlot('background');
+        });
+
+        const bgOpacityInput = createEl('input', {
+          id: 'twfoxtetrio-assets-bg-opacity',
+          className: 'twfox-range-input',
+          type: 'range',
+          attrs: { min: '10', max: '100', step: '5', value: '72' }
+        });
+        const bgOpacityVal = createEl('span', { id: 'twfoxtetrio-assets-bg-opacity-val', className: 'twfox-range-val', text: '72%' });
+        bgOpacityInput.addEventListener('input', function () {
+          const pct = Math.max(10, Math.min(100, Number(bgOpacityInput.value) || 72));
+          bgOpacityVal.textContent = pct + '%';
+          if (assetsApi) assetsApi.setBackgroundConfig({ opacity: pct / 100 });
+        });
+
+        const bgBlurInput = createEl('input', {
+          id: 'twfoxtetrio-assets-bg-blur',
+          className: 'twfox-range-input',
+          type: 'range',
+          attrs: { min: '0', max: '16', step: '1', value: '0' }
+        });
+        const bgBlurVal = createEl('span', { id: 'twfoxtetrio-assets-bg-blur-val', className: 'twfox-range-val', text: '0px' });
+        bgBlurInput.addEventListener('input', function () {
+          const px = Math.max(0, Math.min(16, Number(bgBlurInput.value) || 0));
+          bgBlurVal.textContent = px + 'px';
+          if (assetsApi) assetsApi.setBackgroundConfig({ blur: px });
+        });
+
+        const bgFileInput = createEl('input', {
+          id: 'twfoxtetrio-assets-bg-file',
+          className: 'twfox-hidden-file',
+          type: 'file',
+          attrs: { accept: 'image/*,video/mp4,video/webm' }
+        });
+        const bgFileBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-bg-file-btn',
+          className: 'twfox-btn is-sm is-pri',
+          text: 'SUBIR FONDO (PNG/GIF/MP4/WEBM)',
+          type: 'button'
+        });
+        bgFileBtn.addEventListener('click', function () {
+          if (typeof bgFileInput.click === 'function') bgFileInput.click();
+        });
+
+        const assetFileInput = createEl('input', {
+          id: 'twfoxtetrio-assets-import-file',
+          className: 'twfox-hidden-file',
+          type: 'file',
+          attrs: { accept: '.tpse,.zip,.png,.gif,.webp,.svg,.mp4,.webm,.ogg,.wav,.mp3' }
+        });
+        const assetFileBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-import-btn',
+          className: 'twfox-btn is-sm',
+          text: 'IMPORTAR LOCAL (.TPSE / .ZIP / .PNG)',
+          type: 'button'
+        });
+        assetFileBtn.addEventListener('click', function () {
+          if (typeof assetFileInput.click === 'function') assetFileInput.click();
+        });
+
+        const localStatusEl = createEl('div', { id: 'twfoxtetrio-assets-local-status', className: 'twfox-assets-status', text: '' });
+
+        async function handleFileSelection(fileObj, forcedCategory) {
+          if (!fileObj || !assetsApi) return;
+          localStatusEl.textContent = `Importando ${fileObj.name}...`;
+          try {
+            const buf = await fileObj.arrayBuffer();
+            const rec = await assetsApi.importLocalAsset({
+              name: fileObj.name,
+              type: fileObj.type || '',
+              bytes: new Uint8Array(buf),
+              category: forcedCategory,
+              autoApply: true
+            });
+            localStatusEl.textContent = `Instalado y activado: ${rec.name}`;
+          } catch (err) {
+            localStatusEl.textContent = 'Error importando archivo: ' + (err && err.message ? err.message : String(err));
+          }
+        }
+        bgFileInput.addEventListener('change', function () {
+          const f = bgFileInput.files && bgFileInput.files[0];
+          if (f) handleFileSelection(f, 'background');
+          bgFileInput.value = '';
+        });
+        assetFileInput.addEventListener('change', function () {
+          const f = assetFileInput.files && assetFileInput.files[0];
+          if (f) handleFileSelection(f);
+          assetFileInput.value = '';
+        });
+
+        const bgPanel = createEl('div', { id: 'twfoxtetrio-assets-panel-bg', className: 'hidden' }, [
+          createEl('div', { className: 'twfox-native-row' }, [
+            createEl('div', {}, [
+              createEl('span', { className: 'twfox-native-label', text: 'Fondos Animados Integrados' }),
+              createEl('span', { className: 'twfox-native-desc', text: 'Se muestran detras de los menus y tableros sin descargas externas.' })
+            ])
+          ]),
+          presetWrap,
+          createEl('div', { className: 'twfox-assets-toolbar' }, [bgUrlInput, bgUrlApplyBtn, bgClearBtn]),
+          createEl('div', { className: 'twfox-native-row' }, [
+            createEl('span', { className: 'twfox-native-label', text: 'Opacidad del Fondo' }),
+            createEl('div', { className: 'twfox-range-wrap' }, [bgOpacityInput, bgOpacityVal])
+          ]),
+          createEl('div', { className: 'twfox-native-row' }, [
+            createEl('span', { className: 'twfox-native-label', text: 'Desenfoque (Blur)' }),
+            createEl('div', { className: 'twfox-range-wrap' }, [bgBlurInput, bgBlurVal])
+          ]),
+          createEl('div', { className: 'twfox-assets-toolbar' }, [bgFileInput, bgFileBtn, assetFileInput, assetFileBtn]),
+          localStatusEl
+        ]);
+
+        function setAssetsTab(nextTab) {
+          currentTab = nextTab;
+          setClass(tabExploreBtn, 'is-active', nextTab === 'explore');
+          setClass(tabInstalledBtn, 'is-active', nextTab === 'installed');
+          setClass(tabBgBtn, 'is-active', nextTab === 'background');
+          setClass(explorePanel, 'hidden', nextTab !== 'explore');
+          setClass(installedPanel, 'hidden', nextTab !== 'installed');
+          setClass(bgPanel, 'hidden', nextTab !== 'background');
+          if (nextTab === 'explore') loadCatalogIfNeeded(false);
+          if (nextTab === 'installed') renderInstalledList();
+        }
+
+        tabExploreBtn.addEventListener('click', () => setAssetsTab('explore'));
+        tabInstalledBtn.addEventListener('click', () => setAssetsTab('installed'));
+        tabBgBtn.addEventListener('click', () => setAssetsTab('background'));
+
+        function formatBytesLabel(bytes) {
+          const n = Number(bytes) || 0;
+          if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+          if (n >= 1024) return Math.round(n / 1024) + ' KB';
+          return n + ' B';
+        }
+
+        function categoryLabel(cat) {
+          if (cat === 'board') return 'TABLERO';
+          if (cat === 'sfx') return 'SFX';
+          if (cat === 'background') return 'FONDO';
+          return 'PIEZAS';
+        }
+
+        function renderActiveSlots(state) {
+          slotsWrap.innerHTML = '';
+          const installed = (state && state.installed) || [];
+          const findName = (id) => {
+            if (!id) return null;
+            const rec = installed.find((x) => x.id === id);
+            return rec ? rec.name : id;
+          };
+          const a = (state && state.active) || {};
+
+          let bgName = null;
+          if (a.bgMode === 'preset' && a.bgPresetId && a.bgPresetId !== 'none') {
+            const pr = presets.find((p) => p.id === a.bgPresetId);
+            bgName = pr ? pr.name : a.bgPresetId;
+          } else if (a.bgMode === 'asset' && a.bgAssetId) {
+            bgName = findName(a.bgAssetId) || 'Fondo personalizado';
+          } else if (a.bgMode === 'url' && a.bgUrl) {
+            bgName = 'URL personalizada';
+          }
+
+          const slotDefs = [
+            { slot: 'skin', title: 'PIEZAS / MINOS', value: findName(a.skinId), extra: a.skinFormat ? `(${a.skinFormat})` : '' },
+            { slot: 'board', title: 'TABLERO / QUEUE', value: findName(a.boardId) },
+            { slot: 'sfx', title: 'SONIDOS (SFX)', value: findName(a.sfxId), hasPreview: Boolean(a.sfxId) },
+            { slot: 'background', title: 'FONDO / ANIMADO', value: bgName }
+          ];
+
+          for (const s of slotDefs) {
+            const filled = Boolean(s.value);
+            const actions = [];
+            if (s.hasPreview && assetsApi) {
+              const pBtn = createEl('button', {
+                className: 'twfox-btn is-sm',
+                text: 'PROBAR',
+                type: 'button'
+              });
+              pBtn.addEventListener('click', () => assetsApi.previewSfxPack(a.sfxId));
+              actions.push(pBtn);
+            }
+            if (filled && assetsApi) {
+              const cBtn = createEl('button', {
+                id: `twfoxtetrio-assets-clear-${s.slot}`,
+                className: 'twfox-btn is-sm is-danger',
+                text: 'QUITAR',
+                type: 'button'
+              });
+              cBtn.addEventListener('click', () => assetsApi.deactivateSlot(s.slot));
+              actions.push(cBtn);
+            }
+            slotsWrap.appendChild(
+              createEl('div', { className: 'twfox-asset-slot' + (filled ? ' is-filled' : '') }, [
+                createEl('span', { className: 'twfox-asset-slot-k', text: `${s.title} ${s.extra || ''}`.trim() }),
+                createEl('span', { className: 'twfox-asset-slot-v', text: s.value || 'Original TETR.IO' }),
+                actions.length > 0 ? createEl('div', { className: 'twfox-asset-slot-actions' }, actions) : null
+              ])
+            );
+          }
+
+          setClass(reloadBtn, 'hidden', !(state && state.needsReload));
+        }
+
+        function renderExploreList() {
+          exploreListEl.innerHTML = '';
+          if (!assetsApi) {
+            exploreStatusEl.textContent = 'Modulo de assets no inicializado.';
+            return;
+          }
+          const state = assetsApi.getState();
+          if (!state.catalogLoaded) {
+            return;
+          }
+          const matched = assetsApi.searchCatalog({
+            category: currentCategory,
+            search: currentQuery,
+            sort: currentSort
+          });
+          const totalPages = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
+          if (currentPage >= totalPages) currentPage = totalPages - 1;
+          const start = currentPage * PAGE_SIZE;
+          const pageItems = matched.slice(start, start + PAGE_SIZE);
+
+          exploreStatusEl.textContent = `Mostrando ${pageItems.length} de ${matched.length} resultados (${state.catalogCount} en TETR.IO+)`;
+          pageInfoEl.textContent = `Pagina ${currentPage + 1} / ${totalPages}`;
+          prevPageBtn.disabled = currentPage <= 0;
+          nextPageBtn.disabled = currentPage + 1 >= totalPages;
+
+          if (pageItems.length === 0) {
+            exploreListEl.appendChild(
+              createEl('div', { className: 'twfox-assets-status', text: 'No se encontraron assets con ese filtro.' })
+            );
+            return;
+          }
+
+          for (const item of pageItems) {
+            const downloaded = assetsApi.isDownloaded(item.id);
+            const active = assetsApi.isActive(item.id);
+            const busy = downloadingIds.has(item.id);
+            const tags = [categoryLabel(item.category)];
+            if (item.format) tags.push(item.format.toUpperCase());
+            if (item.animated) tags.push('ANIMADO');
+            if (item.votes > 0) tags.push(`★ ${item.votes}`);
+
+            const actionBtns = [];
+            if (busy) {
+              const b = createEl('button', { className: 'twfox-btn is-sm', text: 'DESCARGANDO...', type: 'button' });
+              b.disabled = true;
+              actionBtns.push(b);
+            } else if (downloaded) {
+              if (active) {
+                actionBtns.push(createEl('span', { className: 'twfox-badge', text: 'ACTIVO ✓' }));
+              } else {
+                const actBtn = createEl('button', {
+                  className: 'twfox-btn is-sm is-ok',
+                  text: 'ACTIVAR',
+                  type: 'button',
+                  attrs: { 'data-asset-id': item.id, 'data-asset-action': 'activate' }
+                });
+                actBtn.addEventListener('click', () => assetsApi.activateAsset(item.id));
+                actionBtns.push(actBtn);
+              }
+              const rmBtn = createEl('button', {
+                className: 'twfox-btn is-sm is-danger',
+                text: 'DESINSTALAR',
+                type: 'button',
+                attrs: { 'data-asset-id': item.id, 'data-asset-action': 'uninstall' }
+              });
+              rmBtn.addEventListener('click', () => assetsApi.uninstallAsset(item.id));
+              actionBtns.push(rmBtn);
+            } else {
+              const dlBtn = createEl('button', {
+                className: 'twfox-btn is-sm is-pri',
+                text: 'DESCARGAR E INSTALAR',
+                type: 'button',
+                attrs: { 'data-asset-id': item.id, 'data-asset-action': 'download' }
+              });
+              dlBtn.addEventListener('click', async function () {
+                downloadingIds.add(item.id);
+                renderExploreList();
+                try {
+                  await assetsApi.downloadAndInstallCatalogItem(item, { autoApply: true });
+                } catch (err) {
+                  exploreStatusEl.textContent = 'Error descargando ' + item.name + ': ' + (err && err.message ? err.message : String(err));
+                } finally {
+                  downloadingIds.delete(item.id);
+                  renderExploreList();
+                }
+              });
+              actionBtns.push(dlBtn);
+            }
+
+            exploreListEl.appendChild(
+              createEl('div', { className: 'twfox-asset-card' + (active ? ' is-active' : '') }, [
+                createEl('div', { className: 'twfox-asset-info' }, [
+                  createEl('div', { className: 'twfox-asset-title', text: item.name }),
+                  createEl('div', { className: 'twfox-asset-meta', text: `por ${item.author} · ${tags.join(' · ')}` }),
+                  item.description ? createEl('div', { className: 'twfox-asset-desc', text: item.description }) : null
+                ]),
+                createEl('div', { className: 'twfox-asset-actions' }, actionBtns)
+              ])
+            );
+          }
+        }
+
+        function renderInstalledList() {
+          installedListEl.innerHTML = '';
+          if (!assetsApi) return;
+          const state = assetsApi.getState();
+          const list = state.installed || [];
+          tabInstalledBtn.textContent = `DESCARGADOS (${list.length})`;
+          installedStatusEl.textContent = list.length > 0
+            ? `${list.length} assets guardados localmente en tu equipo.`
+            : 'Aun no tienes assets descargados. Ve a EXPLORAR (TETR.IO+) o FONDO / LOCAL.';
+
+          for (const rec of list) {
+            const active = assetsApi.isActive(rec.id);
+            const caps = rec.capabilities || {};
+            const capTags = [];
+            if (caps.skin) capTags.push('PIEZAS' + (rec.skinFormat ? ` (${rec.skinFormat})` : ''));
+            if (caps.board || caps.queue || caps.grid) capTags.push('TABLERO');
+            if (caps.sfx) capTags.push('SFX');
+            if (caps.background) capTags.push(`FONDO x${rec.backgroundCount || 1}`);
+            capTags.push(formatBytesLabel(rec.bytesEstimate));
+
+            const thumb = rec.previewSkin
+              ? createEl('img', { className: 'twfox-asset-thumb', attrs: { src: rec.previewSkin, alt: '' } })
+              : null;
+
+            const btns = [];
+            if (active) {
+              btns.push(createEl('span', { className: 'twfox-badge', text: 'ACTIVO ✓' }));
+            } else {
+              const useBtn = createEl('button', {
+                className: 'twfox-btn is-sm is-ok',
+                text: 'ACTIVAR',
+                type: 'button',
+                attrs: { 'data-installed-id': rec.id, 'data-installed-action': 'activate' }
+              });
+              useBtn.addEventListener('click', () => assetsApi.activateAsset(rec.id));
+              btns.push(useBtn);
+            }
+            if (caps.sfx) {
+              const testBtn = createEl('button', {
+                className: 'twfox-btn is-sm',
+                text: 'PROBAR SFX',
+                type: 'button'
+              });
+              testBtn.addEventListener('click', () => assetsApi.previewSfxPack(rec.id));
+              btns.push(testBtn);
+            }
+            if (caps.background && rec.backgroundCount > 1 && state.active.bgMode === 'asset' && state.active.bgAssetId === rec.id) {
+              const nextBgBtn = createEl('button', {
+                className: 'twfox-btn is-sm',
+                text: `FONDO ${(state.active.bgIndex || 0) + 1}/${rec.backgroundCount}`,
+                type: 'button'
+              });
+              nextBgBtn.addEventListener('click', () => {
+                assetsApi.setBackgroundConfig({ bgIndex: ((state.active.bgIndex || 0) + 1) % rec.backgroundCount });
+              });
+              btns.push(nextBgBtn);
+            }
+            const delBtn = createEl('button', {
+              className: 'twfox-btn is-sm is-danger',
+              text: 'DESINSTALAR',
+              type: 'button',
+              attrs: { 'data-installed-id': rec.id, 'data-installed-action': 'uninstall' }
+            });
+            delBtn.addEventListener('click', () => assetsApi.uninstallAsset(rec.id));
+            btns.push(delBtn);
+
+            installedListEl.appendChild(
+              createEl('div', { className: 'twfox-asset-card' + (active ? ' is-active' : '') }, [
+                createEl('div', { className: 'twfox-asset-main' }, [
+                  thumb,
+                  createEl('div', { className: 'twfox-asset-info' }, [
+                    createEl('div', { className: 'twfox-asset-title', text: rec.name }),
+                    createEl('div', { className: 'twfox-asset-meta', text: `${rec.author} · ${capTags.join(' · ')}` })
+                  ])
+                ]),
+                createEl('div', { className: 'twfox-asset-actions' }, btns)
+              ])
+            );
+          }
+        }
+
+        function syncBgPanel(state) {
+          const a = (state && state.active) || {};
+          for (const [pid, btn] of presetButtons.entries()) {
+            const active = (a.bgMode === 'none' && pid === 'none') || (a.bgMode === 'preset' && a.bgPresetId === pid);
+            setClass(btn, 'is-active', active);
+          }
+          if (!bgUrlSynced && a.bgMode === 'url') {
+            bgUrlInput.value = a.bgUrl || '';
+            bgUrlSynced = true;
+          }
+          const pct = Math.round(clampNumber((a.bgOpacity || 0.72) * 100, 10, 100));
+          bgOpacityInput.value = String(pct);
+          bgOpacityVal.textContent = pct + '%';
+          const blurPx = clampNumber(a.bgBlur || 0, 0, 16);
+          bgBlurInput.value = String(blurPx);
+          bgBlurVal.textContent = blurPx + 'px';
+        }
+
+        async function loadCatalogIfNeeded(force) {
+          if (!assetsApi) return;
+          if (!force && catalogRequested) {
+            renderExploreList();
+            return;
+          }
+          catalogRequested = true;
+          exploreStatusEl.textContent = 'Conectando con https://you.have.fail/tetrioplus/ ...';
+          try {
+            await assetsApi.fetchCatalog(Boolean(force));
+            renderExploreList();
+          } catch (err) {
+            exploreStatusEl.textContent = 'No se pudo conectar con TETR.IO+ (' + (err && err.message ? err.message : String(err)) + ')';
+          }
+        }
+
+        searchInput.addEventListener('input', function () {
+          currentQuery = String(searchInput.value || '');
+          currentPage = 0;
+          renderExploreList();
+        });
+        sortSelect.addEventListener('change', function () {
+          currentSort = String(sortSelect.value || 'votes');
+          currentPage = 0;
+          renderExploreList();
+        });
+        refreshCatalogBtn.addEventListener('click', function () {
+          currentPage = 0;
+          loadCatalogIfNeeded(true);
+        });
+        prevPageBtn.addEventListener('click', function () {
+          if (currentPage > 0) {
+            currentPage -= 1;
+            renderExploreList();
+          }
+        });
+        nextPageBtn.addEventListener('click', function () {
+          currentPage += 1;
+          renderExploreList();
+        });
+
+        refreshAssetsStudio = function (allowAutoCatalog) {
+          if (!assetsApi) return;
+          const st = assetsApi.getState();
+          renderActiveSlots(st);
+          renderInstalledList();
+          syncBgPanel(st);
+          if (allowAutoCatalog && currentTab === 'explore' && !st.catalogLoaded) {
+            loadCatalogIfNeeded(false);
+          } else {
+            renderExploreList();
+          }
+        };
+
+        if (assetsApi && typeof assetsApi.subscribe === 'function') {
+          assetsApi.subscribe(function (st) {
+            renderActiveSlots(st);
+            renderInstalledList();
+            syncBgPanel(st);
+            if (currentTab === 'explore' && st.catalogLoaded) {
+              renderExploreList();
+            }
+          });
+        }
+
+        return createEl('div', { id: 'twfoxtetrio-assets-block', className: 'scroller_block twfox-assets-block' }, [
+          createEl('div', { className: 'twfox-assets-top' }, [
+            createEl('div', {}, [
+              createEl('h1', { text: 'SKINS, TABLERO, SFX Y FONDOS (TETR.IO+)' }),
+              createEl('p', { text: 'Descarga directa desde https://you.have.fail/tetrioplus/ · piezas, tablero, sonidos y fondos animados.' })
+            ]),
+            reloadBtn
+          ]),
+          slotsWrap,
+          createEl('div', { className: 'twfox-assets-tabs' }, [tabExploreBtn, tabInstalledBtn, tabBgBtn]),
+          explorePanel,
+          installedPanel,
+          bgPanel
+        ]);
+      }
+
+      const blocks = [buildAssetsStudioBlock()].concat(CONFIG_SECTIONS.map(buildConfigSection));
       blocks.push(
         createEl('div', { className: 'scroller_block twfox-scroller-header' }, [statusEl, resetBtn])
       );

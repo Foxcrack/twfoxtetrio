@@ -11,6 +11,8 @@ const MOD_END_MARKER = '// === TWFOXTETRIO MOD END ===';
 
 const SOURCE_FILES = [
   'src/features/loading-credit.js',
+  'src/features/custom-assets-logic.js',
+  'src/features/custom-assets.js',
   'src/features/blitz-logic.js',
   'src/features/forty-lines-logic.js',
   'src/features/quickplay-logic.js',
