@@ -383,9 +383,28 @@
       tags: Array.isArray(rawItem.tags) ? rawItem.tags.slice() : [],
       path: rawItem.path ? String(rawItem.path) : '',
       tpsePath: rawItem.tpsePath ? String(rawItem.tpsePath) : '',
+      previewPath: rawItem.previewPath ? String(rawItem.previewPath) : '',
       downloadUrls: buildDownloadCandidates(rawItem),
       source: rawItem.source ? String(rawItem.source) : ''
     };
+  }
+
+  function getStaticCatalogPreviewUrl(item) {
+    if (!item || typeof item !== 'object') return null;
+    if (item.previewPath && SUPPORTED_IMAGE_EXT.test(item.previewPath)) {
+      return TETRIOPLUS_BASE_URL + encodeCatalogPath(item.previewPath);
+    }
+    if (item.category === 'sfx') return null;
+    const fmt = String(item.format || '').toLowerCase();
+    const rawPath = String(item.path || '');
+    if (
+      rawPath &&
+      !/\.zip$/i.test(rawPath) &&
+      (fmt === 'tetrioraster' || fmt === 'tetriosvg' || fmt === 'tetrioanim' || fmt === 'jstrisraster' || fmt === 'jstrisanim')
+    ) {
+      return TETRIOPLUS_BASE_URL + encodeCatalogPath(rawPath);
+    }
+    return null;
   }
 
   function filterAndSortCatalog(items, opts) {
@@ -643,6 +662,9 @@
 
   async function parseAssetZip(input, meta, inflateRawFn) {
     const entries = await parseZipArchive(input, inflateRawFn);
+    if (entries.length === 1 && entries[0].lowerName.endsWith('.zip')) {
+      return parseAssetZip(entries[0].bytes, meta, inflateRawFn);
+    }
     const tpseEntry = entries.find((e) => e.lowerName.endsWith('.tpse'));
     if (tpseEntry) {
       const jsonText = decodeUtf8(tpseEntry.bytes);
@@ -1032,6 +1054,7 @@
     classifyCatalogCategory,
     buildDownloadCandidates,
     normalizeCatalogItem,
+    getStaticCatalogPreviewUrl,
     filterAndSortCatalog,
     normalizeSfxAtlasEntries,
     parseTpseObject,

@@ -1590,3 +1590,132 @@ test('Skin variant compiler produces exact hd/uhd simple and connected textures 
   // Ensure tile #7 (index 7 * (816/12) = 476) was extracted for simple ghost 'g' onto 128x128 canvas
   assert.ok(drawnOps.some((op) => op.dstW === 128 && Math.round(op.args[1]) === 476));
 });
+
+test('Explore catalog renders static strip previews for raster/SVG skins and lazy-renders block strips for connected TPSE skins', async () => {
+  const customAssetsLogic = require('../src/features/custom-assets-logic');
+  function makePngBytes(w, h) {
+    const buf = Buffer.alloc(24);
+    buf[0] = 0x89; buf[1] = 0x50; buf[2] = 0x4e; buf[3] = 0x47;
+    buf[4] = 0x0d; buf[5] = 0x0a; buf[6] = 0x1a; buf[7] = 0x0a;
+    buf.writeUInt32BE(13, 8);
+    buf.write('IHDR', 12, 'ascii');
+    buf.writeUInt32BE(w, 16);
+    buf.writeUInt32BE(h, 20);
+    return buf;
+  }
+
+  class FakeImageWithDims {
+    constructor() {
+      this._src = '';
+      this.naturalWidth = 0;
+      this.naturalHeight = 0;
+      this.complete = false;
+      this.onload = null;
+    }
+    get src() { return this._src; }
+    set src(val) {
+      this._src = String(val);
+      const d = customAssetsLogic.readPngDimensionsFromDataUrl(this._src);
+      this.naturalWidth = d ? d.width : 0;
+      this.naturalHeight = d ? d.height : 0;
+      this.complete = true;
+      if (typeof this.onload === 'function') this.onload();
+    }
+  }
+
+  class FakeResponse {
+    constructor(bytes, ct) {
+      this._bytes = Buffer.from(bytes);
+      this.ok = true;
+      this.status = 200;
+      this.headers = { get: () => ct || 'application/octet-stream' };
+    }
+    async arrayBuffer() {
+      return this._bytes.buffer.slice(this._bytes.byteOffset, this._bytes.byteOffset + this._bytes.byteLength);
+    }
+  }
+
+  const catalog = [
+    {
+      id: 'skin-8bJackie-1bit_sci_fi',
+      name: '1bit sci-fi',
+      author: '8bJackie',
+      type: 'skin',
+      format: 'tetrioraster',
+      path: 'content/skin/8bJackie/1bit_sci-fi.png',
+      tpsePath: null
+    },
+    {
+      id: 'skin-4_false-Complex_Simplification',
+      name: 'Complex Simplification',
+      author: '4_false',
+      type: 'skin',
+      format: 'tetrio61connected',
+      path: 'content/skin/4_false/Complex_Simplification.zip',
+      tpsePath: 'tpsefiles/skin/4_false/Complex_Simplification.zip.tpse'
+    }
+  ];
+  const connectedTpse = {
+    skin: 'data:image/png;base64,' + makePngBytes(2048, 2048).toString('base64'),
+    ghost: null
+  };
+
+  const env = createFakeDomEnvironment('https:', {
+    URL,
+    Response: FakeResponse,
+    HTMLImageElement: FakeImageWithDims,
+    Image: FakeImageWithDims,
+    fetch: async (url) => {
+      const u = String(url);
+      if (u.includes('data.json')) return new FakeResponse(Buffer.from(JSON.stringify(catalog)), 'application/json');
+      if (u.includes('votes.json')) return new FakeResponse(Buffer.from('{}'), 'application/json');
+      if (u.includes('Complex_Simplification.zip.tpse')) {
+        return new FakeResponse(Buffer.from(JSON.stringify(connectedTpse)), 'application/json');
+      }
+      throw new Error('Unexpected fetch ' + u);
+    }
+  });
+
+  const stripDraws = [];
+  const origCreateEl = env.context.document.createElement.bind(env.context.document);
+  env.context.document.createElement = function (tag) {
+    if (String(tag).toLowerCase() === 'canvas') {
+      const c = {
+        tagName: 'CANVAS',
+        width: 300,
+        height: 150,
+        classList: { contains: () => false, add() {}, remove() {} },
+        setAttribute() {},
+        getContext() {
+          return {
+            clearRect() {},
+            drawImage(...args) {
+              if (c.width === 308 && c.height === 28) stripDraws.push(args);
+            }
+          };
+        },
+        toDataURL() {
+          return 'data:image/png;base64,' + makePngBytes(c.width, c.height).toString('base64');
+        }
+      };
+      return c;
+    }
+    return origCreateEl(tag);
+  };
+  env.triggerDOMContentLoaded();
+
+  env.elements.get('twfoxtetrio-home-foxmod').click();
+  env.elements.get('twfoxtetrio-card-config').click();
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 8));
+  }
+
+  const exploreList = env.elements.get('twfoxtetrio-assets-explore-list');
+  const imgs = exploreList.querySelectorAll('img');
+  const rasterImg = imgs.find((im) => im.getAttribute('data-preview-id') === 'skin-8bJackie-1bit_sci_fi');
+  const connectedImg = imgs.find((im) => im.getAttribute('data-preview-id') === 'skin-4_false-Complex_Simplification');
+  assert.ok(rasterImg && rasterImg.getAttribute('src').includes('1bit_sci-fi.png'));
+  assert.ok(connectedImg && !connectedImg.classList.contains('hidden'));
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(connectedImg.getAttribute('src')), { width: 308, height: 28 });
+  assert.equal(stripDraws.length, 10); // 10 minos drawn (Minos only pack skips ghost slot)
+});

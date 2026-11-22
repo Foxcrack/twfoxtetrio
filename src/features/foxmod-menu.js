@@ -1613,6 +1613,28 @@ body.twfox-ingame #menus > #footer {
   background: #060810;
   flex: 0 0 auto;
 }
+.twfox-asset-preview-wrap {
+  margin-top: 6px;
+  min-height: 20px;
+}
+.twfox-asset-preview-strip {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: #070a12;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+.twfox-asset-preview-loading {
+  display: inline-block;
+  font-size: 0.78em;
+  color: #7e8fb8;
+  font-style: italic;
+}
 .twfox-asset-info {
   min-width: 0;
   flex: 1 1 auto;
@@ -3807,6 +3829,9 @@ body.twfox-ingame #menus > #footer {
             exploreStatusEl.textContent = 'Modulo de assets no inicializado.';
             return;
           }
+          if (typeof assetsApi.resetPreviewQueue === 'function') {
+            assetsApi.resetPreviewQueue();
+          }
           const state = assetsApi.getState();
           if (!state.catalogLoaded) {
             return;
@@ -3890,12 +3915,56 @@ body.twfox-ingame #menus > #footer {
               actionBtns.push(dlBtn);
             }
 
+            const previewUrl =
+              typeof assetsApi.getCatalogItemPreviewUrl === 'function'
+                ? assetsApi.getCatalogItemPreviewUrl(item)
+                : null;
+            let previewEl = null;
+            if (previewUrl) {
+              const pImg = createEl('img', {
+                className: 'twfox-asset-preview-strip',
+                attrs: {
+                  src: previewUrl,
+                  loading: 'lazy',
+                  alt: '',
+                  'data-preview-id': item.id
+                }
+              });
+              pImg.src = previewUrl;
+              previewEl = createEl('div', { className: 'twfox-asset-preview-wrap' }, [pImg]);
+            } else if (
+              typeof assetsApi.requestCatalogItemPreview === 'function' &&
+              item.category !== 'sfx' &&
+              item.category !== 'background' &&
+              (item.tpsePath || (item.path && !/\.zip$/i.test(item.path)))
+            ) {
+              const pImg = createEl('img', {
+                className: 'twfox-asset-preview-strip hidden',
+                attrs: { alt: '', 'data-preview-id': item.id }
+              });
+              const loadMsg = createEl('span', {
+                className: 'twfox-asset-preview-loading',
+                text: 'Cargando vista previa de bloques...'
+              });
+              previewEl = createEl('div', { className: 'twfox-asset-preview-wrap' }, [pImg, loadMsg]);
+              assetsApi.requestCatalogItemPreview(item).then((resolvedUrl) => {
+                if (!pImg) return;
+                setClass(loadMsg, 'hidden', true);
+                if (resolvedUrl) {
+                  pImg.src = resolvedUrl;
+                  pImg.setAttribute('src', resolvedUrl);
+                  setClass(pImg, 'hidden', false);
+                }
+              });
+            }
+
             exploreListEl.appendChild(
               createEl('div', { className: 'twfox-asset-card' + (active ? ' is-active' : '') }, [
                 createEl('div', { className: 'twfox-asset-info' }, [
                   createEl('div', { className: 'twfox-asset-title', text: item.name }),
                   createEl('div', { className: 'twfox-asset-meta', text: `por ${item.author} · ${tags.join(' · ')}` }),
-                  item.description ? createEl('div', { className: 'twfox-asset-desc', text: item.description }) : null
+                  item.description ? createEl('div', { className: 'twfox-asset-desc', text: item.description }) : null,
+                  previewEl
                 ]),
                 createEl('div', { className: 'twfox-asset-actions' }, actionBtns)
               ])
@@ -3923,8 +3992,15 @@ body.twfox-ingame #menus > #footer {
             if (caps.background) capTags.push(`FONDO x${rec.backgroundCount || 1}`);
             capTags.push(formatBytesLabel(rec.bytesEstimate));
 
-            const thumb = rec.previewSkin
-              ? createEl('img', { className: 'twfox-asset-thumb', attrs: { src: rec.previewSkin, alt: '' } })
+            const previewNode = rec.previewSkin
+              ? (() => {
+                  const pImg = createEl('img', {
+                    className: 'twfox-asset-preview-strip',
+                    attrs: { src: rec.previewSkin, alt: '', 'data-installed-preview-id': rec.id }
+                  });
+                  pImg.src = rec.previewSkin;
+                  return createEl('div', { className: 'twfox-asset-preview-wrap' }, [pImg]);
+                })()
               : null;
 
             const btns = [];
@@ -3971,12 +4047,10 @@ body.twfox-ingame #menus > #footer {
 
             installedListEl.appendChild(
               createEl('div', { className: 'twfox-asset-card' + (active ? ' is-active' : '') }, [
-                createEl('div', { className: 'twfox-asset-main' }, [
-                  thumb,
-                  createEl('div', { className: 'twfox-asset-info' }, [
-                    createEl('div', { className: 'twfox-asset-title', text: rec.name }),
-                    createEl('div', { className: 'twfox-asset-meta', text: `${rec.author} · ${capTags.join(' · ')}` })
-                  ])
+                createEl('div', { className: 'twfox-asset-info' }, [
+                  createEl('div', { className: 'twfox-asset-title', text: rec.name }),
+                  createEl('div', { className: 'twfox-asset-meta', text: `${rec.author} · ${capTags.join(' · ')}` }),
+                  previewNode
                 ]),
                 createEl('div', { className: 'twfox-asset-actions' }, btns)
               ])

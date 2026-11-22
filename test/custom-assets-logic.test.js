@@ -298,4 +298,30 @@ test('detectSkinSourceLayout, GIF/SVG dimensions, underscore zip matching, and 1
   assert.equal(parsedZip.capabilities.board, true);
   assert.equal(parsedZip.skinFormat, 'simple');
   assert.equal(parsedZip.ghostFormat, 'simple');
+
+  // Preview URL rules + nested zip unwrapping
+  const nestedZip = buildTestZip([{ name: 'inner.zip', data: zipBuf, deflate: false }]);
+  const parsedNested = await logic.parseAssetZip(nestedZip, { format: 'tetrio61multi' });
+  assert.equal(parsedNested.capabilities.skin, true);
+
+  assert.equal(
+    logic.getStaticCatalogPreviewUrl({ category: 'skin', format: 'tetrioraster', path: 'content/skin/4_false/carbon_fiber.png' }),
+    'https://you.have.fail/tetrioplus/data/content/skin/4_false/carbon_fiber.png'
+  );
+  assert.equal(
+    logic.getStaticCatalogPreviewUrl({ category: 'skin', format: 'tetriosvg', path: 'content/skin/achokyu/bubbles.svg' }),
+    'https://you.have.fail/tetrioplus/data/content/skin/achokyu/bubbles.svg'
+  );
+  assert.equal(
+    logic.getStaticCatalogPreviewUrl({ category: 'skin', format: 'tetrio61connected', path: 'content/skin/4_false/Complex.zip' }),
+    null
+  );
+  assert.equal(
+    logic.getStaticCatalogPreviewUrl({ category: 'board', format: null, path: 'content/unknown/pack.zip', previewPath: 'content/unknown/preview.png' }),
+    'https://you.have.fail/tetrioplus/data/content/unknown/preview.png'
+  );
+  assert.equal(
+    logic.getStaticCatalogPreviewUrl({ category: 'sfx', format: 'tetrio', path: 'content/sfx/test.zip' }),
+    null
+  );
 });

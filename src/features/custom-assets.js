@@ -18,6 +18,11 @@
 
   const memoryAssetStore = new Map();
   const catalogCache = { items: null, votes: null, fetchedAt: 0, promise: null };
+  const previewMemoryCache = new Map();
+  const previewInFlight = new Map();
+  const previewQueue = [];
+  let previewWorkersActive = 0;
+  let previewEpoch = 0;
   const activePayloads = {
     skin: null,
     board: null,
@@ -112,7 +117,12 @@
       skinFormat: p.skinFormat || null,
       ghostFormat: p.ghostFormat || null,
       backgroundCount: Array.isArray(p.backgrounds) ? p.backgrounds.length : 0,
-      previewSkin: p.skin || p.board || p.queue || (p.backgrounds && p.backgrounds[0] && p.backgrounds[0].mediaType === 'image' ? p.backgrounds[0].dataUrl : null)
+      previewSkin:
+        (p.variants && p.variants.previewStrip) ||
+        p.skin ||
+        p.board ||
+        p.queue ||
+        (p.backgrounds && p.backgrounds[0] && p.backgrounds[0].mediaType === 'image' ? p.backgrounds[0].dataUrl : null)
     };
   }
 
@@ -513,8 +523,189 @@
       variants.grid1024 = await rescaleSquareTexture(payload.grid, 1024);
     }
 
+    const previewStrip = await buildPreviewStripFromPayload(payload, meta);
+    if (previewStrip) {
+      variants.previewStrip = previewStrip;
+    }
+
     payload.variants = variants;
     return payload;
+  }
+
+  const PREVIEW_STRIP_SLOTS = ['z', 'l', 'o', 's', 'i', 'j', 't', 'ghost', 'd', 'gb', 'gbd'];
+
+  async function buildPreviewStripFromPayload(payload, meta) {
+    if (!payload || !canCompileCanvas()) return null;
+    const formatHint = meta && meta.format ? meta.format : '';
+
+    if (payload.skin) {
+      const rawDims = logic.readPngDimensionsFromDataUrl(payload.skin);
+      const rawLoaded = await loadImageForCompile(payload.skin, rawDims);
+      const skinLoaded = await rasterizeSvgIfNeeded(rawLoaded, payload.skin);
+      if (!skinLoaded) return null;
+      const skinLayout = logic.detectSkinSourceLayout(skinLoaded.w, skinLoaded.h, false, formatHint);
+
+      let ghostLoaded = null;
+      let ghostLayout = '';
+      if (payload.ghost) {
+        const gDims = logic.readPngDimensionsFromDataUrl(payload.ghost);
+        const gRaw = await loadImageForCompile(payload.ghost, gDims);
+        ghostLoaded = await rasterizeSvgIfNeeded(gRaw, payload.ghost);
+        if (ghostLoaded) {
+          ghostLayout = logic.detectSkinSourceLayout(ghostLoaded.w, ghostLoaded.h, true, formatHint);
+        }
+      } else if (skinLayout === 'strip12') {
+        ghostLoaded = skinLoaded;
+        ghostLayout = 'strip12_ghost';
+      }
+
+      const cellSize = 26;
+      const step = 28;
+      const { canvas, ctx } = makeCanvas(PREVIEW_STRIP_SLOTS.length * step, cellSize + 2);
+      for (let i = 0; i < PREVIEW_STRIP_SLOTS.length; i++) {
+        const slot = PREVIEW_STRIP_SLOTS[i];
+        let srcLoaded = skinLoaded;
+        let layout = skinLayout;
+        let rect = null;
+        if (slot === 'ghost') {
+          if (!ghostLoaded) continue;
+          srcLoaded = ghostLoaded;
+          layout = ghostLayout;
+          rect = resolveMinoSourceRect(srcLoaded.w, srcLoaded.h, layout, 'g', true);
+        } else {
+          rect = resolveMinoSourceRect(srcLoaded.w, srcLoaded.h, layout, slot, false);
+        }
+        if (!rect || rect.w <= 0 || rect.h <= 0) continue;
+        ctx.drawImage(srcLoaded.img, rect.x, rect.y, rect.w, rect.h, 1 + i * step, 1, cellSize, cellSize);
+      }
+      return safeToPngDataUrl(canvas, null);
+    }
+
+    if (payload.ghost) {
+      const gDims = logic.readPngDimensionsFromDataUrl(payload.ghost);
+      const gRaw = await loadImageForCompile(payload.ghost, gDims);
+      const ghostLoaded = await rasterizeSvgIfNeeded(gRaw, payload.ghost);
+      if (!ghostLoaded) return null;
+      const ghostLayout = logic.detectSkinSourceLayout(ghostLoaded.w, ghostLoaded.h, true, formatHint);
+      const { canvas, ctx } = makeCanvas(58, 28);
+      ['g', 'x'].forEach((slot, idx) => {
+        const r = resolveMinoSourceRect(ghostLoaded.w, ghostLoaded.h, ghostLayout, slot, true);
+        if (r) ctx.drawImage(ghostLoaded.img, r.x, r.y, r.w, r.h, 1 + idx * 28, 1, 26, 26);
+      });
+      return safeToPngDataUrl(canvas, null);
+    }
+
+    if (payload.board || payload.queue) {
+      const src = payload.board || payload.queue;
+      const loaded = await loadImageForCompile(src, logic.readPngDimensionsFromDataUrl(src));
+      if (!loaded) return null;
+      const { canvas, ctx } = makeCanvas(56, 56);
+      ctx.drawImage(loaded.img, 0, 0, 56, 56);
+      return safeToPngDataUrl(canvas, null);
+    }
+    return null;
+  }
+
+  function cachePreviewUrl(id, url) {
+    if (previewMemoryCache.size >= 250) {
+      const oldest = previewMemoryCache.keys().next().value;
+      if (oldest !== undefined) previewMemoryCache.delete(oldest);
+    }
+    previewMemoryCache.set(String(id), url || '');
+  }
+
+  function getCatalogItemPreviewUrl(item) {
+    if (!item || !item.id) return null;
+    const downloaded = memoryAssetStore.get(String(item.id));
+    if (downloaded && downloaded.payload) {
+      const s = summarizeRecord(downloaded);
+      if (s && s.previewSkin) return s.previewSkin;
+    }
+    if (previewMemoryCache.has(String(item.id))) {
+      return previewMemoryCache.get(String(item.id)) || null;
+    }
+    return logic.getStaticCatalogPreviewUrl(item);
+  }
+
+  function pumpPreviewQueue() {
+    while (previewWorkersActive < 2 && previewQueue.length > 0) {
+      const job = previewQueue.shift();
+      if (!job) break;
+      if (job.epoch !== previewEpoch) {
+        job.resolve(null);
+        continue;
+      }
+      previewWorkersActive += 1;
+      (async () => {
+        try {
+          const item = job.item;
+          const tpseUrls = [];
+          if (item.tpsePath) {
+            tpseUrls.push(logic.TETRIOPLUS_BASE_URL + logic.encodeCatalogPath(item.tpsePath));
+            if (!item.tpsePath.endsWith('.tpse')) {
+              tpseUrls.push(logic.TETRIOPLUS_BASE_URL + logic.encodeCatalogPath(item.tpsePath + '.tpse'));
+            }
+          } else if (item.path && !/\.zip$/i.test(item.path)) {
+            tpseUrls.push(logic.TETRIOPLUS_BASE_URL + logic.encodeCatalogPath(item.path));
+          }
+          let resultUrl = null;
+          for (const url of tpseUrls) {
+            if (job.epoch !== previewEpoch) break;
+            try {
+              const { bytes, contentType } = await fetchRemoteBytes(url);
+              const payload = await parseDownloadedBytes(bytes, url.split('/').pop(), contentType, item);
+              resultUrl = await buildPreviewStripFromPayload(payload, item);
+              if (resultUrl) break;
+            } catch (_) {}
+          }
+          if (resultUrl) {
+            cachePreviewUrl(item.id, resultUrl);
+          } else if (job.epoch === previewEpoch) {
+            cachePreviewUrl(item.id, '');
+          }
+          job.resolve(resultUrl || null);
+        } catch (_) {
+          job.resolve(null);
+        } finally {
+          previewInFlight.delete(String(job.item.id));
+          previewWorkersActive -= 1;
+          pumpPreviewQueue();
+        }
+      })();
+    }
+  }
+
+  function requestCatalogItemPreview(item) {
+    if (!item || !item.id) return Promise.resolve(null);
+    const id = String(item.id);
+    const immediate = getCatalogItemPreviewUrl(item);
+    if (immediate) return Promise.resolve(immediate);
+    if (previewMemoryCache.has(id)) return Promise.resolve(previewMemoryCache.get(id) || null);
+    if (item.category === 'sfx' || item.category === 'background') return Promise.resolve(null);
+    if (!canCompileCanvas()) return Promise.resolve(null);
+    if (!item.tpsePath && (!item.path || /\.zip$/i.test(item.path))) return Promise.resolve(null);
+
+    if (previewInFlight.has(id)) {
+      return previewInFlight.get(id);
+    }
+    const epochAtQueue = previewEpoch;
+    const promise = new Promise((resolve) => {
+      previewQueue.push({ item, epoch: epochAtQueue, resolve });
+      pumpPreviewQueue();
+    });
+    previewInFlight.set(id, promise);
+    return promise;
+  }
+
+  function resetPreviewQueue() {
+    previewEpoch += 1;
+    while (previewQueue.length > 0) {
+      const dropped = previewQueue.shift();
+      if (dropped) {
+        previewInFlight.delete(String(dropped.item.id));
+        dropped.resolve(null);
+      }
+    }
   }
 
   async function hydrateActivePayloads() {
@@ -1605,7 +1796,10 @@ body.twfox-has-custom-bg #pixi {
     getActiveTextures,
     previewSfxPack,
     refreshCustomBackgroundDom,
-    resolveSkinOverrideUrl
+    resolveSkinOverrideUrl,
+    getCatalogItemPreviewUrl,
+    requestCatalogItemPreview,
+    resetPreviewQueue
   };
 
   root.__TWFOX_INTERNAL__ = root.__TWFOX_INTERNAL__ || {};
