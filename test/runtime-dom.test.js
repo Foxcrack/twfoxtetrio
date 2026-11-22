@@ -1866,6 +1866,50 @@ test('fox-paw-badge discovers FOXMOD users via MQTT retain, marks DOM without al
   doc.body.appendChild(mentionNuevo);
   doc.body.appendChild(resultOwner);
 
+  // Social PEOPLE list (.social_relationship), NOTIFICATIONS (.social_notification), DM header, and Profile card (.tetra_modal)
+  const relAmigo = new FakeEl('div', '', 'social_relationship');
+  const relAmigoH1 = new FakeEl('h1', '', '');
+  const relAmigoSpan = new FakeEl('span', '', '');
+  relAmigoSpan.textContent = 'AMIGO_FOX';
+  relAmigoH1.appendChild(relAmigoSpan);
+  relAmigo.appendChild(relAmigoH1);
+
+  const relSinmod = new FakeEl('div', '', 'social_relationship');
+  const relSinmodH1 = new FakeEl('h1', '', '');
+  const relSinmodSpan = new FakeEl('span', '', '');
+  relSinmodSpan.textContent = 'SINMOD';
+  relSinmodH1.appendChild(relSinmodSpan);
+  relSinmod.appendChild(relSinmodH1);
+
+  const notifAmigo = new FakeEl('div', '', 'social_notification');
+  const notifAmigoH1 = new FakeEl('h1', '', '');
+  const notifAmigoSpan = new FakeEl('span', '', '');
+  notifAmigoSpan.textContent = 'AMIGO_FOX';
+  notifAmigoH1.appendChild(notifAmigoSpan);
+  notifAmigo.appendChild(notifAmigoH1);
+
+  const notifAch = new FakeEl('div', '', 'social_notification');
+  const notifAchH1 = new FakeEl('h1', '', '');
+  notifAchH1.textContent = 'Achievement get!';
+  notifAch.appendChild(notifAchH1);
+
+  const dmHeaderUser = new FakeEl('p', 'social_dm_username', '');
+  dmHeaderUser.textContent = 'AMIGO_FOX';
+
+  const profileModal = new FakeEl('div', '', 'tetra_modal');
+  const modalAvatar = new FakeEl('img', '', 'avatar');
+  const modalH2 = new FakeEl('h2', '', '');
+  modalH2.textContent = 'TWFOXCRACK';
+  profileModal.appendChild(modalAvatar);
+  profileModal.appendChild(modalH2);
+
+  doc.body.appendChild(relAmigo);
+  doc.body.appendChild(relSinmod);
+  doc.body.appendChild(notifAmigo);
+  doc.body.appendChild(notifAch);
+  doc.body.appendChild(dmHeaderUser);
+  doc.body.appendChild(profileModal);
+
   env.triggerDOMContentLoaded();
 
   try {
@@ -1887,11 +1931,18 @@ test('fox-paw-badge discovers FOXMOD users via MQTT retain, marks DOM without al
     assert.equal(spAmigoH1.textContent, 'AMIGO_FOX');
     assert.equal(chatTagAmigo.getAttribute('data-twfox-paw'), '1');
     assert.equal(ownerSpan.getAttribute('data-twfox-paw'), '1');
+    assert.equal(relAmigoSpan.getAttribute('data-twfox-paw'), '1');
+    assert.equal(notifAmigoSpan.getAttribute('data-twfox-paw'), '1');
+    assert.equal(dmHeaderUser.getAttribute('data-twfox-paw'), '1');
+    assert.equal(modalH2.getAttribute('data-twfox-paw'), '1');
+    assert.equal(modalH2.textContent, 'TWFOXCRACK');
 
-    // Non-FOXMOD player does not receive paw
+    // Non-FOXMOD player and system notifications do not receive paw
     assert.equal(spOtherH1.getAttribute('data-twfox-paw'), null);
     assert.equal(chatTagOther.getAttribute('data-twfox-paw'), null);
     assert.equal(mentionNuevo.getAttribute('data-twfox-paw'), null);
+    assert.equal(relSinmodSpan.getAttribute('data-twfox-paw'), null);
+    assert.equal(notifAchH1.getAttribute('data-twfox-paw'), null);
 
     // Live incoming MQTT publish for nuevo_fox immediately badges nuevo_fox mention
     const incomingNuevo = buildMqttPublishFrame(

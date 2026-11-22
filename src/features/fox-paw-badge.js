@@ -58,10 +58,15 @@
 }
 .scroller_player > h1[${logic.FOX_PAW_ATTR}="1"]::before,
 h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
-.record_owner[${logic.FOX_PAW_ATTR}="1"]::before {
+.record_owner[${logic.FOX_PAW_ATTR}="1"]::before,
+.social_relationship h1 > span[${logic.FOX_PAW_ATTR}="1"]::before,
+.social_notification h1 > span[${logic.FOX_PAW_ATTR}="1"]::before,
+#social_dm_username[${logic.FOX_PAW_ATTR}="1"]::before,
+.tetra_modal > h2[${logic.FOX_PAW_ATTR}="1"]::before {
   width: 0.92em;
   height: 0.92em;
   vertical-align: -0.12em;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
 }
 .twfox-player-row .twfox-player-name[${logic.FOX_PAW_ATTR}="1"]::before {
   content: "";
@@ -307,6 +312,45 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
             (typeof el.getAttribute === 'function' && el.getAttribute('data-username')) || el.textContent
           );
         }
+
+        // 8b. Social panel PEOPLE list (.social_relationship h1 > span)
+        const socialRels = queryRoot.querySelectorAll('.social_relationship');
+        for (let i = 0; i < socialRels.length; i++) {
+          const rel = socialRels[i];
+          const h1 = typeof rel.querySelector === 'function' ? rel.querySelector('h1') : null;
+          const spanEl = h1 && typeof h1.querySelector === 'function' ? h1.querySelector('span') : null;
+          const targetEl = spanEl || h1;
+          if (targetEl) {
+            markTarget(targetEl, targetEl.textContent);
+          }
+        }
+
+        // 8c. Social panel NOTIFICATIONS sender (.social_notification h1 > span)
+        const socialNotifs = queryRoot.querySelectorAll('.social_notification');
+        for (let i = 0; i < socialNotifs.length; i++) {
+          const notif = socialNotifs[i];
+          const h1 = typeof notif.querySelector === 'function' ? notif.querySelector('h1') : null;
+          const spanEl = h1 && typeof h1.querySelector === 'function' ? h1.querySelector('span') : null;
+          if (spanEl) {
+            markTarget(spanEl, spanEl.textContent);
+          }
+        }
+
+        // 8d. Quick user profile card modal (.tetra_modal containing .avatar -> h2)
+        const tetraModals = queryRoot.querySelectorAll('.tetra_modal');
+        for (let i = 0; i < tetraModals.length; i++) {
+          const modal = tetraModals[i];
+          const hasAvatar = typeof modal.querySelector === 'function' ? modal.querySelector('.avatar') : null;
+          const nameH2 = hasAvatar && typeof modal.querySelector === 'function' ? modal.querySelector('h2') : null;
+          if (nameH2) {
+            markTarget(nameH2, nameH2.textContent);
+          }
+        }
+      }
+
+      const dmUsernameEl = document.getElementById('social_dm_username');
+      if (dmUsernameEl) {
+        markTarget(dmUsernameEl, dmUsernameEl.textContent);
       }
 
       // 9. League / multilog player cards & Quick Play self header
