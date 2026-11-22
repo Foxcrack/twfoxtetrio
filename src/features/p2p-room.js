@@ -1007,7 +1007,11 @@
       eliminationSeq = 0;
       roundStartAt = Date.now();
       roundDisconnected = [];
-      const seed = (Date.now() ^ (room.round * 2654435761)) >>> 0;
+      const randBits =
+        root.crypto && typeof root.crypto.getRandomValues === 'function'
+          ? root.crypto.getRandomValues(new Uint32Array(1))[0] >>> 0
+          : (Math.floor(Math.random() * 0x100000000) >>> 0);
+      const seed = ((Date.now() ^ randBits ^ Math.imul(room.round, 0x9e3779b1)) >>> 0) || 1;
       for (const p of players.values()) {
         p.alive = true;
         p.finished = false;

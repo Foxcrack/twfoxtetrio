@@ -154,10 +154,33 @@
   }
 
   /**
-   * Deterministic Mulberry32 PRNG so Solo replays & P2P rooms share fair bags.
+   * Deterministic Mulberry32 PRNG (with avalanche seed mixing) so Solo replays &
+   * P2P rooms share fair shuffled bags without close-seed correlations.
    */
+  let randomSeedNonce = 0;
+
+  function generateRandomSeed() {
+    randomSeedNonce = (randomSeedNonce + 1) >>> 0;
+    let entropy = 0;
+    try {
+      if (root.crypto && typeof root.crypto.getRandomValues === 'function') {
+        const buf = new Uint32Array(1);
+        root.crypto.getRandomValues(buf);
+        entropy = buf[0] >>> 0;
+      }
+    } catch (_) {}
+    if (!entropy) {
+      entropy = Math.floor(Math.random() * 0x100000000) >>> 0;
+    }
+    const mixed = (entropy ^ (Date.now() >>> 0) ^ Math.imul(randomSeedNonce, 0x9e3779b1)) >>> 0;
+    return mixed || 0x9e3779b9;
+  }
+
   function createSeededRng(seed) {
-    let state = (Number(seed) >>> 0) || 0x9e3779b9;
+    let h = (Number(seed) >>> 0) || 0x9e3779b9;
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    let state = ((h ^ (h >>> 16)) >>> 0) || 0x9e3779b9;
     return function nextFloat() {
       state = (state + 0x6d2b79f5) >>> 0;
       let t = Math.imul(state ^ (state >>> 15), 1 | state);
@@ -225,11 +248,15 @@
    * 7 tetrominoes, or a 19-piece chaos bag, plus VS garbage cancellation.
    */
   function createGame(initialOptions) {
+    const rawOpts = initialOptions && typeof initialOptions === 'object' ? initialOptions : {};
+    const hasInitialSeed = rawOpts.seed !== undefined && rawOpts.seed !== null;
+    const fixedSeed = rawOpts.fixedSeed !== undefined ? Boolean(rawOpts.fixedSeed) : hasInitialSeed;
+
     const opts = Object.assign(
       {
         pieceSet: 'pentomino',
         mode: 'zen',
-        seed: Date.now() >>> 0,
+        seed: hasInitialSeed ? (Number(rawOpts.seed) >>> 0) || 0x9e3779b9 : generateRandomSeed(),
         gravityLevel: 1,
         garbageMultiplier: 1,
         blitzDurationMs: 120000,
@@ -239,8 +266,11 @@
         onTopOut: null,
         onFinish: null
       },
-      initialOptions || {}
+      rawOpts
     );
+    if (!hasInitialSeed) {
+      opts.seed = generateRandomSeed();
+    }
 
     let board = createEmptyBoard();
     let rng = createSeededRng(opts.seed);
@@ -647,11 +677,21 @@
     }
 
     function reset(nextOptions) {
+      const hasNextSeed =
+        nextOptions &&
+        typeof nextOptions === 'object' &&
+        nextOptions.seed !== undefined &&
+        nextOptions.seed !== null;
       if (nextOptions && typeof nextOptions === 'object') {
         Object.assign(opts, nextOptions);
       }
+      if (hasNextSeed) {
+        opts.seed = (Number(nextOptions.seed) >>> 0) || 0x9e3779b9;
+      } else if (!fixedSeed) {
+        opts.seed = generateRandomSeed();
+      }
       board = createEmptyBoard();
-      rng = createSeededRng(opts.seed || (Date.now() >>> 0));
+      rng = createSeededRng(opts.seed || generateRandomSeed());
       bag = [];
       holdKey = null;
       canHold = true;
@@ -750,6 +790,7 @@
     PENTOMINO_KEYS,
     TETROMINO_KEYS,
     PIECE_DEFS,
+    generateRandomSeed,
     createSeededRng,
     getPiecePool,
     computeLineAttack,

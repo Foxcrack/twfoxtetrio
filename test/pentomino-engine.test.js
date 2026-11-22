@@ -330,3 +330,60 @@ test('playfield controller fires first ARR immediately at DAS boundary and prese
     globalThis.cancelAnimationFrame = prevCancelRaf;
   }
 });
+
+test('solo pentominoes randomize across bags and resets while keeping multi-player seeds identical', () => {
+  const g = engine.createGame({ pieceSet: 'pentomino', mode: 'zen' });
+  const bagSignatures = new Set();
+
+  // Draw 19 drops + 5 previewed nextKeys = full 24 pieces (two full 12-bags) without stacking above skyline
+  const spreadOffsets = [-5, 5, -2, 2, -4, 4];
+  for (let run = 0; run < 4; run++) {
+    const seq = [];
+    for (let i = 0; i < 19; i++) {
+      const snap = g.getSnapshot();
+      assert.ok(snap.active, `Run ${run} piece ${i} should not top out`);
+      seq.push(snap.active.key);
+      if (i === 18) {
+        seq.push(...snap.nextKeys);
+        break;
+      }
+      const offset = spreadOffsets[i % spreadOffsets.length];
+      if (offset !== 0) {
+        const dir = offset > 0 ? 1 : -1;
+        for (let step = 0; step < Math.abs(offset); step++) g.move(dir, 0);
+      }
+      g.hardDrop();
+    }
+    const bag1 = seq.slice(0, 12);
+    const bag2 = seq.slice(12, 24);
+    assert.equal(new Set(bag1).size, 12, 'First bag must contain all 12 unique pentominoes');
+    assert.equal(new Set(bag2).size, 12, 'Second bag must contain all 12 unique pentominoes');
+    assert.notDeepEqual(bag1, bag2, 'Consecutive bags must be shuffled independently');
+    bagSignatures.add(bag1.join(','));
+    g.reset();
+  }
+
+  assert.ok(bagSignatures.size >= 3, `Expected varied bag orders across solo resets, got ${bagSignatures.size}`);
+
+  // Two players sharing the exact same room seed must receive the exact same 24-piece bag sequence
+  const sharedSeed = 987654321;
+  const hostGame = engine.createGame({ pieceSet: 'pentomino', mode: 'vs', seed: sharedSeed });
+  const peerGame = engine.createGame({ pieceSet: 'pentomino', mode: 'vs', seed: sharedSeed });
+  for (let i = 0; i < 19; i++) {
+    const hSnap = hostGame.getSnapshot();
+    const pSnap = peerGame.getSnapshot();
+    assert.equal(hSnap.active.key, pSnap.active.key);
+    assert.deepEqual(hSnap.nextKeys, pSnap.nextKeys);
+    if (i === 18) break;
+    const offset = spreadOffsets[i % spreadOffsets.length];
+    if (offset !== 0) {
+      const dir = offset > 0 ? 1 : -1;
+      for (let step = 0; step < Math.abs(offset); step++) {
+        hostGame.move(dir, 0);
+        peerGame.move(dir, 0);
+      }
+    }
+    hostGame.hardDrop();
+    peerGame.hardDrop();
+  }
+});

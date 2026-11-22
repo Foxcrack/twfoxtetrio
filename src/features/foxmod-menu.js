@@ -1993,8 +1993,7 @@ body.twfox-ingame #menus > #footer {
         if (!practiceGame) return;
         practiceGame.reset({
           pieceSet: pieceSelect.value || 'pentomino',
-          mode: modeSelect.value || 'zen',
-          seed: Date.now() >>> 0
+          mode: modeSelect.value || 'zen'
         });
         if (foxmodCanvas) {
           foxmodCanvas.renderPlayfield(practiceCanvas, practiceGame.getSnapshot());

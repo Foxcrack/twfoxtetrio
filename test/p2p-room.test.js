@@ -449,6 +449,31 @@ test('3-player Versus KO ranks Nº1 survivor down to first eliminated player in 
     ['1:TWFoxcrack', '2:SegundoKO', '3:PrimeroKO']
   );
 
+  // Verify host and clients receive the exact same random seed in match_start (yielding identical bags per round)
+  const hostStarts = [];
+  const clientStarts = [];
+  host.subscribe((_s, ev, detail) => {
+    if (ev === 'match_start') hostStarts.push(detail.seed);
+  });
+  c2.subscribe((_s, ev, detail) => {
+    if (ev === 'match_start') clientStarts.push(detail.seed);
+  });
+  c3.subscribe((_s, ev, detail) => {
+    if (ev === 'match_start') clientStarts.push(detail.seed);
+  });
+  host.updateSettings({ pieceSet: 'pentomino' });
+  host.startMatch();
+  await new Promise((r) => setTimeout(r, 30));
+  host.reportSelfKo({});
+  c3.reportSelfKo({});
+  await new Promise((r) => setTimeout(r, 30));
+  host.startMatch();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(hostStarts.length, 2);
+  assert.notEqual(hostStarts[0], hostStarts[1], 'Each round must generate a fresh seed');
+  assert.equal(clientStarts[0], hostStarts[0], 'Peers must receive identical seed for identical pentomino bags');
+  assert.equal(clientStarts[1], hostStarts[0]);
+
   c2.close();
   c3.close();
   host.close();
