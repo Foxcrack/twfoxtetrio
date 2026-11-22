@@ -258,3 +258,43 @@ test('tRSD v1.0 parser/builder and PCM16 WAV encoder round-trip cleanly', () => 
   assert.ok(Math.abs(reparsed.entries[1].durationSec - 0.6) < 1e-5);
   assert.deepEqual(Buffer.from(reparsed.audioBytes), Buffer.from(wav));
 });
+
+test('detectSkinSourceLayout, GIF/SVG dimensions, underscore zip matching, and 12-tile strip ghost extraction work across all TETR.IO+ formats', async () => {
+  assert.equal(logic.detectSkinSourceLayout(2048, 2048, false), 'connected_uhd');
+  assert.equal(logic.detectSkinSourceLayout(1024, 1024, false), 'connected_hd');
+  assert.equal(logic.detectSkinSourceLayout(512, 512, false), 'simple_uhd');
+  assert.equal(logic.detectSkinSourceLayout(256, 256, false), 'simple_hd');
+  assert.equal(logic.detectSkinSourceLayout(480, 192, false), 'simple_5x2_cropped');
+  assert.equal(logic.detectSkinSourceLayout(816, 64, false), 'strip12');
+  assert.equal(logic.detectSkinSourceLayout(368, 30, false), 'strip12');
+  assert.equal(logic.detectSkinSourceLayout(1024, 1024, true), 'connected_uhd');
+  assert.equal(logic.detectSkinSourceLayout(512, 512, true), 'connected_hd');
+  assert.equal(logic.detectSkinSourceLayout(256, 256, true), 'simple_uhd');
+  assert.equal(logic.detectSkinSourceLayout(128, 128, true), 'simple_hd');
+
+  const svgBuf = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="367.9" height="30.1" viewBox="0,0,367.95,30.14"></svg>', 'utf8');
+  assert.deepEqual(logic.readImageDimensions(svgBuf, 'image/svg+xml'), { width: 368, height: 30 });
+
+  const gifBuf = Buffer.alloc(10);
+  gifBuf.write('GIF89a', 0, 'ascii');
+  gifBuf.writeUInt16LE(1528, 6);
+  gifBuf.writeUInt16LE(120, 8);
+  assert.deepEqual(logic.readImageDimensions(gifBuf, 'image/gif'), { width: 1528, height: 120 });
+
+  const rawStrip = logic.parseSingleMediaPayload(makeMinimalPng(816, 64), '1bit_sci-fi.png', 'image/png', { format: 'tetrioraster' });
+  assert.equal(rawStrip.skinFormat, 'simple');
+  assert.equal(rawStrip.capabilities.skin, true);
+  assert.equal(rawStrip.capabilities.ghost, true);
+
+  const zipBuf = buildTestZip([
+    { name: 'Tetris_DekarisGiant_minos.png', data: makeMinimalPng(256, 256), deflate: false },
+    { name: 'Tetris_DekarisGiant_ghost.png', data: makeMinimalPng(128, 128), deflate: false },
+    { name: 'c64board.png', data: makeMinimalPng(512, 512), deflate: false }
+  ]);
+  const parsedZip = await logic.parseAssetZip(zipBuf, { format: 'tetrio61multi' });
+  assert.equal(parsedZip.capabilities.skin, true);
+  assert.equal(parsedZip.capabilities.ghost, true);
+  assert.equal(parsedZip.capabilities.board, true);
+  assert.equal(parsedZip.skinFormat, 'simple');
+  assert.equal(parsedZip.ghostFormat, 'simple');
+});

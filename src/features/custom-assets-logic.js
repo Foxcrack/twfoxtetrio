@@ -160,33 +160,148 @@
     return out;
   }
 
+  const TETRIO_SIMPLE_COORDS = {
+    z: [0, 0],
+    l: [1, 0],
+    o: [2, 0],
+    s: [3, 0],
+    i: [4, 0],
+    j: [0, 1],
+    t: [1, 1],
+    d: [2, 1],
+    gb: [3, 1],
+    gbd: [4, 1]
+  };
+
+  const TETRIO_CONNECTED_COORDS = {
+    z: [0, 0],
+    l: [4, 0],
+    o: [8, 0],
+    s: [12, 0],
+    i: [0, 6],
+    j: [4, 6],
+    t: [8, 6],
+    d: [12, 6],
+    gb: [16, 0],
+    gbd: [16, 4]
+  };
+
+  const STRIP12_MINO_SLOTS = [
+    ['z', 0],
+    ['l', 1],
+    ['o', 2],
+    ['s', 3],
+    ['i', 4],
+    ['j', 5],
+    ['t', 6],
+    ['d', 8],
+    ['gb', 9],
+    ['gbd', 10]
+  ];
+
+  const STRIP12_GHOST_SLOTS = {
+    g: 7,
+    x: 11
+  };
+
+  function parseSvgDimensions(svgInput) {
+    const text = String(svgInput || '');
+    if (!text) return null;
+    const vbMatch = text.match(/viewBox\s*=\s*["']\s*[-\d.]+\s*[,\s]\s*[-\d.]+\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)/i);
+    if (vbMatch) {
+      const w = Math.round(Number(vbMatch[1]));
+      const h = Math.round(Number(vbMatch[2]));
+      if (w > 0 && h > 0) return { width: w, height: h };
+    }
+    const wMatch = text.match(/\bwidth\s*=\s*["']\s*([\d.]+)(?:px)?\s*["']/i);
+    const hMatch = text.match(/\bheight\s*=\s*["']\s*([\d.]+)(?:px)?\s*["']/i);
+    if (wMatch && hMatch) {
+      const w = Math.round(Number(wMatch[1]));
+      const h = Math.round(Number(hMatch[1]));
+      if (w > 0 && h > 0) return { width: w, height: h };
+    }
+    return null;
+  }
+
   function readPngDimensions(bytesInput) {
     const b = toUint8Array(bytesInput);
-    if (b.length < 24) return null;
-    if (b[0] !== 0x89 || b[1] !== 0x50 || b[2] !== 0x4e || b[3] !== 0x47) return null;
-    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
-    return {
-      width: dv.getUint32(16, false),
-      height: dv.getUint32(20, false)
-    };
+    if (b.length >= 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+      const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+      return {
+        width: dv.getUint32(16, false),
+        height: dv.getUint32(20, false)
+      };
+    }
+    return null;
+  }
+
+  function readImageDimensions(bytesInput, mimeHint) {
+    const png = readPngDimensions(bytesInput);
+    if (png) return png;
+    const b = toUint8Array(bytesInput);
+    if (b.length >= 10 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) {
+      const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+      return {
+        width: dv.getUint16(6, true),
+        height: dv.getUint16(8, true)
+      };
+    }
+    const mime = mimeHint || detectMimeFromBytes(b, '');
+    if (mime === 'image/svg+xml' || (b.length > 0 && b[0] === 0x3c)) {
+      return parseSvgDimensions(decodeUtf8(b.subarray(0, Math.min(2048, b.length))));
+    }
+    return null;
   }
 
   function readPngDimensionsFromDataUrl(dataUrl) {
-    if (typeof dataUrl !== 'string' || !dataUrl.includes('base64,')) return null;
-    const b64Head = dataUrl.split('base64,')[1].slice(0, 64);
-    return readPngDimensions(base64ToBytes(b64Head));
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+    if (dataUrl.includes('image/svg+xml')) {
+      return parseSvgDimensions(decodeUtf8(dataUrlToBytes(dataUrl)));
+    }
+    if (!dataUrl.includes('base64,')) return null;
+    const b64Head = dataUrl.split('base64,')[1].slice(0, 96);
+    return readImageDimensions(base64ToBytes(b64Head));
+  }
+
+  function detectSkinSourceLayout(width, height, isGhost, formatHint) {
+    const w = Number(width) || 0;
+    const h = Number(height) || 0;
+    if (!w || !h) {
+      if (isGhost) return 'simple_hd';
+      if (typeof formatHint === 'string' && /connected/i.test(formatHint)) return 'connected_uhd';
+      if (typeof formatHint === 'string' && /(raster|svg|anim)/i.test(formatHint)) return 'strip12';
+      return 'simple_hd';
+    }
+    if (isGhost) {
+      if (w >= h * 5) return 'strip12_ghost';
+      if (Math.abs(w - h) <= 8) {
+        if (w >= 768) return 'connected_uhd';
+        if (w >= 384) return 'connected_hd';
+        if (w >= 192) return 'simple_uhd';
+        return 'simple_hd';
+      }
+      if (w > h * 1.4 && w <= h * 3.5) return 'simple_rect';
+      return w >= 192 ? 'simple_uhd' : 'simple_hd';
+    }
+    if (w >= h * 6) return 'strip12';
+    if (Math.abs(w - h) <= 8) {
+      if (w >= 1536) return 'connected_uhd';
+      if (w >= 768) return 'connected_hd';
+      if (w >= 384) return 'simple_uhd';
+      return 'simple_hd';
+    }
+    if (w > h * 1.8 && w <= h * 3.2) return 'simple_5x2_cropped';
+    return w >= 384 ? 'simple_uhd' : 'simple_hd';
   }
 
   function classifySkinFormat(dims, isGhost, formatHint) {
     if (dims && dims.width && dims.height) {
-      if (isGhost) {
-        return dims.width >= 512 && dims.height >= 512 ? 'connected' : 'simple';
-      }
-      if (dims.width >= 1024 && dims.height >= 1024) return 'connected';
-      if (dims.width <= 512 && dims.height <= 512) return 'simple';
+      const layout = detectSkinSourceLayout(dims.width, dims.height, isGhost, formatHint);
+      return layout.startsWith('connected_') ? 'connected' : 'simple';
     }
-    if (typeof formatHint === 'string' && /connected/i.test(formatHint)) {
-      return 'connected';
+    if (typeof formatHint === 'string') {
+      if (/connected/i.test(formatHint)) return 'connected';
+      if (/(raster|svg|anim)/i.test(formatHint)) return 'simple';
     }
     return 'simple';
   }
@@ -565,27 +680,34 @@
       if (!SUPPORTED_IMAGE_EXT.test(base)) continue;
 
       const dataUrl = bytesToDataUrl(entry.bytes, 'image/png');
-      const dims = readPngDimensions(entry.bytes);
-      if (/\bboard\b/i.test(base)) {
+      const dims = readImageDimensions(entry.bytes, detectMimeFromBytes(entry.bytes, 'image/png'));
+      if (base.includes('board')) {
         board = dataUrl;
-      } else if (/\bqueue\b/i.test(base)) {
+      } else if (base.includes('queue')) {
         queue = dataUrl;
-      } else if (/\bgrid\b/i.test(base)) {
+      } else if (base.includes('grid')) {
         grid = dataUrl;
-      } else if (/\b(bg|background|backdrop)\b/i.test(base)) {
+      } else if (/(?:^|[^a-z])(bg|background|backdrop)(?:[^a-z]|$)/i.test(base)) {
         backgrounds.push({
           id: 'zip-bg-' + backgrounds.length,
           filename: base,
           mediaType: 'image',
           dataUrl
         });
-      } else if (/\bghost\b/i.test(base)) {
-        if (!ghost || /connected/i.test(base)) {
+      } else if (base.includes('ghost')) {
+        if (!ghost || base.includes('connected') || (dims && dims.width >= 512)) {
           ghost = dataUrl;
           ghostDims = dims;
         }
-      } else if (/\b(skin|mino|minos|connected|tetrio|blocks?)\b/i.test(base) || (!skin && entries.filter((x) => SUPPORTED_IMAGE_EXT.test(x.lowerName)).length <= 2)) {
-        if (!skin || /connected|2x/i.test(base)) {
+      } else if (
+        base.includes('skin') ||
+        base.includes('mino') ||
+        base.includes('connected') ||
+        base.includes('tetrio') ||
+        base.includes('block') ||
+        (!skin && entries.filter((x) => SUPPORTED_IMAGE_EXT.test(x.lowerName)).length <= 3)
+      ) {
+        if (!skin || base.includes('connected') || base.includes('2x') || (dims && (!skinDims || dims.width > skinDims.width))) {
           skin = dataUrl;
           skinDims = dims;
         }
@@ -676,8 +798,9 @@
       };
     }
 
-    const dims = readPngDimensions(bytes);
-    if (/board/.test(lowerName)) {
+    const dims = readImageDimensions(bytes, mime);
+    const hasStripGhost = Boolean(dims && dims.width >= dims.height * 6 && !/ghost/.test(lowerName));
+    if (lowerName.includes('board')) {
       return {
         category: 'board',
         capabilities: { skin: false, ghost: false, board: true, queue: false, grid: false, sfx: false, background: false, animated: false },
@@ -686,7 +809,7 @@
         board: dataUrl, queue: null, grid: null, sfxAtlasDataUrl: null, sfxAtlasMap: null, sfxFiles: null, backgrounds: []
       };
     }
-    if (/queue/.test(lowerName)) {
+    if (lowerName.includes('queue')) {
       return {
         category: 'board',
         capabilities: { skin: false, ghost: false, board: false, queue: true, grid: false, sfx: false, background: false, animated: false },
@@ -695,7 +818,7 @@
         board: null, queue: dataUrl, grid: null, sfxAtlasDataUrl: null, sfxAtlasMap: null, sfxFiles: null, backgrounds: []
       };
     }
-    if (/grid/.test(lowerName)) {
+    if (lowerName.includes('grid')) {
       return {
         category: 'board',
         capabilities: { skin: false, ghost: false, board: false, queue: false, grid: true, sfx: false, background: false, animated: false },
@@ -704,7 +827,7 @@
         board: null, queue: null, grid: dataUrl, sfxAtlasDataUrl: null, sfxAtlasMap: null, sfxFiles: null, backgrounds: []
       };
     }
-    if (/ghost/.test(lowerName)) {
+    if (lowerName.includes('ghost')) {
       return {
         category: 'skin',
         capabilities: { skin: false, ghost: true, board: false, queue: false, grid: false, sfx: false, background: false, animated: false },
@@ -717,7 +840,7 @@
     return {
       category: 'skin',
       capabilities: {
-        skin: true, ghost: false, board: false, queue: false, grid: false, sfx: false, background: false,
+        skin: true, ghost: hasStripGhost, board: false, queue: false, grid: false, sfx: false, background: false,
         animated: mime === 'image/gif' || /\.gif$/i.test(lowerName)
       },
       skin: dataUrl,
@@ -725,7 +848,7 @@
       skinAnim: null,
       skinAnimMeta: null,
       ghost: null,
-      ghostFormat: null,
+      ghostFormat: hasStripGhost ? 'simple' : null,
       ghostAnim: null,
       ghostAnimMeta: null,
       board: null,
@@ -887,6 +1010,10 @@
     TETRIOPLUS_CATALOG_URL,
     TETRIOPLUS_VOTES_URL,
     BUILTIN_BG_PRESETS,
+    TETRIO_SIMPLE_COORDS,
+    TETRIO_CONNECTED_COORDS,
+    STRIP12_MINO_SLOTS,
+    STRIP12_GHOST_SLOTS,
     encodeCatalogPath,
     bytesToBase64,
     base64ToBytes,
@@ -894,8 +1021,11 @@
     normalizeDataUrl,
     bytesToDataUrl,
     dataUrlToBytes,
+    parseSvgDimensions,
     readPngDimensions,
+    readImageDimensions,
     readPngDimensionsFromDataUrl,
+    detectSkinSourceLayout,
     classifySkinFormat,
     classifyCatalogCategory,
     buildDownloadCandidates,

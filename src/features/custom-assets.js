@@ -220,6 +220,303 @@
     });
   }
 
+  function canCompileCanvas() {
+    try {
+      const doc = root.document;
+      if (!doc || typeof doc.createElement !== 'function' || typeof root.Image !== 'function') return false;
+      const c = doc.createElement('canvas');
+      return Boolean(c && typeof c.getContext === 'function' && c.getContext('2d'));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function loadImageForCompile(src, fallbackDims) {
+    return new Promise((resolve) => {
+      try {
+        const img = new root.Image();
+        let settled = false;
+        const finish = (ok) => {
+          if (settled) return;
+          settled = true;
+          if (!ok) return resolve(null);
+          const w = Number(img.naturalWidth || img.width) || (fallbackDims && fallbackDims.width) || 0;
+          const h = Number(img.naturalHeight || img.height) || (fallbackDims && fallbackDims.height) || 0;
+          resolve(w > 0 && h > 0 ? { img, w, h } : null);
+        };
+        img.onload = () => finish(true);
+        img.onerror = () => finish(false);
+        if (nativeImgSrcDesc && nativeImgSrcDesc.set) {
+          nativeImgSrcDesc.set.call(img, src);
+        } else {
+          img.src = src;
+        }
+        if (img.complete && (img.naturalWidth || (fallbackDims && fallbackDims.width))) {
+          finish(true);
+        }
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  function safeToPngDataUrl(canvas, fallback) {
+    try {
+      return canvas.toDataURL('image/png');
+    } catch (_) {
+      return fallback || null;
+    }
+  }
+
+  function makeCanvas(w, h) {
+    const c = root.document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    return { canvas: c, ctx };
+  }
+
+  async function rasterizeSvgIfNeeded(loaded, src) {
+    if (!loaded || !String(src || '').startsWith('data:image/svg+xml')) return loaded;
+    const targetH = loaded.h < 96 ? 96 : loaded.h;
+    const scale = targetH / Math.max(1, loaded.h);
+    const targetW = Math.max(1, Math.round(loaded.w * scale));
+    const { canvas, ctx } = makeCanvas(targetW, targetH);
+    ctx.drawImage(loaded.img, 0, 0, targetW, targetH);
+    return { img: canvas, w: targetW, h: targetH };
+  }
+
+  function resolveMinoSourceRect(srcW, srcH, layout, slot, isGhost) {
+    if (layout === 'strip12' || layout === 'strip12_ghost') {
+      const idx = isGhost
+        ? logic.STRIP12_GHOST_SLOTS[slot]
+        : (logic.STRIP12_MINO_SLOTS.find((x) => x[0] === slot) || [null, -1])[1];
+      if (idx < 0) return null;
+      const slotW = srcW / 12;
+      const tileW = Math.min(srcH, slotW);
+      return { x: idx * slotW, y: 0, w: tileW, h: srcH };
+    }
+    if (layout === 'connected_hd' || layout === 'connected_uhd') {
+      const sRatio = srcW / (isGhost ? 512 : 1024);
+      const sTile = 46 * sRatio;
+      const sPad = 1 * sRatio;
+      const sStride = 48 * sRatio;
+      const base = isGhost
+        ? (slot === 'x' ? [4, 0] : [0, 0])
+        : logic.TETRIO_CONNECTED_COORDS[slot];
+      if (!base) return null;
+      return {
+        x: sPad + (base[0] + 0) * sStride,
+        y: sPad + (base[1] + 3) * sStride,
+        w: sTile,
+        h: sTile
+      };
+    }
+    if (layout === 'simple_5x2_cropped') {
+      const sStrideX = srcW / 5;
+      const sStrideY = srcH / 2;
+      const c = logic.TETRIO_SIMPLE_COORDS[slot];
+      if (!c) return null;
+      return { x: c[0] * sStrideX, y: c[1] * sStrideY, w: sStrideX, h: sStrideY };
+    }
+    if (layout === 'simple_rect' && isGhost) {
+      const sTile = srcW / 2;
+      return { x: (slot === 'x' ? 1 : 0) * sTile, y: 0, w: sTile, h: srcH };
+    }
+    const baseW = isGhost ? 128 : 256;
+    const sRatio = Math.max(1, srcW / baseW);
+    const sTile = 46 * sRatio;
+    const sPad = 1 * sRatio;
+    const sStride = 48 * sRatio;
+    const coord = isGhost ? [slot === 'x' ? 1 : 0, 0] : logic.TETRIO_SIMPLE_COORDS[slot];
+    if (!coord) return null;
+    return {
+      x: sPad + coord[0] * sStride,
+      y: sPad + coord[1] * sStride,
+      w: sTile,
+      h: sTile
+    };
+  }
+
+  function renderSimpleMinoAtlas(srcImg, srcW, srcH, layout, scale, origSrc) {
+    const dim = 256 * scale;
+    if (
+      String(origSrc || '').startsWith('data:image/png') &&
+      ((scale === 1 && layout === 'simple_hd' && srcW === 256 && srcH === 256) ||
+       (scale === 2 && layout === 'simple_uhd' && srcW === 512 && srcH === 512))
+    ) {
+      return origSrc;
+    }
+    const { canvas, ctx } = makeCanvas(dim, dim);
+    if (layout === 'simple_hd' || layout === 'simple_uhd') {
+      ctx.drawImage(srcImg, 0, 0, dim, dim);
+      return safeToPngDataUrl(canvas, origSrc);
+    }
+    if (layout === 'simple_5x2_cropped') {
+      ctx.drawImage(srcImg, 0, 0, srcW, srcH, 0, 0, 240 * scale, 96 * scale);
+      return safeToPngDataUrl(canvas, origSrc);
+    }
+    const tile = 46 * scale;
+    const pad = 1 * scale;
+    const stride = 48 * scale;
+    for (const [slot, dstCoord] of Object.entries(logic.TETRIO_SIMPLE_COORDS)) {
+      const r = resolveMinoSourceRect(srcW, srcH, layout, slot, false);
+      if (!r) continue;
+      const dx = pad + dstCoord[0] * stride;
+      const dy = pad + dstCoord[1] * stride;
+      ctx.drawImage(srcImg, r.x, r.y, r.w, r.h, dx, dy, tile, tile);
+    }
+    return safeToPngDataUrl(canvas, origSrc);
+  }
+
+  function renderConnectedMinoAtlas(srcImg, srcW, srcH, layout, scale, origSrc) {
+    const dim = 1024 * scale;
+    if (
+      String(origSrc || '').startsWith('data:image/png') &&
+      ((scale === 1 && layout === 'connected_hd' && srcW === 1024 && srcH === 1024) ||
+       (scale === 2 && layout === 'connected_uhd' && srcW === 2048 && srcH === 2048))
+    ) {
+      return origSrc;
+    }
+    const { canvas, ctx } = makeCanvas(dim, dim);
+    if (layout === 'connected_hd' || layout === 'connected_uhd') {
+      ctx.drawImage(srcImg, 0, 0, dim, dim);
+      return safeToPngDataUrl(canvas, origSrc);
+    }
+    const tile = 46 * scale;
+    const pad = 1 * scale;
+    const stride = 48 * scale;
+    for (const [slot, base] of Object.entries(logic.TETRIO_CONNECTED_COORDS)) {
+      const r = resolveMinoSourceRect(srcW, srcH, layout, slot, false);
+      if (!r) continue;
+      const maxRows = slot === 'gb' || slot === 'gbd' ? 4 : 6;
+      for (let oy = 0; oy < maxRows; oy++) {
+        for (let ox = 0; ox < 4; ox++) {
+          const dx = pad + (base[0] + ox) * stride;
+          const dy = pad + (base[1] + oy) * stride;
+          ctx.drawImage(srcImg, r.x, r.y, r.w, r.h, dx, dy, tile, tile);
+        }
+      }
+    }
+    return safeToPngDataUrl(canvas, origSrc);
+  }
+
+  function renderGhostAtlas(srcImg, srcW, srcH, layout, isConnectedOut, scale, origSrc) {
+    const dim = (isConnectedOut ? 512 : 128) * scale;
+    if (
+      String(origSrc || '').startsWith('data:image/png') &&
+      ((isConnectedOut && scale === 1 && layout === 'connected_hd' && srcW === 512 && srcH === 512) ||
+       (isConnectedOut && scale === 2 && layout === 'connected_uhd' && srcW === 1024 && srcH === 1024) ||
+       (!isConnectedOut && scale === 1 && layout === 'simple_hd' && srcW === 128 && srcH === 128) ||
+       (!isConnectedOut && scale === 2 && layout === 'simple_uhd' && srcW === 256 && srcH === 256))
+    ) {
+      return origSrc;
+    }
+    const { canvas, ctx } = makeCanvas(dim, dim);
+    if (
+      (isConnectedOut && (layout === 'connected_hd' || layout === 'connected_uhd')) ||
+      (!isConnectedOut && (layout === 'simple_hd' || layout === 'simple_uhd'))
+    ) {
+      ctx.drawImage(srcImg, 0, 0, dim, dim);
+      return safeToPngDataUrl(canvas, origSrc);
+    }
+    const tile = 46 * scale;
+    const pad = 1 * scale;
+    const stride = 48 * scale;
+    for (const slot of ['g', 'x']) {
+      const r = resolveMinoSourceRect(srcW, srcH, layout, slot, true);
+      if (!r) continue;
+      if (isConnectedOut) {
+        const bx = slot === 'x' ? 4 : 0;
+        for (let oy = 0; oy < 6; oy++) {
+          for (let ox = 0; ox < 4; ox++) {
+            ctx.drawImage(srcImg, r.x, r.y, r.w, r.h, pad + (bx + ox) * stride, pad + oy * stride, tile, tile);
+          }
+        }
+      } else {
+        const dx = pad + (slot === 'x' ? 1 : 0) * stride;
+        ctx.drawImage(srcImg, r.x, r.y, r.w, r.h, dx, pad, tile, tile);
+      }
+    }
+    return safeToPngDataUrl(canvas, origSrc);
+  }
+
+  async function rescaleSquareTexture(dataUrl, targetSize) {
+    if (!dataUrl) return null;
+    const dims = logic.readPngDimensionsFromDataUrl(dataUrl);
+    if (dims && dims.width === targetSize && dims.height === targetSize && String(dataUrl).startsWith('data:image/png')) {
+      return dataUrl;
+    }
+    const loaded = await loadImageForCompile(dataUrl, dims);
+    if (!loaded) return dataUrl;
+    if (loaded.w === targetSize && loaded.h === targetSize && String(dataUrl).startsWith('data:image/png')) {
+      return dataUrl;
+    }
+    const { canvas, ctx } = makeCanvas(targetSize, targetSize);
+    ctx.drawImage(loaded.img, 0, 0, targetSize, targetSize);
+    return safeToPngDataUrl(canvas, dataUrl);
+  }
+
+  async function compilePayloadVariants(payload, meta) {
+    if (!payload || !canCompileCanvas()) return payload;
+    const variants = {};
+    const formatHint = meta && meta.format ? meta.format : '';
+    let skinStripLoaded = null;
+    let skinStripLayout = '';
+
+    if (payload.skin) {
+      const rawDims = logic.readPngDimensionsFromDataUrl(payload.skin);
+      const rawLoaded = await loadImageForCompile(payload.skin, rawDims);
+      const loaded = await rasterizeSvgIfNeeded(rawLoaded, payload.skin);
+      if (loaded) {
+        const layout = logic.detectSkinSourceLayout(loaded.w, loaded.h, false, formatHint);
+        payload.skinFormat = layout.startsWith('connected_') ? 'connected' : 'simple';
+        variants.simpleHd = renderSimpleMinoAtlas(loaded.img, loaded.w, loaded.h, layout, 1, payload.skin);
+        variants.simpleUhd = renderSimpleMinoAtlas(loaded.img, loaded.w, loaded.h, layout, 2, payload.skin);
+        variants.connectedHd = renderConnectedMinoAtlas(loaded.img, loaded.w, loaded.h, layout, 1, payload.skin);
+        variants.connectedUhd = renderConnectedMinoAtlas(loaded.img, loaded.w, loaded.h, layout, 2, payload.skin);
+        if (layout === 'strip12') {
+          skinStripLoaded = loaded;
+          skinStripLayout = 'strip12';
+        }
+      }
+    }
+
+    if (payload.ghost) {
+      const rawDims = logic.readPngDimensionsFromDataUrl(payload.ghost);
+      const rawLoaded = await loadImageForCompile(payload.ghost, rawDims);
+      const loaded = await rasterizeSvgIfNeeded(rawLoaded, payload.ghost);
+      if (loaded) {
+        const layout = logic.detectSkinSourceLayout(loaded.w, loaded.h, true, formatHint);
+        payload.ghostFormat = layout.startsWith('connected_') ? 'connected' : 'simple';
+        variants.ghostSimpleHd = renderGhostAtlas(loaded.img, loaded.w, loaded.h, layout, false, 1, payload.ghost);
+        variants.ghostSimpleUhd = renderGhostAtlas(loaded.img, loaded.w, loaded.h, layout, false, 2, payload.ghost);
+        variants.ghostConnectedHd = renderGhostAtlas(loaded.img, loaded.w, loaded.h, layout, true, 1, payload.ghost);
+        variants.ghostConnectedUhd = renderGhostAtlas(loaded.img, loaded.w, loaded.h, layout, true, 2, payload.ghost);
+      }
+    } else if (skinStripLoaded && skinStripLayout === 'strip12') {
+      variants.ghostSimpleHd = renderGhostAtlas(skinStripLoaded.img, skinStripLoaded.w, skinStripLoaded.h, 'strip12_ghost', false, 1, null);
+      variants.ghostSimpleUhd = renderGhostAtlas(skinStripLoaded.img, skinStripLoaded.w, skinStripLoaded.h, 'strip12_ghost', false, 2, null);
+      variants.ghostConnectedHd = renderGhostAtlas(skinStripLoaded.img, skinStripLoaded.w, skinStripLoaded.h, 'strip12_ghost', true, 1, null);
+      variants.ghostConnectedUhd = renderGhostAtlas(skinStripLoaded.img, skinStripLoaded.w, skinStripLoaded.h, 'strip12_ghost', true, 2, null);
+      payload.ghostFormat = 'simple';
+    }
+
+    if (payload.board) {
+      variants.board512 = await rescaleSquareTexture(payload.board, 512);
+    }
+    if (payload.queue) {
+      variants.queue512 = await rescaleSquareTexture(payload.queue, 512);
+    }
+    if (payload.grid) {
+      variants.grid1024 = await rescaleSquareTexture(payload.grid, 1024);
+    }
+
+    payload.variants = variants;
+    return payload;
+  }
+
   async function hydrateActivePayloads() {
     try {
       await dbGetAllAssets();
@@ -227,6 +524,18 @@
       activePayloads.board = activeMeta.activeBoardId ? memoryAssetStore.get(activeMeta.activeBoardId) || null : null;
       activePayloads.sfx = activeMeta.activeSfxId ? memoryAssetStore.get(activeMeta.activeSfxId) || null : null;
       activePayloads.background = activeMeta.bgAssetId ? memoryAssetStore.get(activeMeta.bgAssetId) || null : null;
+
+      // Upgrade any legacy active records missing compiled resolution variants
+      for (const slotRec of [activePayloads.skin, activePayloads.board]) {
+        if (slotRec && slotRec.payload && !slotRec.payload.variants && (slotRec.payload.skin || slotRec.payload.ghost || slotRec.payload.board || slotRec.payload.queue)) {
+          await compilePayloadVariants(slotRec.payload, slotRec);
+          await dbPutAsset(slotRec);
+        }
+      }
+      if (activePayloads.skin && activePayloads.skin.payload) {
+        activeMeta.activeSkinFormat = activePayloads.skin.payload.skinFormat || 'simple';
+        activeMeta.activeGhostFormat = activePayloads.skin.payload.ghostFormat || activeMeta.activeSkinFormat;
+      }
 
       if (activeMeta.activeSkinId && !activePayloads.skin) {
         activeMeta.activeSkinId = null;
@@ -367,6 +676,7 @@
       try {
         const { bytes, contentType } = await fetchRemoteBytes(url);
         const payload = await parseDownloadedBytes(bytes, url.split('/').pop(), contentType, item);
+        await compilePayloadVariants(payload, item);
         const record = {
           id: String(item.id),
           name: String(item.name || item.id),
@@ -408,6 +718,7 @@
       category: input && input.category,
       format: input && input.format
     });
+    await compilePayloadVariants(payload, { format: input && input.format });
     const cleanStem = fileName.replace(/\.[^.]+$/, '') || 'Custom Asset';
     const id = 'local-' + Date.now() + '-' + cleanStem.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 32);
     const record = {
@@ -487,15 +798,18 @@
     const record = memoryAssetStore.get(String(id));
     if (!record || !record.payload) return null;
     const p = record.payload;
+    if (!p.variants && (p.skin || p.ghost || p.board || p.queue || p.grid)) {
+      await compilePayloadVariants(p, record);
+      await dbPutAsset(record);
+    }
     const caps = p.capabilities || {};
 
     if (caps.skin || caps.ghost) {
-      const prevFmt = activeMeta.activeSkinFormat;
       activeMeta.activeSkinId = record.id;
       activeMeta.activeSkinFormat = p.skinFormat || 'simple';
       activeMeta.activeGhostFormat = p.ghostFormat || p.skinFormat || 'simple';
       activePayloads.skin = record;
-      if (tetrioSkinsLoadedOnBoot && prevFmt !== activeMeta.activeSkinFormat) {
+      if (tetrioSkinsLoadedOnBoot) {
         needsReload = true;
       }
       applyConnectedHookIfNeeded();
@@ -504,6 +818,9 @@
     if (caps.board || caps.queue || caps.grid) {
       activeMeta.activeBoardId = record.id;
       activePayloads.board = record;
+      if (tetrioSkinsLoadedOnBoot) {
+        needsReload = true;
+      }
     }
 
     if (caps.sfx) {
@@ -532,7 +849,7 @@
   async function deactivateSlot(slot) {
     await readyPromise;
     if (slot === 'skin') {
-      if (tetrioSkinsLoadedOnBoot && activeMeta.activeSkinFormat === 'connected') {
+      if (tetrioSkinsLoadedOnBoot) {
         needsReload = true;
       }
       activeMeta.activeSkinId = null;
@@ -542,6 +859,9 @@
       refreshTrackedTetrioImages();
       notifyCanvasSpriteReload();
     } else if (slot === 'board') {
+      if (tetrioSkinsLoadedOnBoot) {
+        needsReload = true;
+      }
       activeMeta.activeBoardId = null;
       activePayloads.board = null;
       refreshTrackedTetrioImages();
@@ -633,20 +953,31 @@
   function resolveSkinOverrideUrl(rawUrl) {
     const pathname = normalizeTetrioPath(rawUrl);
     if (!pathname) return null;
+    const is2x = /\.2x\.png$/i.test(pathname);
 
     if (pathname.startsWith('/res/skins/minos/')) {
       const rec = activePayloads.skin;
-      if (rec && rec.payload && rec.payload.skin) {
-        if (/tetrio(\.2x)?\.png$|connected(\.2x)?\.png$/i.test(pathname)) {
-          return rec.payload.skin;
+      const p = rec && rec.payload;
+      if (p && p.skin) {
+        const v = p.variants || {};
+        if (/connected(\.2x)?\.png$/i.test(pathname)) {
+          return is2x ? (v.connectedUhd || v.connectedHd || p.skin) : (v.connectedHd || p.skin);
+        }
+        if (/tetrio(\.2x)?\.png$/i.test(pathname)) {
+          return is2x ? (v.simpleUhd || v.simpleHd || p.skin) : (v.simpleHd || p.skin);
         }
       }
     }
     if (pathname.startsWith('/res/skins/ghost/')) {
       const rec = activePayloads.skin;
-      if (rec && rec.payload && rec.payload.ghost) {
-        if (/tetrio(\.2x)?\.png$|connected(\.2x)?\.png$/i.test(pathname)) {
-          return rec.payload.ghost;
+      const p = rec && rec.payload;
+      if (p && (p.ghost || (p.variants && (p.variants.ghostSimpleHd || p.variants.ghostConnectedHd)))) {
+        const v = p.variants || {};
+        if (/connected(\.2x)?\.png$/i.test(pathname)) {
+          return is2x ? (v.ghostConnectedUhd || v.ghostConnectedHd || p.ghost) : (v.ghostConnectedHd || p.ghost);
+        }
+        if (/tetrio(\.2x)?\.png$/i.test(pathname)) {
+          return is2x ? (v.ghostSimpleUhd || v.ghostSimpleHd || p.ghost) : (v.ghostSimpleHd || p.ghost);
         }
       }
     }
@@ -655,9 +986,10 @@
       const fallbackSkinBoard = activePayloads.skin;
       const p = (rec && rec.payload) || (fallbackSkinBoard && fallbackSkinBoard.payload) || null;
       if (p) {
-        if (/board\.png$/i.test(pathname) && p.board) return p.board;
-        if (/queue\.png$/i.test(pathname) && p.queue) return p.queue;
-        if (/grid\.png$/i.test(pathname) && p.grid) return p.grid;
+        const v = p.variants || {};
+        if (/board\.png$/i.test(pathname) && (v.board512 || p.board)) return v.board512 || p.board;
+        if (/queue\.png$/i.test(pathname) && (v.queue512 || p.queue)) return v.queue512 || p.queue;
+        if (/grid\.png$/i.test(pathname) && (v.grid1024 || p.grid)) return v.grid1024 || p.grid;
       }
     }
     if (pathname.startsWith('/res/bg/') && isCustomBgEnabled()) {
@@ -805,8 +1137,11 @@
           },
           set(val) {
             devhookFn = val;
-            if (typeof val === 'function' && typeof root.queueMicrotask === 'function') {
-              root.queueMicrotask(() => applyConnectedHookIfNeeded());
+            if (typeof val === 'function') {
+              const schedule = typeof root.queueMicrotask === 'function'
+                ? root.queueMicrotask.bind(root)
+                : (fn) => Promise.resolve().then(fn);
+              schedule(() => applyConnectedHookIfNeeded());
             }
           }
         });
@@ -826,7 +1161,7 @@
             const rawStr = String(val || '');
             const pathname = normalizeTetrioPath(rawStr);
             if (pathname && (pathname.startsWith('/res/skins/') || pathname.startsWith('/res/bg/'))) {
-              if (pathname.startsWith('/res/skins/minos/') || pathname.startsWith('/res/skins/ghost/')) {
+              if (pathname.startsWith('/res/skins/')) {
                 tetrioSkinsLoadedOnBoot = true;
               }
               trackedImages.set(this, rawStr);
@@ -1145,14 +1480,22 @@ body.twfox-has-custom-bg #pixi {
   function getActiveTextures() {
     const skinPayload = activePayloads.skin && activePayloads.skin.payload;
     const boardPayload = activePayloads.board && activePayloads.board.payload;
+    const sv = (skinPayload && skinPayload.variants) || {};
+    const bv = (boardPayload && boardPayload.variants) || {};
+    const isConnectedSkin = skinPayload && skinPayload.skinFormat === 'connected';
+    const isConnectedGhost = skinPayload && skinPayload.ghostFormat === 'connected';
     return {
-      skinDataUrl: skinPayload && skinPayload.skin ? skinPayload.skin : null,
+      skinDataUrl: skinPayload
+        ? (isConnectedSkin ? (sv.connectedUhd || sv.connectedHd || skinPayload.skin) : (sv.simpleUhd || sv.simpleHd || skinPayload.skin))
+        : null,
       skinFormat: (skinPayload && skinPayload.skinFormat) || 'simple',
-      ghostDataUrl: skinPayload && skinPayload.ghost ? skinPayload.ghost : null,
+      ghostDataUrl: skinPayload
+        ? (isConnectedGhost ? (sv.ghostConnectedUhd || sv.ghostConnectedHd || skinPayload.ghost) : (sv.ghostSimpleUhd || sv.ghostSimpleHd || skinPayload.ghost))
+        : null,
       ghostFormat: (skinPayload && skinPayload.ghostFormat) || 'simple',
-      boardDataUrl: (boardPayload && boardPayload.board) || (skinPayload && skinPayload.board) || null,
-      queueDataUrl: (boardPayload && boardPayload.queue) || (skinPayload && skinPayload.queue) || null,
-      gridDataUrl: (boardPayload && boardPayload.grid) || (skinPayload && skinPayload.grid) || null
+      boardDataUrl: bv.board512 || (boardPayload && boardPayload.board) || sv.board512 || (skinPayload && skinPayload.board) || null,
+      queueDataUrl: bv.queue512 || (boardPayload && boardPayload.queue) || sv.queue512 || (skinPayload && skinPayload.queue) || null,
+      gridDataUrl: bv.grid1024 || (boardPayload && boardPayload.grid) || sv.grid1024 || (skinPayload && skinPayload.grid) || null
     };
   }
 

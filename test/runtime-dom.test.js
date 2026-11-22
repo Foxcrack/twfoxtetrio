@@ -1467,3 +1467,111 @@ test('CONFIG Assets Studio connects to you.have.fail/tetrioplus, downloads/insta
   restoredImg.src = '/res/skins/minos/connected.2x.png';
   assert.equal(origDesc.get.call(restoredImg), '/res/skins/minos/connected.2x.png');
 });
+
+test('Skin variant compiler produces exact hd/uhd simple and connected textures and fires DEVHOOK_CONNECTED_SKIN on connected boot', async () => {
+  const customAssetsLogic = require('../src/features/custom-assets-logic');
+  function makePngBytes(w, h) {
+    const buf = Buffer.alloc(24);
+    buf[0] = 0x89; buf[1] = 0x50; buf[2] = 0x4e; buf[3] = 0x47;
+    buf[4] = 0x0d; buf[5] = 0x0a; buf[6] = 0x1a; buf[7] = 0x0a;
+    buf.writeUInt32BE(13, 8);
+    buf.write('IHDR', 12, 'ascii');
+    buf.writeUInt32BE(w, 16);
+    buf.writeUInt32BE(h, 20);
+    return buf;
+  }
+
+  class FakeImageWithDims {
+    constructor() {
+      this._src = '';
+      this.naturalWidth = 0;
+      this.naturalHeight = 0;
+      this.complete = false;
+      this.onload = null;
+    }
+    get src() { return this._src; }
+    set src(val) {
+      this._src = String(val);
+      const d = customAssetsLogic.readPngDimensionsFromDataUrl(this._src);
+      this.naturalWidth = d ? d.width : 0;
+      this.naturalHeight = d ? d.height : 0;
+      this.complete = true;
+      if (typeof this.onload === 'function') this.onload();
+    }
+  }
+
+  const drawnOps = [];
+  const env = createFakeDomEnvironment('https:', {
+    URL,
+    HTMLImageElement: FakeImageWithDims,
+    Image: FakeImageWithDims
+  });
+
+  const origCreateEl = env.context.document.createElement.bind(env.context.document);
+  env.context.document.createElement = function (tag) {
+    if (String(tag).toLowerCase() === 'canvas') {
+      const c = {
+        tagName: 'CANVAS',
+        width: 300,
+        height: 150,
+        classList: { contains: () => false, add() {}, remove() {} },
+        setAttribute() {},
+        getContext() {
+          return {
+            clearRect() {},
+            drawImage(...args) {
+              drawnOps.push({ dstW: c.width, dstH: c.height, args });
+            }
+          };
+        },
+        toDataURL() {
+          return 'data:image/png;base64,' + makePngBytes(c.width, c.height).toString('base64');
+        }
+      };
+      return c;
+    }
+    return origCreateEl(tag);
+  };
+  env.triggerDOMContentLoaded();
+
+  const ca = env.context.__TWFOX_INTERNAL__.customAssets;
+
+  // 1. Import 2048x2048 connected TPSE skin -> compiles exact connectedHd (1024), connectedUhd (2048), simpleHd (256), simpleUhd (512)
+  const tpseJson = JSON.stringify({
+    skin: 'data:image/png;base64,' + makePngBytes(2048, 2048).toString('base64'),
+    ghost: 'data:image/png;base64,' + makePngBytes(1024, 1024).toString('base64')
+  });
+  await ca.importLocalAsset({
+    name: 'connected_skin.tpse',
+    bytes: new Uint8Array(Buffer.from(tpseJson, 'utf8')),
+    autoApply: true
+  });
+
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/minos/connected.png')), { width: 1024, height: 1024 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/minos/connected.2x.png')), { width: 2048, height: 2048 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/minos/tetrio.png')), { width: 256, height: 256 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/minos/tetrio.2x.png')), { width: 512, height: 512 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/ghost/connected.png')), { width: 512, height: 512 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/ghost/connected.2x.png')), { width: 1024, height: 1024 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/ghost/tetrio.png')), { width: 128, height: 128 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/ghost/tetrio.2x.png')), { width: 256, height: 256 });
+
+  // Verify DEVHOOK_CONNECTED_SKIN is invoked automatically when defined on window
+  let devhookCalled = 0;
+  env.context.DEVHOOK_CONNECTED_SKIN = () => { devhookCalled += 1; };
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(devhookCalled, 1);
+
+  // 2. Import raw 816x64 12-tile tetrioraster PNG -> generates BOTH simple minos (256/512) & simple ghost (128/256)
+  drawnOps.length = 0;
+  await ca.importLocalAsset({
+    name: '1bit_sci-fi.png',
+    bytes: new Uint8Array(makePngBytes(816, 64)),
+    format: 'tetrioraster',
+    autoApply: true
+  });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/minos/tetrio.png')), { width: 256, height: 256 });
+  assert.deepEqual(customAssetsLogic.readPngDimensionsFromDataUrl(ca.resolveSkinOverrideUrl('/res/skins/ghost/tetrio.png')), { width: 128, height: 128 });
+  // Ensure tile #7 (index 7 * (816/12) = 476) was extracted for simple ghost 'g' onto 128x128 canvas
+  assert.ok(drawnOps.some((op) => op.dstW === 128 && Math.round(op.args[1]) === 476));
+});
