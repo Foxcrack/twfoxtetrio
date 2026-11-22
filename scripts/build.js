@@ -15,6 +15,7 @@ const SOURCE_FILES = [
   'src/features/forty-lines-logic.js',
   'src/features/quickplay-logic.js',
   'src/features/multiplayer-logic.js',
+  'src/features/zen-qp-logic.js',
   'src/core/top-hud.js',
   'src/core/runtime.js',
   'src/features/blitz-pb-tracker.js',
@@ -24,7 +25,8 @@ const SOURCE_FILES = [
   'src/features/pentomino-engine.js',
   'src/features/p2p-room.js',
   'src/features/foxmod-canvas.js',
-  'src/features/foxmod-menu.js'
+  'src/features/foxmod-menu.js',
+  'src/features/zen-qp-mods.js'
 ];
 
 /**

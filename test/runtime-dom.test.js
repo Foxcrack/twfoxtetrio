@@ -228,6 +228,22 @@ function createFakeDomEnvironment(protocol) {
   pbZenithEx.textContent = '500.0 M';
   const zenithMenu = new FakeElement('div', 'zenithmenu', '');
   const zenithResult = new FakeElement('h1', 'zenith_result', '');
+  const zenPanel = new FakeElement('div', 'zen_panel', 'hidden');
+  const zenPanelContent = new FakeElement('div', 'zen_panel_content', '');
+  const zenGarbageOff = new FakeElement('div', '', 'panel_option selected');
+  zenGarbageOff.setAttribute('data-key', 'garbagemode');
+  zenGarbageOff.setAttribute('data-value', 'off');
+  const zenGarbageBackfire = new FakeElement('div', '', 'panel_option');
+  zenGarbageBackfire.setAttribute('data-key', 'garbagemode');
+  zenGarbageBackfire.setAttribute('data-value', 'backfire_full');
+  zenGarbageBackfire.addEventListener('click', () => {
+    zenGarbageOff.classList.remove('selected');
+    zenGarbageBackfire.classList.add('selected');
+  });
+  zenPanelContent.appendChild(zenGarbageOff);
+  zenPanelContent.appendChild(zenGarbageBackfire);
+  zenPanel.appendChild(zenPanelContent);
+  body.appendChild(zenPanel);
   const resultHeader = new FakeElement('h1', 'result_header', '');
   const resultValue = new FakeElement('p', 'result_result', '');
   const loader = protocol === 'file:' ? new FakeElement('h1', 'loader', '') : null;
@@ -1085,4 +1101,92 @@ test('bundled mod renders left Quick Play Weekly PB vertical bar, counts down in
   env.body.classList.remove('ingame_phys');
   zenithMenu.classList.remove('rolledup', 'hidden');
   assert.equal(zenithHud.classList.contains('is-visible'), false);
+});
+
+test('bundled mod injects Quick Play Cards section into #zen_panel_content and applies effects live in ZEN', () => {
+  const env = createFakeDomEnvironment('https:');
+  env.triggerDOMContentLoaded();
+  const zenSection = env.elements.get('twfoxtetrio-zen-qp-section');
+  assert.ok(zenSection, 'Expected Quick Play Cards section inside #zen_panel_content');
+
+  let createHolderCalls = 0;
+  const zenGameWrapper = {
+    state: {
+      g: 0.02,
+      holdlocked: false,
+      stats: { zenlevel: 3 },
+      setoptions: {
+        usezenconfig: true,
+        display_hold: true,
+        infinite_hold: false,
+        infinite_movement: false,
+        locktime: 30,
+        spinbonuses: 'T-spins+',
+        receivemultiplier: 1,
+        survivalmode: 'none',
+        messiness_change: 1,
+        messiness_inner: 0,
+        messiness_nosame: false,
+        messiness_center: true,
+        garbagefavor: 33,
+        garbagephase: 165,
+        survival_messiness: 100
+      }
+    },
+    pullZenConfig() {
+      const opts = zenGameWrapper.state.setoptions;
+      opts.spinbonuses = 'T-spins+';
+      opts.locktime = 30;
+      zenGameWrapper.state.g = 0.02;
+      opts.survivalmode = 'none';
+      createHolderCalls += 1;
+    }
+  };
+
+  vm.runInContext(
+    `
+      const zenMap = new Map();
+      zenMap.set('zen_self', zenWrapperRef);
+    `,
+    Object.assign(env.context, { zenWrapperRef: zenGameWrapper })
+  );
+
+  // Toggle NO HOLD + ALL-SPIN + INVISIBLE + DOUBLE HOLE directly in #zen_panel
+  env.elements.get('twfoxtetrio-zen-mod-nohold').click();
+  env.elements.get('twfoxtetrio-zen-mod-allspin').click();
+  env.elements.get('twfoxtetrio-zen-mod-invisible').click();
+  env.elements.get('twfoxtetrio-zen-mod-doublehole').click();
+
+  assert.equal(zenGameWrapper.state.setoptions.display_hold, false);
+  assert.equal(zenGameWrapper.state.holdlocked, true);
+  assert.equal(zenGameWrapper.state.setoptions.zenith_allspin, true);
+  assert.equal(zenGameWrapper.state.setoptions.spinbonuses, 'all+');
+  assert.equal(zenGameWrapper.state.setoptions.invisible, true);
+  assert.equal(zenGameWrapper.state.setoptions.zenith_doublehole, true);
+  assert.ok(createHolderCalls >= 4);
+
+  // Garbage helper hint appears while garbagemode is OFF and clicking BACKFIRE 1X enables it
+  const hint = env.elements.get('twfoxtetrio-zen-qp-hint');
+  assert.equal(hint.classList.contains('hidden'), false);
+  env.elements.get('twfoxtetrio-zen-qp-enable-backfire').click();
+  assert.equal(hint.classList.contains('hidden'), true);
+
+  // Flip GRAVITY -> REVERSED (20G Freefall) and check UpdateZenGravity locktime intercept preserves 20G
+  env.elements.get('twfoxtetrio-zen-mod-gravity-rev').click();
+  assert.equal(zenGameWrapper.state.g, 20);
+  assert.equal(zenGameWrapper.state.setoptions.locktime, 16);
+  zenGameWrapper.state.g = 0.05;
+  zenGameWrapper.state.setoptions.locktime = 30;
+  assert.equal(zenGameWrapper.state.g, 20);
+  assert.equal(zenGameWrapper.state.setoptions.locktime, 16);
+
+  // Clicking RESET clears all active QP cards and restores clean base ZEN flags
+  env.elements.get('twfoxtetrio-zen-qp-reset').click();
+  assert.equal(zenGameWrapper.state.setoptions.display_hold, true);
+  assert.equal(zenGameWrapper.state.holdlocked, false);
+  assert.equal(zenGameWrapper.state.setoptions.zenith_allspin, false);
+  assert.equal(zenGameWrapper.state.setoptions.spinbonuses, 'T-spins+');
+  assert.equal(zenGameWrapper.state.setoptions.invisible, false);
+  assert.equal(zenGameWrapper.state.g, 0.02);
+  assert.equal(zenGameWrapper.state.setoptions.locktime, 30);
 });

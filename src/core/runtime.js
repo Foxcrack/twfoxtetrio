@@ -14,6 +14,7 @@
   const fortyLinesLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.fortyLinesLogic;
   const quickPlayLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.quickPlayLogic;
   const multiplayerLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.multiplayerLogic;
+  const zenQpLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.zenQpLogic;
   if (!blitzLogic || !fortyLinesLogic || !quickPlayLogic || !multiplayerLogic) {
     return;
   }
@@ -23,6 +24,19 @@
   const ANON_40L_PB_KEY = 'twfoxtetrio_anon_40l_pb_v1';
   const ANON_ZENITH_PB_KEY = 'twfoxtetrio_anon_zenith_pb_v1';
   const ANON_ZENITHEX_PB_KEY = 'twfoxtetrio_anon_zenithex_pb_v1';
+
+  const DEFAULT_ZEN_QP_MODS = zenQpLogic
+    ? zenQpLogic.createEmptySelection()
+    : {
+        expert: 'off',
+        nohold: 'off',
+        messy: 'off',
+        gravity: 'off',
+        volatile: 'off',
+        doublehole: 'off',
+        invisible: 'off',
+        allspin: 'off'
+      };
 
   const DEFAULT_CONFIG = {
     blitzTracker: {
@@ -43,7 +57,8 @@
       enabled: true,
       maxRows: 12,
       includeQuickPlay: false
-    }
+    },
+    zenQuickPlayMods: { ...DEFAULT_ZEN_QP_MODS }
   };
 
   function cloneDefaults() {
@@ -51,7 +66,8 @@
       blitzTracker: { ...DEFAULT_CONFIG.blitzTracker },
       fortyLinesTracker: { ...DEFAULT_CONFIG.fortyLinesTracker },
       quickPlayTracker: { ...DEFAULT_CONFIG.quickPlayTracker },
-      multiplayerLeaderboard: { ...DEFAULT_CONFIG.multiplayerLeaderboard }
+      multiplayerLeaderboard: { ...DEFAULT_CONFIG.multiplayerLeaderboard },
+      zenQuickPlayMods: zenQpLogic ? zenQpLogic.createEmptySelection() : { ...DEFAULT_ZEN_QP_MODS }
     };
   }
 
@@ -60,7 +76,14 @@
     let changed = false;
     for (const sectionKey of Object.keys(DEFAULT_CONFIG)) {
       if (patch[sectionKey] && typeof patch[sectionKey] === 'object') {
-        Object.assign(target[sectionKey], patch[sectionKey]);
+        if (sectionKey === 'zenQuickPlayMods' && zenQpLogic) {
+          target.zenQuickPlayMods = zenQpLogic.normalizeZenModSelection({
+            ...target.zenQuickPlayMods,
+            ...patch.zenQuickPlayMods
+          });
+        } else {
+          Object.assign(target[sectionKey], patch[sectionKey]);
+        }
         changed = true;
       }
     }
@@ -500,6 +523,95 @@
     String.prototype.padStart = wrappedPadStart;
   }
 
+  let activeZenWrapper = null;
+  let applyingZenMods = false;
+  let hookAppliedDuringPull = false;
+
+  function applyModsToActiveZenWrapper(triggerPull) {
+    if (!zenQpLogic || !activeZenWrapper || !activeZenWrapper.state) return false;
+    if (activeZenWrapper.state.destroyed) {
+      activeZenWrapper = null;
+      return false;
+    }
+    if (applyingZenMods) return false;
+    hookAppliedDuringPull = false;
+    if (triggerPull && typeof activeZenWrapper.pullZenConfig === 'function') {
+      activeZenWrapper.pullZenConfig();
+    }
+    if (!hookAppliedDuringPull) {
+      applyingZenMods = true;
+      try {
+        zenQpLogic.applyZenQpModsToGameState(activeZenWrapper.state, config.zenQuickPlayMods);
+      } finally {
+        applyingZenMods = false;
+      }
+    }
+    return true;
+  }
+
+  function installZenSetoptionsHooks(wrapper) {
+    const gState = wrapper && wrapper.state;
+    const setopts = gState && gState.setoptions;
+    if (!gState || !setopts || !setopts.usezenconfig || setopts.__twfoxZenHooked) return;
+
+    try {
+      let survivalVal = setopts.survivalmode;
+      Object.defineProperty(setopts, 'survivalmode', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return survivalVal;
+        },
+        set(nextVal) {
+          survivalVal = nextVal;
+          if (!applyingZenMods && zenQpLogic) {
+            applyingZenMods = true;
+            try {
+              zenQpLogic.applyZenQpModsToGameState(gState, config.zenQuickPlayMods);
+              hookAppliedDuringPull = true;
+            } finally {
+              applyingZenMods = false;
+            }
+          }
+        }
+      });
+
+      let lockVal = setopts.locktime;
+      Object.defineProperty(setopts, 'locktime', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return lockVal;
+        },
+        set(nextVal) {
+          lockVal = nextVal;
+          if (!applyingZenMods && zenQpLogic) {
+            applyingZenMods = true;
+            try {
+              zenQpLogic.applyZenGravityMods(gState, config.zenQuickPlayMods);
+            } finally {
+              applyingZenMods = false;
+            }
+          }
+        }
+      });
+
+      Object.defineProperty(setopts, '__twfoxZenHooked', {
+        value: true,
+        enumerable: false
+      });
+    } catch (_) {}
+  }
+
+  function attachZenGameWrapper(wrapper) {
+    if (!wrapper || typeof wrapper !== 'object') return;
+    const gState = wrapper.state;
+    if (!gState || !gState.setoptions || !gState.setoptions.usezenconfig) return;
+    activeZenWrapper = wrapper;
+    installZenSetoptionsHooks(wrapper);
+    applyModsToActiveZenWrapper(false);
+  }
+
   function installMapHook() {
     const origMapSet = Map.prototype.set;
     if (origMapSet.__twfoxWrapped) return;
@@ -508,6 +620,7 @@
       const result = origMapSet.call(this, key, value);
       if (value !== null && typeof value === 'object') {
         rosterTracker.observeMapSet(this, key, value);
+        attachZenGameWrapper(value);
       }
       return result;
     }
@@ -701,12 +814,19 @@
         blitzTracker: { ...config.blitzTracker },
         fortyLinesTracker: { ...config.fortyLinesTracker },
         quickPlayTracker: { ...config.quickPlayTracker },
-        multiplayerLeaderboard: { ...config.multiplayerLeaderboard }
+        multiplayerLeaderboard: { ...config.multiplayerLeaderboard },
+        zenQuickPlayMods: { ...config.zenQuickPlayMods }
       };
+    },
+    reapplyZenQpMods() {
+      return applyModsToActiveZenWrapper(true);
     },
     updateConfig(patch) {
       if (applyConfigPatch(config, patch)) {
         saveConfig(config);
+        if (patch && Object.prototype.hasOwnProperty.call(patch, 'zenQuickPlayMods')) {
+          applyModsToActiveZenWrapper(true);
+        }
         emitState();
       }
       return this.getConfig();
@@ -714,6 +834,7 @@
     resetConfig() {
       config = cloneDefaults();
       saveConfig(config);
+      applyModsToActiveZenWrapper(true);
       emitState();
       return this.getConfig();
     },
