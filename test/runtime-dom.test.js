@@ -146,10 +146,16 @@ function createFakeDomEnvironment(protocol) {
   }
 
   function notifyObservers(target, attrName) {
-    for (const obs of observers) {
-      if (obs.target === target) {
-        obs.callback([{ target, attributeName: attrName }]);
+    let cur = target;
+    let depth = 0;
+    while (cur && depth < 32) {
+      for (const obs of observers) {
+        if (obs.target === cur && (cur === target || (obs.options && obs.options.subtree))) {
+          obs.callback([{ target, attributeName: attrName }]);
+        }
       }
+      cur = cur.parentNode;
+      depth += 1;
     }
   }
 
@@ -157,9 +163,11 @@ function createFakeDomEnvironment(protocol) {
     constructor(callback) {
       this.callback = callback;
       this.target = null;
+      this.options = null;
     }
-    observe(target) {
+    observe(target, options) {
       this.target = target;
+      this.options = options || {};
       observers.push(this);
     }
     disconnect() {
@@ -699,7 +707,7 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.homeMenu.classList.contains('hidden'), true);
   assert.equal(foxView.classList.contains('hidden'), false);
 
-  // Enter PRACTICA submenu -> shows 4WIDE, PENTOMINOS, MARATHON
+  // Enter PRACTICA submenu -> shows 4WIDE, PENTOMINOS, MARATHON, ZEN
   env.elements.get('twfoxtetrio-card-practice').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
   assert.equal(env.headerText.textContent, 'PRACTICA');
@@ -708,6 +716,7 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.ok(env.elements.get('twfoxtetrio-prac-4wide'));
   assert.ok(env.elements.get('twfoxtetrio-prac-pentomino'));
   assert.ok(env.elements.get('twfoxtetrio-prac-marathon'));
+  assert.ok(env.elements.get('twfoxtetrio-prac-zen'));
 
   // Clicking 4WIDE configures TETR.IO custom boardwidth=4 & launches real engine (#start_custom)
   env.elements.get('twfoxtetrio-prac-4wide').click();
@@ -1103,11 +1112,37 @@ test('bundled mod renders left Quick Play Weekly PB vertical bar, counts down in
   assert.equal(zenithHud.classList.contains('is-visible'), false);
 });
 
-test('bundled mod injects Quick Play Cards section into #zen_panel_content and applies effects live in ZEN', () => {
+test('vanilla SOLO -> ZEN stays untouched while FOXMOD -> PRACTICA -> ZEN shows original #zen_panel + Quick Play Cards live', () => {
   const env = createFakeDomEnvironment('https:');
   env.triggerDOMContentLoaded();
-  const zenSection = env.elements.get('twfoxtetrio-zen-qp-section');
-  assert.ok(zenSection, 'Expected Quick Play Cards section inside #zen_panel_content');
+
+  // Vanilla boot must NOT inject/show #twfoxtetrio-zen-qp-section on #zen_panel_content
+  assert.equal(env.elements.get('twfoxtetrio-zen-qp-section'), undefined);
+
+  // Vanilla SOLO -> ZEN wrapper (when launched outside PRACTICA) must stay untouched
+  const vanillaZenWrapper = {
+    state: {
+      g: 0.02,
+      holdlocked: false,
+      stats: { zenlevel: 2 },
+      setoptions: { usezenconfig: true, display_hold: true, spinbonuses: 'T-spins+' }
+    }
+  };
+  vm.runInContext(
+    `
+      const vMap = new Map();
+      vMap.set('zen_vanilla', vanillaRef);
+    `,
+    Object.assign(env.context, { vanillaRef: vanillaZenWrapper })
+  );
+  assert.equal(env.elements.get('twfoxtetrio-zen-qp-section'), undefined);
+  assert.equal(vanillaZenWrapper.state.setoptions.__twfoxZenHooked, undefined);
+
+  // Now open FOXMOD -> PRACTICA -> ZEN: arms Practice ZEN, starts custom preset, and opens #zen_panel + QP Cards
+  env.elements.get('twfoxtetrio-home-foxmod').click();
+  env.elements.get('twfoxtetrio-card-practice').click();
+  env.elements.get('twfoxtetrio-prac-zen').click();
+  assert.equal(env.getCustomStarts(), 1);
 
   let createHolderCalls = 0;
   const zenGameWrapper = {
@@ -1116,7 +1151,8 @@ test('bundled mod injects Quick Play Cards section into #zen_panel_content and a
       holdlocked: false,
       stats: { zenlevel: 3 },
       setoptions: {
-        usezenconfig: true,
+        usezenconfig: false,
+        zenlevels: false,
         display_hold: true,
         infinite_hold: false,
         infinite_movement: false,
@@ -1133,6 +1169,7 @@ test('bundled mod injects Quick Play Cards section into #zen_panel_content and a
         survival_messiness: 100
       }
     },
+    loadZenConfig() {},
     pullZenConfig() {
       const opts = zenGameWrapper.state.setoptions;
       opts.spinbonuses = 'T-spins+';
@@ -1143,13 +1180,22 @@ test('bundled mod injects Quick Play Cards section into #zen_panel_content and a
     }
   };
 
+  env.menus.classList.add('hidden');
   vm.runInContext(
     `
       const zenMap = new Map();
-      zenMap.set('zen_self', zenWrapperRef);
+      zenMap.set('prac_zen_self', zenWrapperRef);
     `,
     Object.assign(env.context, { zenWrapperRef: zenGameWrapper })
   );
+
+  // Uses real #zen_panel sidebar (not hidden) with usezenconfig=true and zenlevels=false (no /api/games/zen writes)
+  assert.equal(env.elements.get('zen_panel').classList.contains('hidden'), false);
+  assert.equal(zenGameWrapper.state.setoptions.usezenconfig, true);
+  assert.equal(zenGameWrapper.state.setoptions.zenlevels, false);
+  const zenSection = env.elements.get('twfoxtetrio-zen-qp-section');
+  assert.ok(zenSection, 'Expected Quick Play Cards section inside #zen_panel_content');
+  assert.equal(zenSection.classList.contains('hidden'), false);
 
   // Toggle NO HOLD + ALL-SPIN + INVISIBLE + DOUBLE HOLE directly in #zen_panel
   env.elements.get('twfoxtetrio-zen-mod-nohold').click();
@@ -1189,4 +1235,10 @@ test('bundled mod injects Quick Play Cards section into #zen_panel_content and a
   assert.equal(zenGameWrapper.state.setoptions.invisible, false);
   assert.equal(zenGameWrapper.state.g, 0.02);
   assert.equal(zenGameWrapper.state.setoptions.locktime, 30);
+
+  // Exiting back to menus hides #zen_panel & #twfoxtetrio-zen-qp-section cleanly
+  env.menus.setAttribute('data-menu-type', 'home');
+  env.menus.classList.remove('hidden');
+  assert.equal(env.elements.get('zen_panel').classList.contains('hidden'), true);
+  assert.equal(zenSection.classList.contains('hidden'), true);
 });

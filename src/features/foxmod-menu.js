@@ -88,6 +88,17 @@
       ],
       ['#99ccff', '#4b8aff', '#2351b8']
     ),
+    zen: buildPixelBadgeSvg(
+      [
+        '11111..11111.1...1',
+        '....1..2.....11..1',
+        '...2...2222..2.2.2',
+        '..2....2.....2..22',
+        '.3.....3.....3...3',
+        '33333..33333.3...3'
+      ],
+      ['#fdb9ff', '#c953c7', '#6b2b69']
+    ),
     multi: buildPixelBadgeSvg(
       [
         '1111...1111..1111',
@@ -256,6 +267,42 @@
       slot_counter3: 'level',
       slot_counter4: '---empty---',
       slot_counter5: 'score'
+    },
+    zen: {
+      bagtype: '7-bag',
+      spinbonuses: 'T-spins+',
+      combotable: 'multiplier',
+      kickset: 'SRS+',
+      allclears: true,
+      seed_random: true,
+      can_retry: true,
+      stock: 0,
+      clutch: true,
+      nolockout: true,
+      boardwidth: 10,
+      boardheight: 20,
+      survivalmode: 'none',
+      allow180: true,
+      allow_harddrop: true,
+      display_next: true,
+      display_hold: true,
+      nextcount: 5,
+      infinite_movement: false,
+      infinite_hold: false,
+      display_shadow: true,
+      are: 0,
+      lineclear_are: 0,
+      g: 0.02,
+      levels: false,
+      objective_type: 'none',
+      topoutisclear: false,
+      mission: 'ZEN',
+      slot_counter1: '---empty---',
+      slot_counter2: '---empty---',
+      slot_counter3: '---empty---',
+      slot_counter4: '---empty---',
+      slot_counter5: '---empty---',
+      song: 'RANDOMcalm'
     }
   };
 
@@ -1565,7 +1612,18 @@ body.twfox-ingame #menus > #footer {
       }
     }
 
-    startBtn.click();
+    const musicPicker = document.getElementById('music_picker_custom');
+    const prevSong = musicPicker ? musicPicker.getAttribute('data-song') : null;
+    if (musicPicker && presetMap.song) {
+      musicPicker.setAttribute('data-song', String(presetMap.song));
+    }
+    try {
+      startBtn.click();
+    } finally {
+      if (musicPicker && presetMap.song && prevSong !== null) {
+        musicPicker.setAttribute('data-song', prevSong);
+      }
+    }
     return true;
   }
 
@@ -1843,6 +1901,28 @@ body.twfox-ingame #menus > #footer {
           function () {
             hideFoxmodScrollersImmediately();
             applyCustomSoloPreset(CUSTOM_SOLO_PRESETS.marathon);
+          }
+        ),
+        makeGiantBanner(
+          {
+            cardId: 'twfoxtetrio-prac-zen',
+            icon: ICONS.zen,
+            title: 'ZEN',
+            subtitle: 'original zen + quick play cards (expert, all-spin, gravity, volatile...)',
+            bg: '#331933',
+            top: '#6b2b69',
+            left: '#582957',
+            bottom: '#2e162e',
+            titleColor: '#fdb9ff',
+            descColor: '#c993cc',
+            hit: 'confirm'
+          },
+          function () {
+            hideFoxmodScrollersImmediately();
+            if (typeof runtimeApi.enterPracticeZen === 'function') {
+              runtimeApi.enterPracticeZen();
+            }
+            applyCustomSoloPreset(CUSTOM_SOLO_PRESETS.zen);
           }
         )
       ];

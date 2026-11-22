@@ -16,6 +16,9 @@
   padding-top: 0.7em;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
+#${SECTION_ID}.hidden {
+  display: none;
+}
 #${SECTION_ID} .twfox-zen-hdr {
   display: flex;
   align-items: center;
@@ -373,7 +376,7 @@
         backfireBtn
       ]);
 
-      mountedSection = buildEl('div', { id: SECTION_ID }, [
+      mountedSection = buildEl('div', { id: SECTION_ID, className: 'hidden' }, [
         buildEl('div', { className: 'twfox-zen-hdr' }, [
           buildEl('h1', { text: 'QUICK PLAY CARDS' }),
           resetBtn
@@ -385,24 +388,48 @@
 
       panelContent.appendChild(mountedSection);
 
-      if (typeof root.MutationObserver === 'function') {
-        const panelObserver = new root.MutationObserver(function () {
-          renderSelection(api.getConfig());
-        });
-        panelObserver.observe(panelContent, {
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['class']
+      // Listen for native panel option clicks without MutationObserver on #zen_panel_content
+      // (a subtree class MutationObserver inside panelContent would re-trigger on card class updates).
+      if (!panelContent.__twfoxQpClickBound) {
+        panelContent.__twfoxQpClickBound = true;
+        panelContent.addEventListener('click', function (ev) {
+          const target = ev && ev.target;
+          if (
+            target &&
+            target.classList &&
+            target.classList.contains('panel_option') &&
+            mountedSection &&
+            !mountedSection.classList.contains('hidden')
+          ) {
+            if (typeof root.setTimeout === 'function') {
+              root.setTimeout(function () {
+                renderSelection(api.getConfig());
+              }, 0);
+            } else {
+              renderSelection(api.getConfig());
+            }
+          }
         });
       }
 
       return true;
     }
 
-    ensureSectionMounted();
-    api.subscribe(function (_state, cfg) {
-      ensureSectionMounted();
+    function syncVisibility(st, cfg) {
+      const isActive = Boolean(st && st.practiceZenActive);
+      if (!isActive) {
+        if (mountedSection && mountedSection.classList) {
+          mountedSection.classList.add('hidden');
+        }
+        return;
+      }
+      if (!ensureSectionMounted() || !mountedSection) return;
+      mountedSection.classList.remove('hidden');
       renderSelection(cfg);
+    }
+
+    api.subscribe(function (st, cfg) {
+      syncVisibility(st, cfg);
     });
   });
 }(typeof globalThis !== 'undefined' ? globalThis : window));

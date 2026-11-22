@@ -127,7 +127,8 @@
     inZenith: false,
     selfUsername: '',
     leaderboard: [],
-    isAnonymous: false
+    isAnonymous: false,
+    practiceZenActive: false
   };
 
   const listeners = new Set();
@@ -370,6 +371,7 @@
     timerDetector.reset();
 
     if (modeName === 'Blitz') {
+      exitPracticeZenSession(false);
       state.mode = 'blitz';
       state.inGame = true;
       state.currentScore = 0;
@@ -377,6 +379,7 @@
       refreshPBs();
       emitState();
     } else if (modeName === '40 Lines') {
+      exitPracticeZenSession(false);
       state.mode = '40l';
       state.inGame = true;
       state.currentScore = 0;
@@ -384,6 +387,9 @@
       refreshPBs();
       emitState();
     } else {
+      if (modeName !== 'Custom Solo') {
+        exitPracticeZenSession(false);
+      }
       const wasTracked = state.inGame && (state.mode === 'blitz' || state.mode === '40l');
       state.mode = typeof modeName === 'string' ? modeName : 'other';
       state.inGame = true;
@@ -526,9 +532,40 @@
   let activeZenWrapper = null;
   let applyingZenMods = false;
   let hookAppliedDuringPull = false;
+  let practiceZenRequested = false;
+  let practiceZenActive = false;
+  let lastEndedPracticeZen = false;
+
+  function setPracticeZenPanelVisibility(visible) {
+    const zenPanel = document.getElementById('zen_panel');
+    const qpSection = document.getElementById('twfoxtetrio-zen-qp-section');
+    if (zenPanel && zenPanel.classList) {
+      if (visible) zenPanel.classList.remove('hidden');
+      else zenPanel.classList.add('hidden');
+    }
+    if (qpSection && qpSection.classList) {
+      if (visible) qpSection.classList.remove('hidden');
+      else qpSection.classList.add('hidden');
+    }
+  }
+
+  function exitPracticeZenSession(fromMenuReturn) {
+    const wasActive = practiceZenActive || practiceZenRequested || Boolean(activeZenWrapper);
+    practiceZenRequested = false;
+    if (practiceZenActive) {
+      lastEndedPracticeZen = Boolean(fromMenuReturn);
+    }
+    practiceZenActive = false;
+    state.practiceZenActive = false;
+    activeZenWrapper = null;
+    if (wasActive) {
+      setPracticeZenPanelVisibility(false);
+    }
+    return wasActive;
+  }
 
   function applyModsToActiveZenWrapper(triggerPull) {
-    if (!zenQpLogic || !activeZenWrapper || !activeZenWrapper.state) return false;
+    if (!practiceZenActive || !zenQpLogic || !activeZenWrapper || !activeZenWrapper.state) return false;
     if (activeZenWrapper.state.destroyed) {
       activeZenWrapper = null;
       return false;
@@ -564,7 +601,7 @@
         },
         set(nextVal) {
           survivalVal = nextVal;
-          if (!applyingZenMods && zenQpLogic) {
+          if (practiceZenActive && !applyingZenMods && zenQpLogic) {
             applyingZenMods = true;
             try {
               zenQpLogic.applyZenQpModsToGameState(gState, config.zenQuickPlayMods);
@@ -585,7 +622,7 @@
         },
         set(nextVal) {
           lockVal = nextVal;
-          if (!applyingZenMods && zenQpLogic) {
+          if (practiceZenActive && !applyingZenMods && zenQpLogic) {
             applyingZenMods = true;
             try {
               zenQpLogic.applyZenGravityMods(gState, config.zenQuickPlayMods);
@@ -604,12 +641,41 @@
   }
 
   function attachZenGameWrapper(wrapper) {
-    if (!wrapper || typeof wrapper !== 'object') return;
+    if (!practiceZenRequested || !wrapper || typeof wrapper !== 'object') return;
     const gState = wrapper.state;
-    if (!gState || !gState.setoptions || !gState.setoptions.usezenconfig) return;
+    if (!gState || !gState.setoptions) return;
+
+    practiceZenRequested = false;
+    lastEndedPracticeZen = false;
+    practiceZenActive = true;
+    state.practiceZenActive = true;
+
+    const setopts = gState.setoptions;
+    setopts.usezenconfig = true;
+    setopts.zenlevels = false;
+    setopts.nolockout = true;
+    setopts.retryisclear = true;
+    setopts.infinite_stock = true;
+    setopts.pro = true;
+    setopts.garbagespecialbonus = true;
+    setopts.clutch = true;
+    setopts.b2bcharging = true;
+    setopts.b2bcharge_at = 4;
+    setopts.b2bcharge_base = 3;
+    setopts.allclear_garbage = 5;
+    setopts.allclear_b2b = 1;
+    setopts.allclear_b2b_sends = true;
+
     activeZenWrapper = wrapper;
+    if (typeof wrapper.loadZenConfig === 'function') {
+      try {
+        wrapper.loadZenConfig();
+      } catch (_) {}
+    }
     installZenSetoptionsHooks(wrapper);
-    applyModsToActiveZenWrapper(false);
+    setPracticeZenPanelVisibility(true);
+    applyModsToActiveZenWrapper(typeof wrapper.pullZenConfig === 'function');
+    emitState();
   }
 
   function installMapHook() {
@@ -724,6 +790,16 @@
     if (menusEl) {
       const syncMenusState = () => {
         const menusHidden = menusEl.classList.contains('hidden');
+        const menuType = menusEl.getAttribute('data-menu-type');
+        let needEmit = false;
+        if (!menusHidden) {
+          const onResults = menuType === 'results';
+          if (practiceZenActive && exitPracticeZenSession(onResults)) {
+            needEmit = true;
+          } else if (!onResults) {
+            lastEndedPracticeZen = false;
+          }
+        }
         if (!menusHidden && state.inGame) {
           const prevMode = state.mode;
           if (prevMode === 'blitz' || prevMode === '40l') {
@@ -736,13 +812,26 @@
           scoreDetector.reset();
           timerDetector.reset();
           if (prevMode === 'blitz' || prevMode === '40l') {
-            emitState();
+            needEmit = true;
           }
         }
         if (sampleZenithProgress()) {
+          needEmit = true;
+        }
+        if (needEmit) {
           emitState();
         }
       };
+
+      const startResultsBtn = document.getElementById('start_results');
+      if (startResultsBtn && !startResultsBtn.__twfoxPracticeZenBound) {
+        startResultsBtn.__twfoxPracticeZenBound = true;
+        startResultsBtn.addEventListener('click', function () {
+          if (lastEndedPracticeZen) {
+            practiceZenRequested = true;
+          }
+        });
+      }
 
       const menuObserver = new MutationObserver(syncMenusState);
       menuObserver.observe(menusEl, {
@@ -817,6 +906,15 @@
         multiplayerLeaderboard: { ...config.multiplayerLeaderboard },
         zenQuickPlayMods: { ...config.zenQuickPlayMods }
       };
+    },
+    enterPracticeZen() {
+      practiceZenRequested = true;
+      lastEndedPracticeZen = false;
+    },
+    exitPracticeZen() {
+      if (exitPracticeZenSession(false)) {
+        emitState();
+      }
     },
     reapplyZenQpMods() {
       return applyModsToActiveZenWrapper(true);
