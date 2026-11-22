@@ -3494,11 +3494,8 @@ body.twfox-ingame #menus > #footer {
         });
         const catDefs = [
           ['all', 'Todos'],
-          ['skin', 'Piezas'],
-          ['board', 'Tablero'],
-          ['sfx', 'SFX'],
-          ['background', 'Fondos'],
-          ['animated', 'Animados']
+          ['skins', 'Skins'],
+          ['sfx', 'SFX']
         ];
         const catWrap = createEl('div', { className: 'twfox-assets-cats' });
         const catButtons = new Map();

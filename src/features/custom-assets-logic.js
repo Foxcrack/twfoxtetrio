@@ -398,6 +398,8 @@
       if (!item) return false;
       if (cat === 'animated') {
         if (!item.animated) return false;
+      } else if (cat === 'skins') {
+        if (item.category === 'sfx') return false;
       } else if (cat !== 'all' && item.category !== cat) {
         return false;
       }

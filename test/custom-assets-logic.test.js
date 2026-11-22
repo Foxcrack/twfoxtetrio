@@ -156,6 +156,7 @@ test('catalog classification, vote lookup, URL candidates, and filtering/sorting
     ]
   );
 
+  assert.equal(logic.filterAndSortCatalog(items, { category: 'skins' }).length, 3);
   assert.equal(logic.filterAndSortCatalog(items, { category: 'board' }).length, 1);
   assert.equal(logic.filterAndSortCatalog(items, { category: 'sfx' }).length, 1);
   assert.equal(logic.filterAndSortCatalog(items, { category: 'animated' }).length, 1);

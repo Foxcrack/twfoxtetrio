@@ -350,5 +350,7 @@ module.exports = {
   findTetrioAsar,
   installMod,
   uninstallMod,
-  showStatus
+  showStatus,
+  injectModIntoMain,
+  stripMainMod
 };

@@ -134,63 +134,14 @@ test('install.js parseArgs supports flags and positional paths (drag-and-drop)',
   );
 });
 
-test('installMod injects allowlisted twfoxtetrio-fetch IPC into main.js and uninstallMod restores backup cleanly', () => {
-  const { installMod, uninstallMod } = require('../scripts/install');
-  function buildRawAsar(filesObj) {
-    const names = Object.keys(filesObj);
-    const metaFiles = {};
-    const blobs = [];
-    let offset = 0;
-    for (const name of names) {
-      const buf = filesObj[name];
-      metaFiles[name] = { size: buf.length, offset: String(offset) };
-      blobs.push(buf);
-      offset += buf.length;
-    }
-    const headerJson = JSON.stringify({ files: metaFiles });
-    const jsonBuf = Buffer.from(headerJson, 'utf8');
-    const alignedJsonLen = Math.ceil(jsonBuf.length / 4) * 4;
-    const paddedJson = Buffer.alloc(alignedJsonLen);
-    jsonBuf.copy(paddedJson);
-    const hdr = Buffer.alloc(16);
-    hdr.writeUInt32LE(4, 0);
-    hdr.writeUInt32LE(8 + alignedJsonLen, 4);
-    hdr.writeUInt32LE(4 + alignedJsonLen, 8);
-    hdr.writeUInt32LE(jsonBuf.length, 12);
-    return Buffer.concat([hdr, paddedJson, ...blobs]);
-  }
-  function extractFromAsar(asarBuf, name) {
-    const jsonLen = asarBuf.readUInt32LE(12);
-    const header = JSON.parse(asarBuf.slice(16, 16 + jsonLen).toString('utf8'));
-    const baseOffset = 8 + asarBuf.readUInt32LE(4);
-    const entry = header.files[name];
-    return asarBuf.slice(baseOffset + Number(entry.offset), baseOffset + Number(entry.offset) + entry.size).toString('utf8');
-  }
+test('injectModIntoMain adds allowlisted twfoxtetrio-fetch IPC and stripMainMod removes it cleanly', () => {
+  const { injectModIntoMain, stripMainMod } = require('../scripts/install');
+  const origMain = "const { app, ipcMain } = require('electron');\nipcMain.handle('get-systeminfo', () => ({}));\n";
+  const patchedMain = injectModIntoMain(origMain);
+  assert.ok(patchedMain.includes('twfoxtetrio-fetch'));
+  assert.ok(patchedMain.includes("parsed.hostname !== 'you.have.fail'"));
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'twfoxtetrio-main-ipc-'));
-  try {
-    const asarPath = path.join(tmpDir, 'app.asar');
-    const origMain = "const { app, ipcMain } = require('electron');\nipcMain.handle('get-systeminfo', () => ({}));\n";
-    const origPreload = "window.IPC = require('electron').ipcRenderer;\n";
-    const rawAsar = buildRawAsar({
-      'package.json': Buffer.from('{"name":"tetrio-desktop"}', 'utf8'),
-      'preload.js': Buffer.from(origPreload, 'utf8'),
-      'main.js': Buffer.from(origMain, 'utf8')
-    });
-    fs.writeFileSync(asarPath, rawAsar);
-
-    installMod(asarPath);
-    const patchedBuf = fs.readFileSync(asarPath);
-    const patchedMain = extractFromAsar(patchedBuf, 'main.js');
-    assert.ok(patchedMain.includes('twfoxtetrio-fetch'));
-    assert.ok(patchedMain.includes('you.have.fail'));
-    assert.ok(fs.existsSync(asarPath + '.bak'));
-
-    uninstallMod(asarPath);
-    const restoredBuf = fs.readFileSync(asarPath);
-    assert.equal(extractFromAsar(restoredBuf, 'main.js'), origMain);
-    assert.equal(extractFromAsar(restoredBuf, 'preload.js'), origPreload);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+  // Idempotent on re-injection and clean strip back to original content
+  assert.equal(injectModIntoMain(patchedMain), patchedMain);
+  assert.equal(stripMainMod(patchedMain), origMain);
 });

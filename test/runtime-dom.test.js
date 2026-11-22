@@ -1391,6 +1391,21 @@ test('CONFIG Assets Studio connects to you.have.fail/tetrioplus, downloads/insta
   const exploreList = env.elements.get('twfoxtetrio-assets-explore-list');
   assert.equal(exploreList.children.length, 2);
 
+  // Verify only Todos, Skins, and SFX category buttons are shown
+  assert.ok(env.elements.get('twfoxtetrio-assets-cat-all'));
+  assert.ok(env.elements.get('twfoxtetrio-assets-cat-skins'));
+  assert.ok(env.elements.get('twfoxtetrio-assets-cat-sfx'));
+  assert.equal(env.elements.get('twfoxtetrio-assets-cat-board'), undefined);
+  assert.equal(env.elements.get('twfoxtetrio-assets-cat-background'), undefined);
+  assert.equal(env.elements.get('twfoxtetrio-assets-cat-animated'), undefined);
+
+  env.elements.get('twfoxtetrio-assets-cat-skins').click();
+  assert.equal(exploreList.children.length, 1);
+  env.elements.get('twfoxtetrio-assets-cat-sfx').click();
+  assert.equal(exploreList.children.length, 1);
+  env.elements.get('twfoxtetrio-assets-cat-all').click();
+  assert.equal(exploreList.children.length, 2);
+
   // Filter search -> narrows down to Carbon Fiber and click DESCARGAR E INSTALAR
   const searchEl = env.elements.get('twfoxtetrio-assets-search');
   searchEl.value = 'Carbon';
