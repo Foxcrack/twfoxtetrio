@@ -407,3 +407,49 @@ test('host and client exchange WebRTC handshake via MQTT-over-WebSocket relay', 
   client.close();
   host.close();
 });
+
+test('3-player Versus KO ranks Nº1 survivor down to first eliminated player in standings', async () => {
+  const rtcFactory = createLoopbackRtcFactory();
+  const host = p2p.createHostServer({ hostName: 'TWFoxcrack', rtcFactory });
+  const c2 = p2p.createClientPeer({ playerName: 'SegundoKO', rtcFactory });
+  const c3 = p2p.createClientPeer({ playerName: 'PrimeroKO', rtcFactory });
+
+  for (const [peer, name] of [[c2, 'SegundoKO'], [c3, 'PrimeroKO']]) {
+    const inv = await host.createInvite(name);
+    const ans = await peer.joinFromInvite(inv.code);
+    await host.acceptAnswer(inv.peerId, ans);
+  }
+  await new Promise((r) => setTimeout(r, 35));
+
+  assert.equal(host.getSnapshot().players.length, 3);
+  host.startMatch();
+  await new Promise((r) => setTimeout(r, 25));
+
+  // PrimeroKO dies first -> provisionally Nº3 (2 alive left)
+  c3.reportSelfKo({ vs: 12.5, attackSent: 2, lines: 4 });
+  await new Promise((r) => setTimeout(r, 25));
+  const afterFirstKo = host.getSnapshot().players.find((p) => p.name === 'PrimeroKO');
+  assert.equal(afterFirstKo.alive, false);
+  assert.equal(afterFirstKo.placement, 3);
+
+  // SegundoKO dies second -> match ends: TWFoxcrack Nº1 (survivor), SegundoKO Nº2, PrimeroKO Nº3
+  c2.reportSelfKo({ vs: 35.0, attackSent: 7, lines: 11 });
+  await new Promise((r) => setTimeout(r, 30));
+
+  const hostSnap = host.getSnapshot();
+  const clientSnap = c2.getSnapshot();
+  assert.equal(hostSnap.room.status, 'results');
+  assert.equal(hostSnap.room.winner, 'TWFoxcrack');
+  assert.deepEqual(
+    hostSnap.room.lastResults.map((r) => `${r.placement}:${r.name}:${r.alive}`),
+    ['1:TWFoxcrack:true', '2:SegundoKO:false', '3:PrimeroKO:false']
+  );
+  assert.deepEqual(
+    clientSnap.room.lastResults.map((r) => `${r.placement}:${r.name}`),
+    ['1:TWFoxcrack', '2:SegundoKO', '3:PrimeroKO']
+  );
+
+  c2.close();
+  c3.close();
+  host.close();
+});

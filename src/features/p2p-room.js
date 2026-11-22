@@ -55,6 +55,59 @@
     return null;
   }
 
+  /**
+   * Builds final ordered standings for a completed round.
+   * - Versus KO: survivor (#1) first, then descending koOrder (#2 was last KO'd down to #N first KO'd).
+   * - Blitz: highest score first, breaking ties by lines, survival, and koOrder.
+   */
+  function buildRoundStandings(playerList, disconnectedList, gameMode, roundStartAt, endedAt) {
+    const startTs = Number(roundStartAt) || 0;
+    const endTs = Number(endedAt) || startTs;
+    const combined = []
+      .concat(Array.isArray(playerList) ? playerList : [])
+      .concat(Array.isArray(disconnectedList) ? disconnectedList : []);
+
+    const sorted = combined.slice().sort((a, b) => {
+      if (gameMode === 'blitz') {
+        return (
+          ((Number(b.score) || 0) - (Number(a.score) || 0)) ||
+          ((b.lines || 0) - (a.lines || 0)) ||
+          (Number(Boolean(b.alive)) - Number(Boolean(a.alive))) ||
+          ((b.koOrder || 0) - (a.koOrder || 0))
+        );
+      }
+      return (
+        (Number(Boolean(b.alive)) - Number(Boolean(a.alive))) ||
+        ((b.koOrder || 0) - (a.koOrder || 0)) ||
+        ((Number(b.vs) || 0) - (Number(a.vs) || 0)) ||
+        ((Number(b.attack) || 0) - (Number(a.attack) || 0)) ||
+        ((b.lines || 0) - (a.lines || 0)) ||
+        ((Number(b.score) || 0) - (Number(a.score) || 0))
+      );
+    });
+
+    return sorted.map((p, idx) => {
+      const stopTs = p.eliminatedAt && p.eliminatedAt > startTs ? p.eliminatedAt : endTs;
+      return {
+        id: p.id,
+        name: p.name,
+        isHost: Boolean(p.isHost),
+        placement: idx + 1,
+        alive: Boolean(p.alive),
+        disconnected: Boolean(p.disconnected),
+        koOrder: p.koOrder || null,
+        score: Number(p.score) || 0,
+        lines: Number(p.lines) || 0,
+        attack: Number(p.attack) || 0,
+        vs: Number(p.vs) || 0,
+        pps: Number(p.pps) || 0,
+        apm: Number(p.apm) || 0,
+        wins: Number(p.wins) || 0,
+        durationMs: startTs > 0 ? Math.max(0, stopTs - startTs) : 0
+      };
+    });
+  }
+
   function concatUint8(parts) {
     let total = 0;
     for (const p of parts) total += p.length;
@@ -529,7 +582,8 @@
       gravityLevel: 1,
       status: 'lobby',
       round: 0,
-      winner: null
+      winner: null,
+      lastResults: null
     };
 
     const players = new Map();
@@ -540,10 +594,15 @@
       ready: true,
       alive: true,
       finished: false,
+      koOrder: null,
+      placement: null,
+      eliminatedAt: null,
       score: 0,
       lines: 0,
       attack: 0,
       vs: 0,
+      pps: 0,
+      apm: 0,
       wins: 0,
       board: null
     });
@@ -558,6 +617,9 @@
     const listeners = new Set();
     let nextPeerSeq = 2;
     let attackNonce = 1;
+    let eliminationSeq = 0;
+    let roundStartAt = 0;
+    let roundDisconnected = [];
     let signalingStatus = shouldAutoSignal ? 'connecting' : 'manual';
     let signalBus = null;
     let pollTimer = null;
@@ -632,17 +694,33 @@
     function finalizeRound(winnerPlayer, chatMessage) {
       if (room.status !== 'playing') return;
       clearBlitzTimer();
+      const endTs = Date.now();
       if (winnerPlayer) {
         winnerPlayer.wins += 1;
         room.winner = winnerPlayer.name;
       } else {
         room.winner = 'DRAW';
       }
+      const standings = buildRoundStandings(
+        Array.from(players.values()),
+        roundDisconnected,
+        room.gameMode,
+        roundStartAt,
+        endTs
+      );
+      for (const item of standings) {
+        const p = players.get(item.id);
+        if (p) p.placement = item.placement;
+      }
+      room.lastResults = standings;
       room.status = 'results';
       const endPacket = {
         type: 'round_end',
+        round: room.round,
+        gameMode: room.gameMode,
         winner: room.winner,
-        players: getSnapshot().players
+        players: getSnapshot().players,
+        standings
       };
       broadcast(endPacket);
       pushChat('SYS', chatMessage || `${room.winner} wins round #${room.round}!`, true);
@@ -655,6 +733,26 @@
         (a, b) => (b.score - a.score) || (b.lines - a.lines) || (Number(b.alive) - Number(a.alive))
       );
       return ranked[0] || null;
+    }
+
+    function markPlayerEliminated(player, extraStats) {
+      if (!player || !player.alive || room.status !== 'playing') return false;
+      if (extraStats && typeof extraStats === 'object') {
+        if (extraStats.score !== undefined) player.score = Number(extraStats.score) || 0;
+        if (extraStats.lines !== undefined) player.lines = Number(extraStats.lines) || 0;
+        if (extraStats.attack !== undefined) player.attack = Number(extraStats.attack) || 0;
+        if (extraStats.vs !== undefined) player.vs = Number(extraStats.vs) || 0;
+        if (extraStats.pps !== undefined) player.pps = Number(extraStats.pps) || 0;
+        if (extraStats.apm !== undefined) player.apm = Number(extraStats.apm) || 0;
+      }
+      player.alive = false;
+      player.finished = true;
+      eliminationSeq += 1;
+      player.koOrder = eliminationSeq;
+      player.eliminatedAt = Date.now();
+      const aliveRemaining = Array.from(players.values()).filter((p) => p.alive).length;
+      player.placement = aliveRemaining + 1;
+      return true;
     }
 
     function evaluateRoundEnd() {
@@ -731,6 +829,8 @@
           player.lines = Number(msg.lines) || 0;
           player.attack = Number(msg.attack) || 0;
           player.vs = Number(msg.vs) || 0;
+          player.pps = Number(msg.pps) || 0;
+          player.apm = Number(msg.apm) || 0;
           broadcast({
             type: 'peer_board',
             id: peerId,
@@ -739,6 +839,8 @@
             lines: player.lines,
             attack: player.attack,
             vs: player.vs,
+            pps: player.pps,
+            apm: player.apm,
             alive: player.alive
           });
           notify('peer_board', { id: peerId });
@@ -749,13 +851,16 @@
         case 'finish_match':
           player.finished = true;
           if (msg.score !== undefined) player.score = Number(msg.score) || 0;
+          if (msg.lines !== undefined) player.lines = Number(msg.lines) || 0;
+          if (msg.attack !== undefined) player.attack = Number(msg.attack) || 0;
+          if (msg.vs !== undefined) player.vs = Number(msg.vs) || 0;
+          if (msg.pps !== undefined) player.pps = Number(msg.pps) || 0;
+          if (msg.apm !== undefined) player.apm = Number(msg.apm) || 0;
           broadcastRoomState();
           evaluateRoundEnd();
           break;
         case 'ko':
-          if (player.alive) {
-            player.alive = false;
-            player.finished = true;
+          if (markPlayerEliminated(player, msg)) {
             broadcastRoomState();
             evaluateRoundEnd();
           }
@@ -776,10 +881,15 @@
             ready: true,
             alive: room.status !== 'playing',
             finished: false,
+            koOrder: null,
+            placement: null,
+            eliminatedAt: null,
             score: 0,
             lines: 0,
             attack: 0,
             vs: 0,
+            pps: 0,
+            apm: 0,
             wins: 0,
             board: null
           });
@@ -790,6 +900,17 @@
       channel.onmessage = (ev) => handlePeerMessage(peerId, ev && ev.data);
       channel.onclose = () => {
         const left = players.get(peerId);
+        if (left && room.status === 'playing') {
+          const snapshotLeft = { ...left, disconnected: true };
+          if (snapshotLeft.alive) {
+            snapshotLeft.alive = false;
+            snapshotLeft.finished = true;
+            eliminationSeq += 1;
+            snapshotLeft.koOrder = eliminationSeq;
+            snapshotLeft.eliminatedAt = Date.now();
+          }
+          roundDisconnected.push(snapshotLeft);
+        }
         connections.delete(peerId);
         players.delete(peerId);
         announcedPeers.delete(peerId);
@@ -882,14 +1003,23 @@
       room.round += 1;
       room.status = 'playing';
       room.winner = null;
+      room.lastResults = null;
+      eliminationSeq = 0;
+      roundStartAt = Date.now();
+      roundDisconnected = [];
       const seed = (Date.now() ^ (room.round * 2654435761)) >>> 0;
       for (const p of players.values()) {
         p.alive = true;
         p.finished = false;
+        p.koOrder = null;
+        p.placement = null;
+        p.eliminatedAt = null;
         p.score = 0;
         p.lines = 0;
         p.attack = 0;
         p.vs = 0;
+        p.pps = 0;
+        p.apm = 0;
         p.board = null;
       }
       if (room.gameMode === 'blitz') {
@@ -925,6 +1055,8 @@
       self.lines = snapshot.lines || 0;
       self.attack = snapshot.attackSent || 0;
       self.vs = Number(snapshot.vs) || 0;
+      self.pps = Number(snapshot.pps) || 0;
+      self.apm = Number(snapshot.apm) || 0;
       broadcast({
         type: 'peer_board',
         id: 'host',
@@ -933,6 +1065,8 @@
         lines: self.lines,
         attack: self.attack,
         vs: self.vs,
+        pps: self.pps,
+        apm: self.apm,
         alive: self.alive
       });
       notify('self_board', { id: 'host' });
@@ -947,17 +1081,30 @@
       if (!self) return;
       self.finished = true;
       if (snapshot && snapshot.score !== undefined) self.score = Number(snapshot.score) || 0;
+      if (snapshot && snapshot.lines !== undefined) self.lines = Number(snapshot.lines) || 0;
+      if (snapshot && snapshot.attackSent !== undefined) self.attack = Number(snapshot.attackSent) || 0;
+      if (snapshot && snapshot.vs !== undefined) self.vs = Number(snapshot.vs) || 0;
+      if (snapshot && snapshot.pps !== undefined) self.pps = Number(snapshot.pps) || 0;
+      if (snapshot && snapshot.apm !== undefined) self.apm = Number(snapshot.apm) || 0;
       broadcastRoomState();
       if (room.gameMode === 'blitz') {
         evaluateRoundEnd();
       }
     }
 
-    function reportSelfKo() {
+    function reportSelfKo(snapshot) {
       const self = players.get('host');
-      if (!self || !self.alive) return;
-      self.alive = false;
-      self.finished = true;
+      const extra = snapshot
+        ? {
+            score: snapshot.score,
+            lines: snapshot.lines,
+            attack: snapshot.attackSent !== undefined ? snapshot.attackSent : snapshot.attack,
+            vs: snapshot.vs,
+            pps: snapshot.pps,
+            apm: snapshot.apm
+          }
+        : null;
+      if (!markPlayerEliminated(self, extra)) return;
       broadcastRoomState();
       evaluateRoundEnd();
     }
@@ -1122,7 +1269,8 @@
       gravityLevel: 1,
       status: 'connecting',
       round: 0,
-      winner: null
+      winner: null,
+      lastResults: null
     };
     let players = [];
     let chat = [];
@@ -1184,6 +1332,8 @@
             target.lines = msg.lines;
             target.attack = msg.attack;
             target.vs = msg.vs;
+            if (msg.pps !== undefined) target.pps = Number(msg.pps) || 0;
+            if (msg.apm !== undefined) target.apm = Number(msg.apm) || 0;
             target.alive = msg.alive;
             notify('peer_board', { id: msg.id });
           }
@@ -1193,6 +1343,7 @@
           room.status = 'playing';
           room.round = msg.round;
           room.winner = null;
+          room.lastResults = null;
           notify('match_start', msg);
           break;
         case 'garbage':
@@ -1202,6 +1353,7 @@
           room.status = 'results';
           room.winner = msg.winner;
           if (Array.isArray(msg.players)) players = msg.players;
+          if (Array.isArray(msg.standings)) room.lastResults = msg.standings;
           notify('round_end', msg);
           break;
       }
@@ -1463,6 +1615,8 @@
           selfPlayer.lines = snapshot.lines || 0;
           selfPlayer.attack = snapshot.attackSent || 0;
           selfPlayer.vs = Number(snapshot.vs) || 0;
+          selfPlayer.pps = Number(snapshot.pps) || 0;
+          selfPlayer.apm = Number(snapshot.apm) || 0;
         }
         send({
           type: 'board_state',
@@ -1470,7 +1624,9 @@
           score: Number(snapshot.score) || 0,
           lines: snapshot.lines || 0,
           attack: snapshot.attackSent || 0,
-          vs: Number(snapshot.vs) || 0
+          vs: Number(snapshot.vs) || 0,
+          pps: Number(snapshot.pps) || 0,
+          apm: Number(snapshot.apm) || 0
         });
         if (selfPlayer) notify('self_board', { id: selfId });
       },
@@ -1480,11 +1636,26 @@
       reportSelfFinish(snapshot) {
         send({
           type: 'finish_match',
-          score: Number(snapshot && snapshot.score) || 0
+          score: Number(snapshot && snapshot.score) || 0,
+          lines: Number(snapshot && snapshot.lines) || 0,
+          attack: Number(snapshot && (snapshot.attackSent !== undefined ? snapshot.attackSent : snapshot.attack)) || 0,
+          vs: Number(snapshot && snapshot.vs) || 0,
+          pps: Number(snapshot && snapshot.pps) || 0,
+          apm: Number(snapshot && snapshot.apm) || 0
         });
       },
-      reportSelfKo() {
-        send({ type: 'ko' });
+      reportSelfKo(snapshot) {
+        const extra = snapshot
+          ? {
+              score: Number(snapshot.score) || 0,
+              lines: Number(snapshot.lines) || 0,
+              attack: Number(snapshot.attackSent !== undefined ? snapshot.attackSent : snapshot.attack) || 0,
+              vs: Number(snapshot.vs) || 0,
+              pps: Number(snapshot.pps) || 0,
+              apm: Number(snapshot.apm) || 0
+            }
+          : {};
+        send({ type: 'ko', ...extra });
       },
       close
     };
@@ -1500,6 +1671,7 @@
     encodeSignal,
     decodeSignal,
     pickAttackTarget,
+    buildRoundStandings,
     createHostServer,
     createClientPeer
   };

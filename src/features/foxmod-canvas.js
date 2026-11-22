@@ -492,7 +492,7 @@
   /**
    * Renders a compact opponent board preview using native TETR.IO skin colors.
    */
-  function renderMiniBoard(canvas, compactBoard, alive) {
+  function renderMiniBoard(canvas, compactBoard, alive, placement) {
     if (!canvas || typeof canvas.getContext !== 'function') return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -500,7 +500,7 @@
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#06080f';
     ctx.fillRect(0, 0, w, h);
 
     if (Array.isArray(compactBoard) && compactBoard.length > 0) {
@@ -526,17 +526,25 @@
       }
     }
 
-    ctx.strokeStyle = alive === false ? '#ff3d5c' : '#ffffff';
+    ctx.strokeStyle = alive === false ? '#ff4666' : '#53679c';
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, w, h);
 
     if (alive === false) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+      ctx.fillStyle = 'rgba(8, 6, 12, 0.62)';
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = '#ff4b6e';
-      ctx.font = '900 14px HUN, Segoe UI, sans-serif';
+      ctx.font = '900 15px HUN, Segoe UI, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('KO', w / 2, h / 2 + 5);
+      const numPlacement = Number(placement);
+      if (Number.isFinite(numPlacement) && numPlacement > 0) {
+        ctx.fillText('KO', w / 2, h / 2 - 2);
+        ctx.fillStyle = '#ffd1da';
+        ctx.font = '800 12px HUN, Segoe UI, sans-serif';
+        ctx.fillText('Nº' + numPlacement, w / 2, h / 2 + 15);
+      } else {
+        ctx.fillText('KO', w / 2, h / 2 + 5);
+      }
     }
   }
 

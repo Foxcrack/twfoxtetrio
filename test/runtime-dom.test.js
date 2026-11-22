@@ -864,8 +864,54 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(lbRows.children[0].children[1].textContent, '4,200');
   assert.match(lbRows.children[1].children[0].textContent, /TWFOXCRACK/);
 
-  peerClient.close();
   backLobbyBtn.click();
+  assert.equal(env.body.classList.contains('twfox-ingame'), false);
+  assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
+
+  // Switch to VERSUS KO round: client KOs -> Victory finish animation overlay opens -> Podium Nº1 survivor -> Nº2 KO
+  roomMode.value = 'vs';
+  roomMode.dispatchEvent('change');
+  await new Promise((r) => setTimeout(r, 20));
+  startBtn.click();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(env.elements.get('twfoxtetrio-multi-finish-overlay').classList.contains('hidden'), true);
+
+  peerClient.reportSelfKo({ vs: 24.5, attackSent: 5, lines: 8 });
+  await new Promise((r) => setTimeout(r, 30));
+
+  const finishOverlay = env.elements.get('twfoxtetrio-multi-finish-overlay');
+  assert.equal(finishOverlay.classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-finish-title').textContent, 'VICTORY!');
+
+  // Advance/click through to dedicated Podium Results view (Nº1 survivor at top, Nº2 below)
+  env.elements.get('twfoxtetrio-finish-skip-btn').click();
+  assert.equal(env.elements.get('twfoxtetrio-multi-game').classList.contains('hidden'), true);
+  assert.equal(env.elements.get('twfoxtetrio-multi-results').classList.contains('hidden'), false);
+  const resRows = env.elements.get('twfoxtetrio-results-list').children;
+  assert.equal(resRows.length, 2);
+  assert.equal(resRows[0].children[0].textContent, 'Nº1');
+  assert.match(resRows[0].children[1].children[0].textContent, /TWFOXCRACK/);
+  assert.equal(resRows[0].children[1].children[1].textContent, 'SURVIVOR');
+  assert.equal(resRows[1].children[0].textContent, 'Nº2');
+  assert.match(resRows[1].children[1].children[0].textContent, /MAEKRIX|Maekrix/);
+  assert.equal(resRows[1].children[1].children[1].textContent, 'KO');
+
+  // Returning to lobby exposes VIEW RESULTS button cleanly and can reopen Results
+  env.elements.get('twfoxtetrio-results-lobby-btn').click();
+  assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-view-results-btn').classList.contains('hidden'), false);
+  env.elements.get('twfoxtetrio-view-results-btn').click();
+  assert.equal(env.elements.get('twfoxtetrio-multi-results').classList.contains('hidden'), false);
+
+  // PLAY AGAIN from Results launches Round 3 directly
+  env.elements.get('twfoxtetrio-results-again-btn').click();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(env.elements.get('twfoxtetrio-multi-results').classList.contains('hidden'), true);
+  assert.equal(env.elements.get('twfoxtetrio-multi-game').classList.contains('hidden'), false);
+  backLobbyBtn.click();
+  assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
+
+  peerClient.close();
   assert.equal(env.body.classList.contains('twfox-ingame'), false);
   assert.equal(env.elements.get('twfoxtetrio-multi-lobby').classList.contains('hidden'), false);
 
