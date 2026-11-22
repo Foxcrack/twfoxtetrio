@@ -43,6 +43,42 @@
     return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 10) / 10 : 0;
   }
 
+  // Exact TETR.IO Zenith Tower floor thresholds (ge.FloorDistance from tetrio.js, F1..F10)
+  const ZENITH_FLOOR_DISTANCES = Object.freeze([
+    0, 50, 150, 300, 450, 650, 850, 1100, 1350, 1650
+  ]);
+
+  /**
+   * Computes normalized tick positions (0..1) for each Zenith floor threshold strictly
+   * between 0 M and the player's Weekly PB altitude.
+   *
+   * @param {number} bestAltitude
+   * @param {readonly number[]} [floorDistances]
+   * @returns {Array<{ floor: number, altitude: number, ratio: number }>}
+   */
+  function computeFloorTicks(bestAltitude, floorDistances) {
+    const best = Number(bestAltitude);
+    if (!Number.isFinite(best) || best <= 0) {
+      return [];
+    }
+    const distances = Array.isArray(floorDistances) && floorDistances.length > 0
+      ? floorDistances
+      : ZENITH_FLOOR_DISTANCES;
+    const ticks = [];
+    for (let i = 0; i < distances.length; i += 1) {
+      const altitude = Number(distances[i]);
+      if (!Number.isFinite(altitude) || altitude <= 0 || altitude >= best) {
+        continue;
+      }
+      ticks.push({
+        floor: i + 1,
+        altitude,
+        ratio: altitude / best
+      });
+    }
+    return ticks;
+  }
+
   /**
    * Computes Quick Play (Zenith Tower) Weekly PB pace HUD state:
    * - While currentTenths <= bestTenths: red digits counting down remaining meters
@@ -97,8 +133,10 @@
   }
 
   return {
+    ZENITH_FLOOR_DISTANCES,
     formatAltitude,
     parseAltitudeText,
+    computeFloorTicks,
     computeQuickPlayDelta
   };
 }));

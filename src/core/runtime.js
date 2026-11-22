@@ -284,8 +284,12 @@
     const bodyEl = document.body;
     if (!bodyEl || !bodyEl.classList.contains('inzenith')) return false;
     if (bodyEl.classList.contains('spectating')) return false;
+    // Live TETR.IO adds body.ingame_phys for every active local run (including AGAIN retries),
+    // while #zenithmenu retains a stale .inresults class between deaths and AGAIN.
+    if (bodyEl.classList.contains('ingame_phys')) return true;
     const zMenu = document.getElementById('zenithmenu');
     if (zMenu) {
+      if (zMenu.classList.contains('hidden')) return true;
       return zMenu.classList.contains('rolledup') && !zMenu.classList.contains('inresults');
     }
     const menusEl = document.getElementById('menus');

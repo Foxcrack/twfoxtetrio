@@ -991,13 +991,23 @@ test('bundled mod renders left Quick Play Weekly PB vertical bar, counts down in
   assert.equal(barWrap.classList.contains('is-collapsed'), false);
   assert.equal(barFill.getAttribute('data-progress'), '0.00%');
 
-  // Climbing to 750.0m counts down to 250.0 M remaining and fills bar to 75%
+  // Renders floor tick marks for floors strictly below Weekly PB (1000 M -> F2..F7: 50..850 M)
+  const ticks = barWrap.querySelectorAll('.twfox-z-bar-tick');
+  assert.equal(ticks.length, 6);
+  assert.equal(ticks[0].getAttribute('data-floor'), '2');
+  assert.equal(ticks[0].getAttribute('data-altitude'), '50');
+  assert.equal(ticks[5].getAttribute('data-floor'), '7');
+  assert.equal(ticks[5].getAttribute('data-altitude'), '850');
+
+  // Climbing to 750.0m counts down to 250.0 M remaining, fills bar to 75%, marks crossed floor ticks
   currentAlt = 750.0;
   env.tickIntervals();
   assert.equal(zenithHud.getAttribute('data-state'), 'behind');
   assert.equal(zValEl.textContent, '250.0 M');
   assert.equal(barWrap.classList.contains('is-collapsed'), false);
   assert.equal(barFill.getAttribute('data-progress'), '75.00%');
+  assert.equal(ticks[4].classList.contains('is-reached'), true);  // F6 (650 M) reached
+  assert.equal(ticks[5].classList.contains('is-reached'), false); // F7 (850 M) not yet reached
 
   // Surpassing Weekly PB (1,142.3m): turns green, counts upward +142.3 M, and collapses vertical bar
   currentAlt = 1142.3;
@@ -1008,7 +1018,25 @@ test('bundled mod renders left Quick Play Weekly PB vertical bar, counts down in
   assert.equal(zSubEl.textContent, 'NEW WEEKLY PB · 1,000.0 M');
   assert.equal(barWrap.classList.contains('is-collapsed'), true);
 
-  // Exiting Quick Play climb (menu unrolls / results) hides HUD cleanly
-  zenithMenu.classList.remove('rolledup');
+  // Dying shows results (adds inresults, removes rolledup and ingame_phys): HUD hides cleanly
+  env.body.classList.remove('ingame_phys');
+  zenithMenu.classList.remove('rolledup', 'hidden');
+  zenithMenu.classList.add('inresults');
+  assert.equal(zenithHud.classList.contains('is-visible'), false);
+
+  // Clicking AGAIN starts a second run (body gets ingame_phys while #zenithmenu retains stale .inresults):
+  // HUD and vertical bar MUST reappear and resume tracking from 0 M
+  currentAlt = 120.0;
+  env.body.classList.add('ingame_phys');
+  zenithMenu.classList.add('rolledup', 'hidden');
+  assert.equal(zenithHud.classList.contains('is-visible'), true);
+  assert.equal(zenithHud.getAttribute('data-state'), 'behind');
+  assert.equal(barWrap.classList.contains('is-collapsed'), false);
+  assert.equal(zValEl.textContent, '880.0 M');
+  assert.equal(barFill.getAttribute('data-progress'), '12.00%');
+
+  // Exiting Quick Play results/menu hides HUD cleanly
+  env.body.classList.remove('ingame_phys');
+  zenithMenu.classList.remove('rolledup', 'hidden');
   assert.equal(zenithHud.classList.contains('is-visible'), false);
 });

@@ -3,8 +3,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  ZENITH_FLOOR_DISTANCES,
   formatAltitude,
   parseAltitudeText,
+  computeFloorTicks,
   computeQuickPlayDelta
 } = require('../src/features/quickplay-logic');
 
@@ -65,4 +67,27 @@ test('computeQuickPlayDelta turns green, counts up, and hides bar once Weekly PB
   assert.equal(noPbClimb.state, 'ahead');
   assert.equal(noPbClimb.showBar, false);
   assert.equal(noPbClimb.formatted, '+42.5 M');
+});
+
+test('computeFloorTicks maps exact Zenith Tower floor altitudes below Weekly PB', () => {
+  assert.deepEqual(ZENITH_FLOOR_DISTANCES, [0, 50, 150, 300, 450, 650, 850, 1100, 1350, 1650]);
+  assert.deepEqual(computeFloorTicks(0), []);
+
+  const lowPb = computeFloorTicks(450);
+  assert.deepEqual(
+    lowPb.map((t) => ({ floor: t.floor, altitude: t.altitude })),
+    [
+      { floor: 2, altitude: 50 },
+      { floor: 3, altitude: 150 },
+      { floor: 4, altitude: 300 }
+    ]
+  );
+  assert.ok(Math.abs(lowPb[0].ratio - 50 / 450) < 1e-9);
+  assert.ok(Math.abs(lowPb[2].ratio - 300 / 450) < 1e-9);
+
+  const highPb = computeFloorTicks(3262.7);
+  assert.equal(highPb.length, 9);
+  assert.equal(highPb[0].floor, 2);
+  assert.equal(highPb[highPb.length - 1].floor, 10);
+  assert.equal(highPb[highPb.length - 1].altitude, 1650);
 });
