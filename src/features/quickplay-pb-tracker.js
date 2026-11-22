@@ -13,18 +13,18 @@
   const HUD_CSS = `
 #${HUD_ID} {
   position: fixed;
-  left: 16px;
-  top: 16%;
+  left: 18px;
+  top: 7%;
   z-index: 999998;
   pointer-events: none;
   user-select: none;
   font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   opacity: 0;
-  transform: translateX(-14px);
+  transform: translateX(-16px);
   transition: opacity 160ms ease, transform 160ms ease;
 }
 #${HUD_ID}.is-visible {
@@ -34,68 +34,69 @@
 #${HUD_ID} .twfox-z-digits {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  min-width: 124px;
-  padding: 6px 14px 7px;
-  border-radius: 6px;
+  align-items: center;
+  text-align: center;
+  min-width: clamp(168px, 16vw, 228px);
+  padding: 9px 18px 10px;
+  border-radius: 8px;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  border: 1.5px solid rgba(255, 71, 87, 0.78);
-  background: rgba(24, 9, 13, 0.80);
-  box-shadow: 0 4px 16px rgba(255, 45, 65, 0.25);
+  border: 2px solid rgba(255, 71, 87, 0.82);
+  background: rgba(24, 9, 13, 0.82);
+  box-shadow: 0 6px 20px rgba(255, 45, 65, 0.28);
   transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
 #${HUD_ID}[data-state="ahead"] .twfox-z-digits {
-  border-color: rgba(46, 213, 115, 0.85);
-  background: rgba(8, 28, 16, 0.84);
-  box-shadow: 0 4px 20px rgba(46, 213, 115, 0.34);
+  border-color: rgba(46, 213, 115, 0.88);
+  background: rgba(8, 28, 16, 0.86);
+  box-shadow: 0 6px 24px rgba(46, 213, 115, 0.36);
 }
 #${HUD_ID}.is-flash-ahead .twfox-z-digits {
   animation: twfoxZenithFlashAhead 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes twfoxZenithFlashAhead {
   0% { transform: scale(1); }
-  35% { transform: scale(1.08); box-shadow: 0 0 28px rgba(46, 213, 115, 0.65); }
+  35% { transform: scale(1.09); box-shadow: 0 0 32px rgba(46, 213, 115, 0.72); }
   100% { transform: scale(1); }
 }
 #${HUD_ID} .twfox-z-value {
-  font-size: clamp(19px, 2vw, 27px);
+  font-size: clamp(28px, 3vw, 42px);
   font-weight: 900;
-  line-height: 1.05;
+  line-height: 1.04;
   letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
   color: #ff4d5e;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
 }
 #${HUD_ID}[data-state="ahead"] .twfox-z-value {
   color: #3ae374;
 }
 #${HUD_ID} .twfox-z-sub {
-  margin-top: 2px;
-  font-size: 10px;
-  font-weight: 600;
+  margin-top: 3px;
+  font-size: clamp(11px, 1vw, 14px);
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 194, 200, 0.88);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  color: rgba(255, 194, 200, 0.92);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 #${HUD_ID}[data-state="ahead"] .twfox-z-sub {
-  color: rgba(176, 250, 203, 0.92);
+  color: rgba(176, 250, 203, 0.95);
 }
 #${HUD_ID} .twfox-z-sub.is-hidden {
   display: none;
 }
 #${HUD_ID} .twfox-z-bar-wrap {
   position: relative;
-  width: 20px;
-  height: clamp(170px, 34vh, 260px);
-  border-radius: 5px;
-  padding: 3px;
+  width: clamp(32px, 3.2vw, 44px);
+  height: clamp(220px, 44vh, 360px);
+  border-radius: 7px;
+  padding: 4px;
   box-sizing: border-box;
-  border: 1.5px solid rgba(255, 71, 87, 0.78);
-  background: rgba(24, 9, 13, 0.78);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(255, 71, 87, 0.82);
+  background: rgba(24, 9, 13, 0.80);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.50);
   overflow: hidden;
   transform-origin: top center;
   transition: opacity 220ms ease, height 240ms ease, padding 220ms ease, border-width 220ms ease, transform 220ms ease;
@@ -113,9 +114,17 @@
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
   overflow: hidden;
+}
+#${HUD_ID} .twfox-z-bar-tick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  z-index: 2;
 }
 #${HUD_ID} .twfox-z-bar-fill {
   position: absolute;
@@ -123,9 +132,9 @@
   right: 0;
   bottom: 0;
   height: 0%;
-  border-radius: 3px;
+  border-radius: 4px;
   background: linear-gradient(to top, #ff4d5e 0%, #ff8c42 100%);
-  box-shadow: 0 0 10px rgba(255, 92, 92, 0.5);
+  box-shadow: 0 0 12px rgba(255, 92, 92, 0.55);
   transition: height 90ms linear;
 }
 `;
@@ -170,6 +179,12 @@
       fillEl.className = 'twfox-z-bar-fill';
 
       track.appendChild(fillEl);
+      for (const pct of ['25%', '50%', '75%']) {
+        const tick = document.createElement('div');
+        tick.className = 'twfox-z-bar-tick';
+        if (tick.style) tick.style.bottom = pct;
+        track.appendChild(tick);
+      }
       barWrap.appendChild(track);
       rootEl.appendChild(digits);
       rootEl.appendChild(barWrap);
