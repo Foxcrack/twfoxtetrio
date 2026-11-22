@@ -222,6 +222,12 @@ function createFakeDomEnvironment(protocol) {
   pbBlitz.textContent = '100,000';
   const pb40l = new FakeElement('h1', 'pbdisplay_40l_inner', '');
   pb40l.textContent = '0:45.320';
+  const pbZenith = new FakeElement('h1', 'pbdisplay_zenith_inner', '');
+  pbZenith.textContent = '1,000.0 M';
+  const pbZenithEx = new FakeElement('h1', 'pbdisplay_zenithex_inner', '');
+  pbZenithEx.textContent = '500.0 M';
+  const zenithMenu = new FakeElement('div', 'zenithmenu', '');
+  const zenithResult = new FakeElement('h1', 'zenith_result', '');
   const resultHeader = new FakeElement('h1', 'result_header', '');
   const resultValue = new FakeElement('p', 'result_result', '');
   const loader = protocol === 'file:' ? new FakeElement('h1', 'loader', '') : null;
@@ -885,7 +891,7 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(configPane.classList.contains('hidden'), false);
 
   const checkboxes = configPane.querySelectorAll('.twfox-toggle-input');
-  assert.equal(checkboxes.length, 7);
+  assert.equal(checkboxes.length, 10);
   checkboxes[0].checked = false;
   checkboxes[0].dispatchEvent('change');
   assert.equal(env.context.__TWFOX_TETRIO__.getConfig().blitzTracker.enabled, false);
@@ -928,4 +934,81 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   env.menus.setAttribute('data-menu-type', 'blitz');
   env.menus.classList.add('hidden');
   assert.equal(foxView.classList.contains('hidden'), true);
+});
+
+test('bundled mod renders left Quick Play Weekly PB vertical bar, counts down in red, and hides bar in green once surpassed', () => {
+  const env = createFakeDomEnvironment('https:');
+  env.triggerDOMContentLoaded();
+
+  const zenithHud = env.elements.get('twfoxtetrio-zenith-hud');
+  const barWrap = env.elements.get('twfoxtetrio-zenith-bar-wrap');
+  const barFill = env.elements.get('twfoxtetrio-zenith-bar-fill');
+  assert.ok(zenithHud);
+  assert.ok(barWrap);
+  assert.ok(barFill);
+  assert.equal(zenithHud.classList.contains('is-visible'), false);
+
+  const zValEl = zenithHud.querySelector('.twfox-z-value');
+  const zSubEl = zenithHud.querySelector('.twfox-z-sub');
+
+  let currentAlt = 0;
+  const selfGameWrapper = {
+    id: 'self_z_1',
+    getOwner: () => 'fox',
+    getFrame: () => 300,
+    getZenithAltitude: () => currentAlt,
+    isPlaying: () => true,
+    state: {
+      playing: true,
+      time: { zero: false, frameoffset: 0 },
+      setoptions: { zenith_expert: false },
+      stats: {
+        piecesplaced: 12,
+        garbage: { attack: 0, cleared: 0 },
+        zenith: { altitude: 0 }
+      }
+    }
+  };
+
+  vm.runInContext(
+    `
+      const zMap = new Map();
+      zMap.self = selfWrapperRef;
+      zMap.set('self_z_1', selfWrapperRef);
+    `,
+    Object.assign(env.context, { selfWrapperRef: selfGameWrapper })
+  );
+
+  const zenithMenu = env.elements.get('zenithmenu');
+  env.menus.classList.add('hidden');
+  env.body.classList.add('multiplexed', 'inzenith');
+  zenithMenu.classList.add('rolledup');
+
+  assert.equal(zenithHud.classList.contains('is-visible'), true);
+  assert.equal(zenithHud.getAttribute('data-state'), 'behind');
+  assert.equal(zValEl.textContent, '1,000.0 M');
+  assert.equal(zSubEl.textContent, 'WEEKLY PB: 1,000.0 M');
+  assert.equal(barWrap.classList.contains('is-collapsed'), false);
+  assert.equal(barFill.getAttribute('data-progress'), '0.00%');
+
+  // Climbing to 750.0m counts down to 250.0 M remaining and fills bar to 75%
+  currentAlt = 750.0;
+  env.tickIntervals();
+  assert.equal(zenithHud.getAttribute('data-state'), 'behind');
+  assert.equal(zValEl.textContent, '250.0 M');
+  assert.equal(barWrap.classList.contains('is-collapsed'), false);
+  assert.equal(barFill.getAttribute('data-progress'), '75.00%');
+
+  // Surpassing Weekly PB (1,142.3m): turns green, counts upward +142.3 M, and collapses vertical bar
+  currentAlt = 1142.3;
+  env.tickIntervals();
+  assert.equal(zenithHud.getAttribute('data-state'), 'ahead');
+  assert.ok(zenithHud.classList.contains('is-flash-ahead'));
+  assert.equal(zValEl.textContent, '+142.3 M');
+  assert.equal(zSubEl.textContent, 'NEW WEEKLY PB · 1,000.0 M');
+  assert.equal(barWrap.classList.contains('is-collapsed'), true);
+
+  // Exiting Quick Play climb (menu unrolls / results) hides HUD cleanly
+  zenithMenu.classList.remove('rolledup');
+  assert.equal(zenithHud.classList.contains('is-visible'), false);
 });

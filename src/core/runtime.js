@@ -12,14 +12,17 @@
 
   const blitzLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.blitzLogic;
   const fortyLinesLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.fortyLinesLogic;
+  const quickPlayLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.quickPlayLogic;
   const multiplayerLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.multiplayerLogic;
-  if (!blitzLogic || !fortyLinesLogic || !multiplayerLogic) {
+  if (!blitzLogic || !fortyLinesLogic || !quickPlayLogic || !multiplayerLogic) {
     return;
   }
 
   const CONFIG_STORAGE_KEY = 'twfoxtetrio_config_v1';
   const ANON_BLITZ_PB_KEY = 'twfoxtetrio_anon_blitz_pb_v1';
   const ANON_40L_PB_KEY = 'twfoxtetrio_anon_40l_pb_v1';
+  const ANON_ZENITH_PB_KEY = 'twfoxtetrio_anon_zenith_pb_v1';
+  const ANON_ZENITHEX_PB_KEY = 'twfoxtetrio_anon_zenithex_pb_v1';
 
   const DEFAULT_CONFIG = {
     blitzTracker: {
@@ -30,6 +33,11 @@
     fortyLinesTracker: {
       enabled: true,
       showSubtitle: true
+    },
+    quickPlayTracker: {
+      enabled: true,
+      showSubtitle: true,
+      signedBehind: false
     },
     multiplayerLeaderboard: {
       enabled: true,
@@ -42,6 +50,7 @@
     return {
       blitzTracker: { ...DEFAULT_CONFIG.blitzTracker },
       fortyLinesTracker: { ...DEFAULT_CONFIG.fortyLinesTracker },
+      quickPlayTracker: { ...DEFAULT_CONFIG.quickPlayTracker },
       multiplayerLeaderboard: { ...DEFAULT_CONFIG.multiplayerLeaderboard }
     };
   }
@@ -86,6 +95,11 @@
     bestScore: 0,
     currentTimeMs: 0,
     bestTimeMs: 0,
+    currentAltitude: 0,
+    bestZenithAltitude: 0,
+    bestZenithExAltitude: 0,
+    zenithActive: false,
+    zenithExpert: false,
     inMultiplayer: false,
     inZenith: false,
     selfUsername: '',
@@ -95,8 +109,10 @@
 
   const listeners = new Set();
   const features = new Map();
+  const fetchedZenithUsers = new Set();
   let domInitialized = false;
   let leaderboardTimer = null;
+  let leaderboardTimerPeriod = 0;
 
   function emitState() {
     const snapshot = {
@@ -134,10 +150,76 @@
   function refreshPBs() {
     const nextScorePB = readPbValue('pbdisplay_blitz_inner', ANON_BLITZ_PB_KEY, blitzLogic.parseScoreText);
     const nextTimePB = readPbValue('pbdisplay_40l_inner', ANON_40L_PB_KEY, fortyLinesLogic.parseTimeText);
-    const changed = nextScorePB !== state.bestScore || nextTimePB !== state.bestTimeMs;
+    const nextZenithPB = readPbValue('pbdisplay_zenith_inner', ANON_ZENITH_PB_KEY, quickPlayLogic.parseAltitudeText);
+    const nextZenithExPB = readPbValue('pbdisplay_zenithex_inner', ANON_ZENITHEX_PB_KEY, quickPlayLogic.parseAltitudeText);
+    const changed =
+      nextScorePB !== state.bestScore ||
+      nextTimePB !== state.bestTimeMs ||
+      nextZenithPB !== state.bestZenithAltitude ||
+      nextZenithExPB !== state.bestZenithExAltitude;
     state.bestScore = nextScorePB;
     state.bestTimeMs = nextTimePB;
+    state.bestZenithAltitude = nextZenithPB;
+    state.bestZenithExAltitude = nextZenithExPB;
     return changed;
+  }
+
+  function maybeFetchWeeklyZenithPbFallback(isExpert) {
+    if (state.isAnonymous || !state.selfUsername || typeof root.fetch !== 'function') return;
+    const currentPb = isExpert ? state.bestZenithExAltitude : state.bestZenithAltitude;
+    if (currentPb > 0) return;
+
+    const cleanUser = state.selfUsername.trim().toLowerCase();
+    if (!cleanUser) return;
+    const endpoint = isExpert ? 'zenithex' : 'zenith';
+    const cacheKey = endpoint + ':' + cleanUser;
+    if (fetchedZenithUsers.has(cacheKey)) return;
+    fetchedZenithUsers.add(cacheKey);
+
+    root
+      .fetch('https://ch.tetr.io/api/users/' + encodeURIComponent(cleanUser) + '/summaries/' + endpoint)
+      .then((resp) => (resp && resp.ok ? resp.json() : null))
+      .then((json) => {
+        const alt = Number(json && json.data && json.data.record && json.data.record.results && json.data.record.results.stats && json.data.record.results.stats.zenith && json.data.record.results.stats.zenith.altitude);
+        if (!Number.isFinite(alt) || alt <= 0) return;
+        const parsed = Math.round(alt * 10) / 10;
+        if (isExpert && state.bestZenithExAltitude === 0) {
+          state.bestZenithExAltitude = parsed;
+          emitState();
+        } else if (!isExpert && state.bestZenithAltitude === 0) {
+          state.bestZenithAltitude = parsed;
+          emitState();
+        }
+      })
+      .catch(() => {});
+  }
+
+  function maybePersistAnonZenithResult() {
+    if (!document.body || !document.body.classList.contains('anon')) return;
+    const zMenu = document.getElementById('zenithmenu');
+    if (!zMenu || !zMenu.classList.contains('inresults')) return;
+    const resEl = document.getElementById('zenith_result');
+    if (!resEl) return;
+
+    const finalAlt = quickPlayLogic.parseAltitudeText(resEl.textContent);
+    if (finalAlt <= 0) return;
+
+    const isEx = zMenu.classList.contains('reversed');
+    const elemId = isEx ? 'pbdisplay_zenithex_inner' : 'pbdisplay_zenith_inner';
+    const key = isEx ? ANON_ZENITHEX_PB_KEY : ANON_ZENITH_PB_KEY;
+    const pbEl = document.getElementById(elemId);
+    if (pbEl && !pbEl.classList.contains('hidden')) return;
+
+    const prevAnonPB = readPbValue(elemId, key, quickPlayLogic.parseAltitudeText);
+    if (finalAlt > prevAnonPB) {
+      try {
+        if (root.localStorage) {
+          root.localStorage.setItem(key, quickPlayLogic.formatAltitude(finalAlt, true));
+        }
+      } catch (_) {}
+      if (isEx) state.bestZenithExAltitude = finalAlt;
+      else state.bestZenithAltitude = finalAlt;
+    }
   }
 
   function maybePersistAnonResult(menusEl, endedMode) {
@@ -198,11 +280,56 @@
     }
   }
 
+  function computeZenithActiveFlag() {
+    const bodyEl = document.body;
+    if (!bodyEl || !bodyEl.classList.contains('inzenith')) return false;
+    if (bodyEl.classList.contains('spectating')) return false;
+    const zMenu = document.getElementById('zenithmenu');
+    if (zMenu) {
+      return zMenu.classList.contains('rolledup') && !zMenu.classList.contains('inresults');
+    }
+    const menusEl = document.getElementById('menus');
+    return Boolean(menusEl && menusEl.classList.contains('hidden'));
+  }
+
+  function sampleZenithProgress() {
+    refreshSelfUsername();
+    const zMenu = document.getElementById('zenithmenu');
+    const selfZ = rosterTracker.getSelfZenithState(state.selfUsername);
+    const nextActive = computeZenithActiveFlag();
+    const nextExpert = Boolean(selfZ.isExpert || (zMenu && zMenu.classList.contains('reversed')));
+    const prevActive = state.zenithActive;
+    let nextAlt = prevActive ? state.currentAltitude : 0;
+    if (selfZ.found) {
+      nextAlt = selfZ.altitude;
+    }
+    if (nextActive && !prevActive) {
+      refreshPBs();
+      maybeFetchWeeklyZenithPbFallback(nextExpert);
+      if (!selfZ.found) nextAlt = 0;
+    }
+    if (!nextActive && prevActive) {
+      nextAlt = 0;
+    }
+
+    const changed =
+      nextActive !== state.zenithActive ||
+      nextExpert !== state.zenithExpert ||
+      nextAlt !== state.currentAltitude;
+    state.zenithActive = nextActive;
+    state.zenithExpert = nextExpert;
+    state.currentAltitude = nextAlt;
+    return changed;
+  }
+
   function sampleLeaderboard() {
     refreshSelfUsername();
-    state.leaderboard = rosterTracker.sample(state.selfUsername, {
-      useScoreboard: Boolean(state.inZenith && config.multiplayerLeaderboard.includeQuickPlay)
-    });
+    state.leaderboard = state.inMultiplayer
+      ? rosterTracker.sample(state.selfUsername, {
+          useScoreboard: Boolean(state.inZenith && config.multiplayerLeaderboard.includeQuickPlay)
+        })
+      : [];
+    sampleZenithProgress();
   }
 
   function handlePaqEntry(entry) {
@@ -408,24 +535,33 @@
     });
   }
 
-  function startLeaderboardPolling() {
-    if (leaderboardTimer !== null) return;
-    sampleLeaderboard();
-    emitState();
-    leaderboardTimer = setInterval(() => {
-      if (!state.inMultiplayer) return;
-      sampleLeaderboard();
-      emitState();
-    }, 200);
-  }
-
   function stopLeaderboardPolling() {
     if (leaderboardTimer !== null) {
       clearInterval(leaderboardTimer);
       leaderboardTimer = null;
+      leaderboardTimerPeriod = 0;
     }
     rosterTracker.reset();
     state.leaderboard = [];
+    state.zenithActive = false;
+    state.currentAltitude = 0;
+  }
+
+  function startLeaderboardPolling() {
+    const desiredPeriod = state.inZenith ? 80 : 200;
+    if (leaderboardTimer !== null && leaderboardTimerPeriod === desiredPeriod) return;
+    if (leaderboardTimer !== null) {
+      clearInterval(leaderboardTimer);
+      leaderboardTimer = null;
+    }
+    leaderboardTimerPeriod = desiredPeriod;
+    sampleLeaderboard();
+    emitState();
+    leaderboardTimer = setInterval(() => {
+      if (!state.inMultiplayer && !state.inZenith) return;
+      sampleLeaderboard();
+      emitState();
+    }, desiredPeriod);
   }
 
   function syncBodyState() {
@@ -434,16 +570,26 @@
 
     const nextMulti = bodyEl.classList.contains('multiplexed');
     const nextZenith = bodyEl.classList.contains('inzenith');
+    const prevZenith = state.inZenith;
 
     if (nextMulti !== state.inMultiplayer || nextZenith !== state.inZenith) {
       state.inMultiplayer = nextMulti;
       state.inZenith = nextZenith;
-      if (nextMulti) {
+      if (nextZenith && !prevZenith) {
+        refreshPBs();
+        maybeFetchWeeklyZenithPbFallback(false);
+      }
+      if (nextMulti || nextZenith) {
         startLeaderboardPolling();
       } else {
         stopLeaderboardPolling();
         emitState();
       }
+      return;
+    }
+
+    if ((nextMulti || nextZenith) && sampleZenithProgress()) {
+      emitState();
     }
   }
 
@@ -476,6 +622,9 @@
             emitState();
           }
         }
+        if (sampleZenithProgress()) {
+          emitState();
+        }
       };
 
       const menuObserver = new MutationObserver(syncMenusState);
@@ -496,6 +645,22 @@
 
     observePbElement('pbdisplay_blitz_inner');
     observePbElement('pbdisplay_40l_inner');
+    observePbElement('pbdisplay_zenith_inner');
+    observePbElement('pbdisplay_zenithex_inner');
+
+    const zenithMenuEl = document.getElementById('zenithmenu');
+    if (zenithMenuEl) {
+      const zMenuObserver = new MutationObserver(() => {
+        maybePersistAnonZenithResult();
+        if (sampleZenithProgress()) {
+          emitState();
+        }
+      });
+      zMenuObserver.observe(zenithMenuEl, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+    }
 
     const meEl = document.getElementById('me_username');
     if (meEl) {
@@ -531,6 +696,7 @@
       return {
         blitzTracker: { ...config.blitzTracker },
         fortyLinesTracker: { ...config.fortyLinesTracker },
+        quickPlayTracker: { ...config.quickPlayTracker },
         multiplayerLeaderboard: { ...config.multiplayerLeaderboard }
       };
     },

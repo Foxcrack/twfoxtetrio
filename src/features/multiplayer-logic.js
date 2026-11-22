@@ -200,6 +200,68 @@
         }
 
         return sortLeaderboardEntries(Array.from(roundPlayers.values()));
+      },
+
+      getSelfZenithState(selfUsername) {
+        const normalizedSelf = typeof selfUsername === 'string' ? selfUsername.toLowerCase() : '';
+        if (activeGamesMap) {
+          let selfWrapper = activeGamesMap.self || null;
+          if (!selfWrapper && normalizedSelf) {
+            for (const [, gameWrapper] of activeGamesMap.entries()) {
+              if (!isGameWrapper(gameWrapper)) continue;
+              let owner = '';
+              try {
+                owner = gameWrapper.getOwner() || '';
+              } catch (_) {}
+              if (owner && owner.toLowerCase() === normalizedSelf) {
+                selfWrapper = gameWrapper;
+                break;
+              }
+            }
+          }
+          if (isGameWrapper(selfWrapper)) {
+            const gState = selfWrapper.state || {};
+            const zStats = gState.stats && gState.stats.zenith;
+            let alt = NaN;
+            if (typeof selfWrapper.getZenithAltitude === 'function') {
+              alt = Number(selfWrapper.getZenithAltitude());
+            } else if (zStats && typeof zStats.altitude === 'number') {
+              alt = Number(zStats.altitude);
+            }
+            const setOpts = gState.setoptions || {};
+            const isExpert = Boolean(
+              setOpts.zenith_expert ||
+              (Array.isArray(setOpts.zenith_mods) && setOpts.zenith_mods.includes('expert'))
+            );
+            const alive = typeof selfWrapper.isPlaying === 'function'
+              ? Boolean(selfWrapper.isPlaying())
+              : Boolean(gState.playing !== false);
+            return {
+              found: Number.isFinite(alt),
+              altitude: Number.isFinite(alt) && alt >= 0 ? alt : 0,
+              isExpert,
+              alive
+            };
+          }
+        }
+
+        if (activeScoreboardMap && normalizedSelf) {
+          for (const item of activeScoreboardMap.values()) {
+            if (!item || typeof item.username !== 'string' || !item.stats) continue;
+            if (item.username.toLowerCase() !== normalizedSelf) continue;
+            const alt = Number(item.stats.altitude);
+            if (Number.isFinite(alt) && alt >= 0) {
+              return {
+                found: true,
+                altitude: alt,
+                isExpert: Boolean(Array.isArray(item.mods) && item.mods.includes('expert')),
+                alive: Boolean(item.alive)
+              };
+            }
+          }
+        }
+
+        return { found: false, altitude: 0, isExpert: false, alive: false };
       }
     };
   }

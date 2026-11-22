@@ -326,6 +326,28 @@
       ]
     },
     {
+      key: 'quickPlayTracker',
+      title: 'QUICK PLAY WEEKLY PB BAR',
+      accent: '#ff8c42',
+      toggles: [
+        {
+          field: 'enabled',
+          label: 'Enable Quick Play Weekly PB Bar',
+          description: 'Show left vertical progress bar + countdown to Weekly PB, hiding the bar in green when surpassed.'
+        },
+        {
+          field: 'showSubtitle',
+          label: 'Show Weekly PB Subtitle',
+          description: 'Display your current Weekly PB altitude beneath the digits.'
+        },
+        {
+          field: 'signedBehind',
+          label: 'Show Minus Sign While Behind Weekly PB',
+          description: 'Prefix a "-" sign before remaining meters while below your Weekly PB.'
+        }
+      ]
+    },
+    {
       key: 'multiplayerLeaderboard',
       title: 'MULTIPLAYER LIVE VS LEADERBOARD',
       accent: '#8daeff',
