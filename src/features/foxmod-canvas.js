@@ -560,6 +560,25 @@
       ctx.fillText(snap.lastCallout, statRightX, boardY + 145);
     }
 
+    if (snap.proMode) {
+      ctx.fillStyle = '#ffb870';
+      ctx.font = '800 11px HUN, Segoe UI, sans-serif';
+      ctx.fillText('PRO · FINESSE', statRightX, boardY + 18);
+      if (vOpts && Number.isFinite(vOpts.inputsCount)) {
+        const kpp = snap.pieces > 0 ? vOpts.inputsCount / snap.pieces : 0;
+        ctx.fillStyle = '#d4d9e8';
+        ctx.font = '700 11px HUN, Segoe UI, sans-serif';
+        ctx.fillText(`KEYS: ${vOpts.inputsCount} (${kpp.toFixed(2)} KPP)`, statRightX, boardY + 34);
+      }
+    }
+
+    if (vOpts && vOpts.retryHoldNotice) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255, 196, 120, 0.92)';
+      ctx.font = '800 12px HUN, Segoe UI, sans-serif';
+      ctx.fillText('HOLD [R] TO RETRY (STRIDE OFF)', boardX + boardW / 2, boardY + 24);
+    }
+
     if (snap.finished) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
       ctx.fillRect(boardX, boardY, boardW, boardH);
@@ -652,8 +671,13 @@
       lShift: { held: false, dasMs: 0, arrMs: 0, dir: -1 },
       rShift: { held: false, dasMs: 0, arrMs: 0, dir: 1 },
       down: false,
-      dir: 0
+      dir: 0,
+      retryHeld: false,
+      retryMs: 0,
+      retryTriggered: false
     };
+    let inputsCount = 0;
+    let lastObservedPieces = 0;
 
     function resetKeys() {
       held.lShift.held = false;
@@ -664,6 +688,9 @@
       held.rShift.arrMs = 0;
       held.down = false;
       held.dir = 0;
+      held.retryHeld = false;
+      held.retryMs = 0;
+      held.retryTriggered = false;
     }
 
     function is20gSoftDrop() {
@@ -694,6 +721,7 @@
 
       if (matchesAction(candidates, 'moveLeft')) {
         if (!held.lShift.held) {
+          inputsCount += 1;
           held.lShift.held = true;
           held.lShift.dasMs = 0;
           held.lShift.arrMs = userSettings.arrMs;
@@ -702,6 +730,7 @@
         }
       } else if (matchesAction(candidates, 'moveRight')) {
         if (!held.rShift.held) {
+          inputsCount += 1;
           held.rShift.held = true;
           held.rShift.dasMs = 0;
           held.rShift.arrMs = userSettings.arrMs;
@@ -710,6 +739,7 @@
         }
       } else if (matchesAction(candidates, 'softDrop')) {
         if (!held.down) {
+          inputsCount += 1;
           held.down = true;
           if (userSettings.sdf >= 41 && typeof game.sonicDrop === 'function') {
             game.sonicDrop(true);
@@ -718,21 +748,35 @@
           }
         }
       } else if (matchesAction(candidates, 'rotateCW') && !ev.repeat) {
+        inputsCount += 1;
         const rotated = game.rotate(1, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
         if (rotated) applyDcdTrim();
       } else if (matchesAction(candidates, 'rotateCCW') && !ev.repeat) {
+        inputsCount += 1;
         const rotated = game.rotate(-1, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
         if (rotated) applyDcdTrim();
       } else if (matchesAction(candidates, 'rotate180') && !ev.repeat) {
+        inputsCount += 1;
         const rotated = game.rotate(2, { apply20g: is20gSoftDrop(), scoreSoftDrop: true });
         if (rotated) applyDcdTrim();
       } else if (matchesAction(candidates, 'hardDrop') && !ev.repeat) {
+        inputsCount += 1;
         game.hardDrop();
         applyDcdTrim();
       } else if (matchesAction(candidates, 'hold') && !ev.repeat) {
+        inputsCount += 1;
         game.hold();
       } else if (matchesAction(candidates, 'retry') && !ev.repeat && opts.allowRestart !== false) {
-        game.reset();
+        const snapNow = game.getSnapshot();
+        if (snapNow.strideMode !== false || snapNow.finished) {
+          inputsCount = 0;
+          lastObservedPieces = 0;
+          game.reset();
+        } else {
+          held.retryHeld = true;
+          held.retryMs = 0;
+          held.retryTriggered = false;
+        }
       } else {
         handled = false;
       }
@@ -743,6 +787,11 @@
     function handleKeyUp(ev) {
       if (!ev) return;
       const candidates = buildEventKeyCandidates(ev);
+      if (matchesAction(candidates, 'retry')) {
+        held.retryHeld = false;
+        held.retryMs = 0;
+        held.retryTriggered = false;
+      }
       if (matchesAction(candidates, 'moveLeft')) {
         held.lShift.held = false;
         held.lShift.dasMs = 0;
@@ -807,9 +856,28 @@
           }
         }
 
+        if (held.retryHeld && !held.retryTriggered && opts.allowRestart !== false) {
+          held.retryMs += dt;
+          if (held.retryMs >= 320) {
+            held.retryTriggered = true;
+            held.retryHeld = false;
+            inputsCount = 0;
+            lastObservedPieces = 0;
+            game.reset();
+          }
+        }
+
         game.step(dt, held.down, userSettings.sdf);
         const snap = game.getSnapshot();
-        renderPlayfield(canvas, snap, userSettings);
+        if (snap.pieces < lastObservedPieces) {
+          inputsCount = 0;
+        }
+        lastObservedPieces = snap.pieces;
+        renderPlayfield(canvas, snap, {
+          ...userSettings,
+          inputsCount,
+          retryHoldNotice: held.retryHeld && !held.retryTriggered
+        });
         if (typeof opts.onFrame === 'function' && ts - lastSyncTs >= 85) {
           lastSyncTs = ts;
           opts.onFrame(snap);

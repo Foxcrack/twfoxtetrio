@@ -262,9 +262,13 @@
         blitzDurationMs: 120000,
         sprintLines: 40,
         kickset: 'SRS+',
+        noSzoFirst: false,
+        proMode: false,
+        strideMode: true,
         onAttack: null,
         onTopOut: null,
-        onFinish: null
+        onFinish: null,
+        onReset: null
       },
       rawOpts
     );
@@ -306,7 +310,19 @@
     }
 
     function refillBag() {
+      const isInitialBag = bag.length === 0 && pieces === 0 && !active;
       const pool = shuffleArray(getPiecePool(opts.pieceSet), rng);
+      if (isInitialBag && opts.noSzoFirst && pool.length > 3) {
+        const szo = new Set(['S', 'Z', 'O']);
+        if (szo.has(pool[0])) {
+          const altIdx = pool.findIndex((k) => !szo.has(k));
+          if (altIdx > 0) {
+            const tmp = pool[0];
+            pool[0] = pool[altIdx];
+            pool[altIdx] = tmp;
+          }
+        }
+      }
       bag.push(...pool);
     }
 
@@ -677,6 +693,11 @@
     }
 
     function reset(nextOptions) {
+      if (pieces > 0 && !finished && typeof opts.onReset === 'function') {
+        try {
+          opts.onReset(getSnapshot());
+        } catch (_) {}
+      }
       const hasNextSeed =
         nextOptions &&
         typeof nextOptions === 'object' &&
@@ -762,6 +783,8 @@
         finished,
         toppedOut,
         winReason,
+        proMode: Boolean(opts.proMode),
+        strideMode: Boolean(opts.strideMode),
         compactBoard: getCompactVisibleBoard()
       };
     }

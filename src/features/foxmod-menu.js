@@ -10,6 +10,7 @@
   const pentominoEngine = internals.pentominoEngine || null;
   const p2pRoom = internals.p2pRoom || null;
   const foxmodCanvas = internals.foxmodCanvas || null;
+  const soloLobbyLogic = internals.soloLobbyLogic || null;
 
   const STYLE_ID = 'twfoxtetrio-foxmod-style';
   const MENU_BTN_ID = 'twfoxtetrio-home-foxmod';
@@ -310,10 +311,15 @@
     home: { header: 'HOME', footer: 'WELCOME TO TETR.IO!', back: null },
     foxmod: { header: 'FOXMOD', footer: 'pick a foxmod section', back: 'home' },
     foxmod_practice: { header: 'PRACTICA', footer: 'pick a practice mode', back: 'foxmod' },
+    foxmod_solo_lobby: {
+      header: '4WIDE',
+      footer: 'press start to begin playing',
+      back: 'foxmod_practice'
+    },
     foxmod_pentomino: {
       header: 'PENTOMINOS',
       footer: '12 pentominoes · real TETR.IO controls & skin',
-      back: 'foxmod_practice'
+      back: 'foxmod_solo_lobby'
     },
     foxmod_multi: {
       header: 'MULTIJUGADOR',
@@ -1692,6 +1698,206 @@ body.twfox-ingame #menus > #footer {
 .twfox-hidden-file {
   display: none;
 }
+/* Pre-game Solo Mode Lobby (matching TETR.IO 40 LINES / BLITZ screen) */
+#twfoxtetrio-pane-solo-lobby {
+  --solo-bg: #523d2d;
+  --solo-top: #99633b;
+  --solo-left: #77563e;
+  --solo-bottom: #271c14;
+  --solo-right: #3b291c;
+  --solo-title: #ffd28c;
+  --solo-muted: #c9954c;
+  --solo-start-bg: #70523c;
+  --solo-start-border: #b3825d;
+  --solo-start-color: #f4c19a;
+}
+#twfoxtetrio-pane-solo-lobby .scroller_block {
+  background-color: var(--solo-bg) !important;
+  border-top: 3px solid var(--solo-top) !important;
+  border-left: 3px solid var(--solo-left) !important;
+  border-bottom: 3px solid var(--solo-bottom) !important;
+  border-right: 3px solid var(--solo-right) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.twfox-solo-toprow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.twfox-solo-toprow h1 {
+  margin: 0 !important;
+  font-size: 2.35em;
+  letter-spacing: 0.04em;
+  color: var(--solo-title) !important;
+}
+.twfox-solo-pill {
+  padding: 5px 11px;
+  border-radius: 3px;
+  font-family: HUN, sans-serif;
+  font-size: 0.85em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--solo-title);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--solo-top);
+}
+.twfox-solo-desc {
+  margin: 0.55em 0 1em !important;
+  font-size: 1em;
+  line-height: 1.3;
+  color: var(--solo-muted) !important;
+  text-transform: uppercase;
+}
+.twfox-solo-pb-label {
+  margin: 0.45em 0 0 !important;
+  font-size: 1.05em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--solo-title) !important;
+}
+.twfox-solo-pb-value {
+  margin: 0.02em 0 0 !important;
+  font-family: HUN, sans-serif;
+  font-size: 2.85em;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #ffffff !important;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.twfox-solo-pb-sub {
+  margin-top: 0.2em;
+  font-size: 0.86em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--solo-muted);
+  text-transform: uppercase;
+}
+.twfox-solo-starter {
+  padding: 0 !important;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.twfox-solo-music {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0.65em 1.15em;
+  font-family: HUN, sans-serif;
+  font-size: 1.35em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--solo-muted);
+  cursor: pointer;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.12);
+  transition: filter 120ms ease, color 120ms ease;
+}
+.twfox-solo-music:hover {
+  filter: brightness(1.2);
+  color: var(--solo-title);
+}
+.twfox-solo-start {
+  flex: 0 0 auto;
+  min-width: 4.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.16em 0.55em;
+  border: 0;
+  border-left: 2px solid var(--solo-start-border);
+  background: var(--solo-start-bg);
+  color: var(--solo-start-color);
+  font-family: HUN, sans-serif;
+  font-size: 3.15em;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: filter 120ms ease, transform 90ms ease;
+}
+.twfox-solo-start:hover {
+  filter: brightness(1.18);
+}
+.twfox-solo-start:active {
+  transform: scale(0.985);
+}
+.twfox-solo-opts-title {
+  margin: 0 0 0.55em !important;
+  font-size: 1.8em;
+  color: var(--solo-title) !important;
+}
+.twfox-solo-pent-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.twfox-solo-pent-field {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.twfox-solo-pent-field span {
+  font-family: HUN, sans-serif;
+  font-size: 0.85em;
+  font-weight: 800;
+  color: var(--solo-title);
+  letter-spacing: 0.06em;
+}
+.twfox-solo-check-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 5px 0;
+  cursor: pointer;
+  user-select: none;
+  font-family: HUN, sans-serif;
+  font-size: 1.18em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--solo-title);
+}
+.twfox-solo-check-row.is-disabled {
+  opacity: 0.42;
+}
+.twfox-solo-check-input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 2px solid var(--solo-muted);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.25);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.twfox-solo-check-input:checked {
+  background: var(--solo-title);
+  border-color: #ffffff;
+}
+.twfox-solo-check-input:checked::after {
+  content: "✓";
+  color: #1f140d;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+}
+.twfox-solo-check-note {
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--solo-muted);
+  margin-left: auto;
+  text-transform: uppercase;
+}
 `;
 
   function setClass(el, className, active) {
@@ -1848,11 +2054,19 @@ body.twfox-ingame #menus > #footer {
     let activeFoxView = null;
     let isNavigatingInternal = false;
     let pendingPracticeReturn = false;
+    let pendingPracticeReturnView = 'foxmod_practice';
     let practiceRunEntered = false;
     let scrollersInjected = false;
     let backHooked = false;
     let statusEl = null;
     let refreshAssetsStudio = null;
+    let currentSoloModeKey = 'fourWide';
+    let soloOptionsMap = soloLobbyLogic ? soloLobbyLogic.loadAllOptions() : {
+      fourWide: { pro: false, proAlert: false, proRetry: false, stride: true, song: 'RANDOMcalm' },
+      pentomino: { pro: false, stride: true, song: 'RANDOMcalm', pieceSet: 'pentomino', subMode: 'zen' },
+      marathon: { pro: false, proAlert: false, proRetry: false, stride: true, song: 'RANDOMcalm' }
+    };
+    let refreshSoloLobbyUi = null;
     const scrollerMap = new Map();
     const toggleControls = [];
     const rangeControls = [];
@@ -2013,6 +2227,10 @@ body.twfox-ingame #menus > #footer {
         if (typeof refreshAssetsStudio === 'function') {
           refreshAssetsStudio(true);
         }
+      } else if (targetView === 'foxmod_solo_lobby') {
+        if (typeof refreshSoloLobbyUi === 'function') {
+          refreshSoloLobbyUi();
+        }
       } else if (targetView === 'foxmod_pentomino' && practiceController) {
         practiceController.reloadUserSettings();
         practiceController.start();
@@ -2069,14 +2287,23 @@ body.twfox-ingame #menus > #footer {
       );
     }
 
-    function launchCustomPracticeMode(presetMap, isZen) {
+    function launchCustomPracticeMode(presetMap, isZen, returnView) {
       hideFoxmodScrollersImmediately();
       pendingPracticeReturn = true;
+      pendingPracticeReturnView = returnView || 'foxmod_practice';
       practiceRunEntered = false;
       if (isZen && typeof runtimeApi.enterPracticeZen === 'function') {
         runtimeApi.enterPracticeZen();
       }
       applyCustomSoloPreset(presetMap);
+    }
+
+    function openSoloLobby(modeKey) {
+      currentSoloModeKey = modeKey && (modeKey === 'pentomino' || modeKey === 'marathon') ? modeKey : 'fourWide';
+      if (typeof refreshSoloLobbyUi === 'function') {
+        refreshSoloLobbyUi();
+      }
+      navigateMenu('foxmod_solo_lobby');
     }
 
     function buildPracticeMenuScroller() {
@@ -2096,7 +2323,7 @@ body.twfox-ingame #menus > #footer {
             hit: 'confirm'
           },
           function () {
-            launchCustomPracticeMode(CUSTOM_SOLO_PRESETS.fourWide, false);
+            openSoloLobby('fourWide');
           }
         ),
         makeGiantBanner(
@@ -2114,8 +2341,7 @@ body.twfox-ingame #menus > #footer {
             hit: 'hit2'
           },
           function () {
-            if (practiceGame) practiceGame.reset();
-            navigateMenu('foxmod_pentomino');
+            openSoloLobby('pentomino');
           }
         ),
         makeGiantBanner(
@@ -2133,7 +2359,7 @@ body.twfox-ingame #menus > #footer {
             hit: 'confirm'
           },
           function () {
-            launchCustomPracticeMode(CUSTOM_SOLO_PRESETS.marathon, false);
+            openSoloLobby('marathon');
           }
         ),
         makeGiantBanner(
@@ -2151,7 +2377,10 @@ body.twfox-ingame #menus > #footer {
             hit: 'confirm'
           },
           function () {
-            launchCustomPracticeMode(CUSTOM_SOLO_PRESETS.zen, true);
+            if (typeof runtimeApi.clearSoloPracticeLaunch === 'function') {
+              runtimeApi.clearSoloPracticeLaunch();
+            }
+            launchCustomPracticeMode(CUSTOM_SOLO_PRESETS.zen, true, 'foxmod_practice');
           }
         )
       ];
@@ -2165,6 +2394,245 @@ body.twfox-ingame #menus > #footer {
         },
         items
       );
+    }
+
+    let syncPentStageSelectors = null;
+
+    function buildSoloLobbyScroller() {
+      const titleEl = createEl('h1', { id: 'twfoxtetrio-solo-title', text: '4WIDE' });
+      const pillEl = createEl('span', { className: 'twfox-solo-pill', text: 'FOXMOD SOLO' });
+      const descEl = createEl('p', { id: 'twfoxtetrio-solo-desc', className: 'twfox-solo-desc', text: '' });
+      const pbLabelEl = createEl('h2', { id: 'twfoxtetrio-solo-pb-label', className: 'twfox-solo-pb-label', text: 'PERSONAL BEST SCORE' });
+      const pbValueEl = createEl('h1', { id: 'twfoxtetrio-solo-pb-value', className: 'twfox-solo-pb-value', text: '0' });
+      const pbSubEl = createEl('div', { id: 'twfoxtetrio-solo-pb-sub', className: 'twfox-solo-pb-sub', text: '' });
+
+      const musicPickerEl = createEl('div', {
+        id: 'twfoxtetrio-solo-music',
+        className: 'twfox-solo-music',
+        text: '♪ RANDOM: CALM',
+        attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+      });
+      const startBtnEl = createEl('button', {
+        id: 'twfoxtetrio-solo-start',
+        className: 'twfox-solo-start',
+        text: 'START',
+        type: 'button',
+        attrs: { 'data-hover': 'hover', 'data-hit': 'confirm' }
+      });
+
+      const pentPieceSelect = createEl('select', { id: 'twfoxtetrio-solo-piece-select', className: 'twfox-select' }, [
+        createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
+        createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
+        createEl('option', { text: 'CAOS MIX (19)', attrs: { value: 'chaos' } })
+      ]);
+      const pentModeSelect = createEl('select', { id: 'twfoxtetrio-solo-submode-select', className: 'twfox-select' }, [
+        createEl('option', { text: 'ZEN / PRACTICA', attrs: { value: 'zen' } }),
+        createEl('option', { text: '40 LINES', attrs: { value: '40l' } }),
+        createEl('option', { text: 'BLITZ 2:00', attrs: { value: 'blitz' } })
+      ]);
+      const pentSelectorsRow = createEl('div', { id: 'twfoxtetrio-solo-pent-controls', className: 'twfox-solo-pent-row hidden' }, [
+        createEl('label', { className: 'twfox-solo-pent-field' }, [
+          createEl('span', { text: 'PIECE SET' }),
+          pentPieceSelect
+        ]),
+        createEl('label', { className: 'twfox-solo-pent-field' }, [
+          createEl('span', { text: 'SOLO MODE' }),
+          pentModeSelect
+        ])
+      ]);
+
+      function makeOptRow(id, labelText, noteText) {
+        const input = createEl('input', { id, type: 'checkbox', className: 'twfox-solo-check-input' });
+        const row = createEl(
+          'label',
+          {
+            className: 'twfox-solo-check-row',
+            attrs: { 'data-hover': 'tap', 'data-hit': 'click', for: id }
+          },
+          [
+            input,
+            createEl('span', { text: labelText }),
+            noteText ? createEl('span', { className: 'twfox-solo-check-note', text: noteText }) : null
+          ].filter(Boolean)
+        );
+        return { row, input };
+      }
+
+      const optPro = makeOptRow('twfoxtetrio-solo-opt-pro', 'PRO MODE', 'EXTRA STATS & FINESSE');
+      const optProAlert = makeOptRow('twfoxtetrio-solo-opt-pro-alert', 'ALERT ON FINESSE FAULT', '');
+      const optProRetry = makeOptRow('twfoxtetrio-solo-opt-pro-retry', 'RETRY ON FINESSE FAULT', '');
+      const optStride = makeOptRow('twfoxtetrio-solo-opt-stride', 'STRIDE MODE', 'INSTANT R RETRY · FAST START · NO S/Z/O FIRST');
+
+      const pane = createEl(
+        'div',
+        {
+          id: 'twfoxtetrio-pane-solo-lobby',
+          className: 'right_scroller hidden thidden twfox-native-scroller',
+          attrs: { 'data-menuview': 'foxmod_solo_lobby' }
+        },
+        [
+          createEl('div', { className: 'scroller_block ns' }, [
+            createEl('div', { className: 'twfox-solo-toprow' }, [titleEl, pillEl]),
+            descEl,
+            pbLabelEl,
+            pbValueEl,
+            pbSubEl
+          ]),
+          createEl('div', { className: 'scroller_block twfox-solo-starter ns' }, [
+            musicPickerEl,
+            startBtnEl
+          ]),
+          createEl('div', { className: 'scroller_block ns' }, [
+            createEl('h1', { className: 'twfox-solo-opts-title', text: 'OPTIONS' }),
+            pentSelectorsRow,
+            optPro.row,
+            optProAlert.row,
+            optProRetry.row,
+            optStride.row
+          ])
+        ]
+      );
+
+      function getCurrentOpts() {
+        const cur = soloOptionsMap[currentSoloModeKey] || {};
+        return soloLobbyLogic ? soloLobbyLogic.normalizeModeOptions(cur) : cur;
+      }
+
+      function commitOpts(patch) {
+        const next = Object.assign({}, getCurrentOpts(), patch || {});
+        soloOptionsMap[currentSoloModeKey] = soloLobbyLogic ? soloLobbyLogic.normalizeModeOptions(next) : next;
+        if (soloLobbyLogic) {
+          soloLobbyLogic.saveAllOptions(soloOptionsMap);
+        }
+        renderSoloLobby();
+      }
+
+      function renderSoloLobby() {
+        const specs = soloLobbyLogic && soloLobbyLogic.SOLO_MODE_SPECS;
+        const spec = (specs && specs[currentSoloModeKey]) || (specs && specs.fourWide);
+        const opts = getCurrentOpts();
+
+        if (spec) {
+          titleEl.textContent = spec.title;
+          descEl.textContent = spec.subtitle;
+          const headerText = document.getElementById('header_text');
+          const footerText = document.getElementById('footer_text');
+          if (activeFoxView === 'foxmod_solo_lobby') {
+            if (headerText) headerText.textContent = spec.title;
+            if (footerText) footerText.textContent = spec.footer;
+          }
+          if (spec.theme) {
+            const t = spec.theme;
+            pane.setAttribute(
+              'style',
+              `--solo-bg:${t.blockBg};--solo-top:${t.blockTop};--solo-left:${t.blockLeft};--solo-bottom:${t.blockBottom};--solo-right:${t.blockRight};--solo-title:${t.text};--solo-muted:${t.muted};--solo-start-bg:${t.startBg};--solo-start-border:${t.startBorder};--solo-start-color:${t.startColor};`
+            );
+          }
+          setClass(pentSelectorsRow, 'hidden', !spec.hasPentominoSelectors);
+          setClass(optProAlert.row, 'hidden', !spec.hasProFinesseSubOpts);
+          setClass(optProRetry.row, 'hidden', !spec.hasProFinesseSubOpts);
+        }
+
+        const allPbs = soloLobbyLogic ? soloLobbyLogic.loadAllPbs() : {};
+        const pbDisplay = soloLobbyLogic
+          ? soloLobbyLogic.formatSoloPbDisplay(currentSoloModeKey, opts, allPbs)
+          : { title: 'PERSONAL BEST', value: '0', subtitle: '' };
+        pbLabelEl.textContent = pbDisplay.title;
+        pbValueEl.textContent = pbDisplay.value;
+        pbSubEl.textContent = pbDisplay.subtitle;
+
+        if (currentSoloModeKey === 'pentomino') {
+          pentPieceSelect.value = opts.pieceSet || 'pentomino';
+          pentModeSelect.value = opts.subMode || 'zen';
+          const setDesc = opts.pieceSet === 'chaos' ? 'CAOS 19' : opts.pieceSet === 'tetromino' ? 'TETROMINO 7' : 'PENTOMINO 12';
+          const modeDesc = opts.subMode === '40l' ? '40 LINES' : opts.subMode === 'blitz' ? 'BLITZ 2:00' : 'ZEN / PRACTICA';
+          musicPickerEl.textContent = `♪ ${setDesc} · ${modeDesc}`;
+        } else {
+          const choices = (soloLobbyLogic && soloLobbyLogic.SOLO_MUSIC_CHOICES) || [];
+          const found = choices.find((m) => m.id === opts.song) || choices[0];
+          musicPickerEl.textContent = `♪ ${found ? found.label : 'RANDOM: CALM'}`;
+        }
+
+        optPro.input.checked = Boolean(opts.pro);
+        optProAlert.input.checked = Boolean(opts.proAlert);
+        optProRetry.input.checked = Boolean(opts.proRetry);
+        optStride.input.checked = Boolean(opts.stride);
+
+        const disableSub = !opts.pro;
+        setClass(optProAlert.row, 'is-disabled', disableSub);
+        setClass(optProRetry.row, 'is-disabled', disableSub);
+        optProAlert.input.disabled = disableSub;
+        optProRetry.input.disabled = disableSub;
+      }
+
+      refreshSoloLobbyUi = renderSoloLobby;
+
+      musicPickerEl.addEventListener('click', function () {
+        if (currentSoloModeKey === 'pentomino') {
+          const order = ['zen', '40l', 'blitz'];
+          const opts = getCurrentOpts();
+          const idx = order.indexOf(opts.subMode);
+          commitOpts({ subMode: order[(idx + 1) % order.length] });
+          return;
+        }
+        const choices = (soloLobbyLogic && soloLobbyLogic.SOLO_MUSIC_CHOICES) || [];
+        if (choices.length === 0) return;
+        const opts = getCurrentOpts();
+        const curIdx = choices.findIndex((m) => m.id === opts.song);
+        const nextChoice = choices[(curIdx + 1) % choices.length];
+        commitOpts({ song: nextChoice.id });
+      });
+
+      pentPieceSelect.addEventListener('change', function () {
+        commitOpts({ pieceSet: pentPieceSelect.value || 'pentomino' });
+      });
+      pentModeSelect.addEventListener('change', function () {
+        commitOpts({ subMode: pentModeSelect.value || 'zen' });
+      });
+      optPro.input.addEventListener('change', function () {
+        commitOpts({ pro: Boolean(optPro.input.checked) });
+      });
+      optProAlert.input.addEventListener('change', function () {
+        commitOpts({ proAlert: Boolean(optProAlert.input.checked) });
+      });
+      optProRetry.input.addEventListener('change', function () {
+        commitOpts({ proRetry: Boolean(optProRetry.input.checked) });
+      });
+      optStride.input.addEventListener('change', function () {
+        commitOpts({ stride: Boolean(optStride.input.checked) });
+      });
+
+      startBtnEl.addEventListener('click', function () {
+        const opts = getCurrentOpts();
+        if (currentSoloModeKey === 'pentomino') {
+          if (practiceGame) {
+            practiceGame.reset({
+              pieceSet: opts.pieceSet || 'pentomino',
+              mode: opts.subMode || 'zen',
+              noSzoFirst: Boolean(opts.stride),
+              proMode: Boolean(opts.pro),
+              strideMode: Boolean(opts.stride)
+            });
+          }
+          if (typeof syncPentStageSelectors === 'function') {
+            syncPentStageSelectors(opts.pieceSet || 'pentomino', opts.subMode || 'zen');
+          }
+          navigateMenu('foxmod_pentomino');
+          return;
+        }
+
+        const basePreset = CUSTOM_SOLO_PRESETS[currentSoloModeKey] || CUSTOM_SOLO_PRESETS.fourWide;
+        const built = soloLobbyLogic
+          ? soloLobbyLogic.buildCustomLaunchConfig(basePreset, opts)
+          : { preset: basePreset, options: opts };
+        if (typeof runtimeApi.prepareSoloPracticeLaunch === 'function') {
+          runtimeApi.prepareSoloPracticeLaunch(currentSoloModeKey, built.options);
+        }
+        launchCustomPracticeMode(built.preset, false, 'foxmod_solo_lobby');
+      });
+
+      renderSoloLobby();
+      return pane;
     }
 
     function buildPentominoStageScroller() {
@@ -2196,10 +2664,32 @@ body.twfox-ingame #menus > #footer {
         attrs: { width: '640', height: '620' }
       });
 
+      function recordPentominoRun(snap) {
+        if (!soloLobbyLogic || !snap) return;
+        const completed = snap.winReason === '40l_complete';
+        if ((snap.score || 0) <= 0 && (snap.lines || 0) <= 0 && !completed) return;
+        soloLobbyLogic.recordSoloResult(
+          'pentomino',
+          { pieceSet: snap.pieceSet, subMode: snap.mode },
+          {
+            score: snap.score || 0,
+            lines: snap.lines || 0,
+            timeMs: snap.elapsedMs || 0,
+            completed
+          }
+        );
+      }
+
       if (pentominoEngine && foxmodCanvas) {
+        const initPentOpts = soloOptionsMap.pentomino || {};
         practiceGame = pentominoEngine.createGame({
-          pieceSet: 'pentomino',
-          mode: 'zen'
+          pieceSet: initPentOpts.pieceSet || 'pentomino',
+          mode: initPentOpts.subMode || 'zen',
+          noSzoFirst: initPentOpts.stride !== false,
+          proMode: Boolean(initPentOpts.pro),
+          strideMode: initPentOpts.stride !== false,
+          onFinish: recordPentominoRun,
+          onReset: recordPentominoRun
         });
         practiceController = foxmodCanvas.createPlayfieldController({
           canvas: practiceCanvas,
@@ -2208,11 +2698,28 @@ body.twfox-ingame #menus > #footer {
         });
       }
 
+      syncPentStageSelectors = function (pSet, pMode) {
+        pieceSelect.value = pSet || 'pentomino';
+        modeSelect.value = pMode || 'zen';
+      };
+
       function applyPracticeSettings() {
         if (!practiceGame) return;
+        const nextSet = pieceSelect.value || 'pentomino';
+        const nextMode = modeSelect.value || 'zen';
+        const pOpts = soloOptionsMap.pentomino || {};
+        soloOptionsMap.pentomino = soloLobbyLogic
+          ? soloLobbyLogic.normalizeModeOptions(Object.assign({}, pOpts, { pieceSet: nextSet, subMode: nextMode }))
+          : Object.assign({}, pOpts, { pieceSet: nextSet, subMode: nextMode });
+        if (soloLobbyLogic) {
+          soloLobbyLogic.saveAllOptions(soloOptionsMap);
+        }
         practiceGame.reset({
-          pieceSet: pieceSelect.value || 'pentomino',
-          mode: modeSelect.value || 'zen'
+          pieceSet: nextSet,
+          mode: nextMode,
+          noSzoFirst: soloOptionsMap.pentomino.stride !== false,
+          proMode: Boolean(soloOptionsMap.pentomino.pro),
+          strideMode: soloOptionsMap.pentomino.stride !== false
         });
         if (foxmodCanvas) {
           foxmodCanvas.renderPlayfield(practiceCanvas, practiceGame.getSnapshot());
@@ -4277,6 +4784,7 @@ body.twfox-ingame #menus > #footer {
       const built = [
         ['foxmod', buildHubScroller()],
         ['foxmod_practice', buildPracticeMenuScroller()],
+        ['foxmod_solo_lobby', buildSoloLobbyScroller()],
         ['foxmod_pentomino', buildPentominoStageScroller()],
         ['foxmod_multi', buildMultiScroller()],
         ['foxmod_config', buildConfigScroller()],
@@ -4390,7 +4898,7 @@ body.twfox-ingame #menus > #footer {
           } else if (practiceRunEntered && (menuType === 'home' || menuType === 'custom')) {
             pendingPracticeReturn = false;
             practiceRunEntered = false;
-            navigateMenu('foxmod_practice');
+            navigateMenu(pendingPracticeReturnView || 'foxmod_practice');
             return;
           } else if (practiceRunEntered && menuType !== 'results') {
             pendingPracticeReturn = false;
@@ -4422,6 +4930,8 @@ body.twfox-ingame #menus > #footer {
       }
       if (activeFoxView === 'foxmod_config') {
         syncConfigControls(cfg);
+      } else if (activeFoxView === 'foxmod_solo_lobby' && typeof refreshSoloLobbyUi === 'function') {
+        refreshSoloLobbyUi();
       }
     });
   }

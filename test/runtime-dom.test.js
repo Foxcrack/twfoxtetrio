@@ -721,43 +721,100 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.ok(env.elements.get('twfoxtetrio-prac-marathon'));
   assert.ok(env.elements.get('twfoxtetrio-prac-zen'));
 
-  // Clicking 4WIDE configures TETR.IO custom boardwidth=4 & launches real engine (#start_custom)
+  // Clicking 4WIDE opens its pre-game Solo Lobby (Personal Best, Start button, Pro & Stride options) WITHOUT auto-starting
   env.elements.get('twfoxtetrio-prac-4wide').click();
+  assert.equal(env.getCustomStarts(), 0);
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_solo_lobby');
+  assert.equal(env.headerText.textContent, '4WIDE');
+  const soloLobbyPane = env.elements.get('twfoxtetrio-pane-solo-lobby');
+  assert.equal(soloLobbyPane.classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-solo-pb-value').textContent, '0');
+  const strideCheck = env.elements.get('twfoxtetrio-solo-opt-stride');
+  const proCheck = env.elements.get('twfoxtetrio-solo-opt-pro');
+  assert.equal(strideCheck.checked, true);
+  assert.equal(proCheck.checked, false);
+
+  // Clicking START launches TETR.IO custom 4-wide engine & applies real Stride/no_szo options to wrapper
+  env.elements.get('twfoxtetrio-solo-start').click();
   assert.equal(env.getCustomStarts(), 1);
   assert.equal(env.customContainer.children[0].value, '4');
   assert.equal(env.customContainer.children[1].textContent, 'none');
 
-  // Exiting 4WIDE (TETR.IO hides menus during game, then Ni('home')) returns directly to PRACTICA
+  const fake4wWrapper = {
+    state: {
+      frame: 1800,
+      stats: { score: 88500, lines: 44 },
+      setoptions: { stride: false, no_szo: false, pro: false, precountdown: 3000 }
+    }
+  };
   env.menus.setAttribute('data-menu-type', 'none');
   env.menus.classList.add('hidden');
+  vm.runInContext(`new Map().set('custom_4w', fake4wWrapperRef);`, Object.assign(env.context, { fake4wWrapperRef: fake4wWrapper }));
+  assert.equal(fake4wWrapper.state.setoptions.stride, true);
+  assert.equal(fake4wWrapper.state.setoptions.no_szo, true);
+  assert.equal(fake4wWrapper.state.setoptions.precountdown, 0);
+
+  // Exiting 4WIDE returns directly to the 4WIDE pre-game lobby showing the updated Personal Best!
   env.menus.setAttribute('data-menu-type', 'home');
   env.menus.classList.remove('hidden');
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_solo_lobby');
+  assert.equal(env.headerText.textContent, '4WIDE');
+  assert.equal(env.elements.get('twfoxtetrio-solo-pb-value').textContent, '88,500');
+
+  // BACK from 4WIDE pre-game lobby returns to PRACTICA -> click MARATHON opens MARATHON pre-game lobby
+  env.backBtn.click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
-  assert.equal(env.headerText.textContent, 'PRACTICA');
   assert.equal(practiceMenuPane.classList.contains('hidden'), false);
 
-  // Directly click MARATHON from returned PRACTICA -> configures 150 lines & levels=true -> exiting via results->custom returns to PRACTICA
   env.elements.get('twfoxtetrio-prac-marathon').click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_solo_lobby');
+  assert.equal(env.headerText.textContent, 'MARATHON');
+  assert.equal(env.getCustomStarts(), 1);
+
+  // Enable Pro Mode on Marathon, launch, verify results return -> lobby -> BACK to PRACTICA
+  proCheck.checked = true;
+  proCheck.dispatchEvent('change');
+  env.elements.get('twfoxtetrio-solo-start').click();
   assert.equal(env.getCustomStarts(), 2);
   assert.equal(env.customContainer.children[0].value, '10');
   assert.equal(env.customContainer.children[1].textContent, 'lines');
   assert.equal(env.customContainer.children[2].value, '150');
   assert.equal(env.customContainer.children[3].checked, true);
+  const fakeMarWrapper = {
+    state: {
+      frame: 7200,
+      stats: { score: 250400, lines: 150 },
+      setoptions: { stride: false, no_szo: false, pro: false }
+    }
+  };
   env.menus.setAttribute('data-menu-type', 'none');
   env.menus.classList.add('hidden');
+  vm.runInContext(`new Map().set('custom_mar', fakeMarRef);`, Object.assign(env.context, { fakeMarRef: fakeMarWrapper }));
+  assert.equal(fakeMarWrapper.state.setoptions.pro, true);
+  assert.equal(fakeMarWrapper.state.setoptions.stride, true);
   env.menus.setAttribute('data-menu-type', 'results');
   env.menus.classList.remove('hidden');
   assert.equal(env.menus.getAttribute('data-menu-type'), 'results', 'Results screen stays visible before returning');
   env.menus.setAttribute('data-menu-type', 'custom');
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_solo_lobby');
+  assert.equal(env.elements.get('twfoxtetrio-solo-pb-value').textContent, '250,400');
+  env.backBtn.click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
-  assert.equal(practiceMenuPane.classList.contains('hidden'), false);
 
-  // Directly click PENTOMINOS from PRACTICA -> full-stage TETR.IO-styled Pentominoes + custom userConfig controls
+  // Click PENTOMINOS -> opens PENTOMINOS pre-game lobby -> switch to 40L -> START launches playable stage with custom userConfig controls
   env.elements.get('twfoxtetrio-prac-pentomino').click();
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_solo_lobby');
+  assert.equal(env.headerText.textContent, 'PENTOMINOS');
+  const pentSubModeSelect = env.elements.get('twfoxtetrio-solo-submode-select');
+  pentSubModeSelect.value = '40l';
+  pentSubModeSelect.dispatchEvent('change');
+  assert.match(env.elements.get('twfoxtetrio-solo-pb-label').textContent, /40L/);
+  env.elements.get('twfoxtetrio-solo-start').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_pentomino');
   assert.equal(pentominoStagePane.classList.contains('hidden'), false);
   assert.equal(env.body.classList.contains('twfox-ingame'), true);
   assert.equal(env.elements.get('twfoxtetrio-practice-pieces').value, 'pentomino');
+  assert.equal(env.elements.get('twfoxtetrio-practice-mode').value, '40l');
 
   // Custom keybinds read from userConfig (DIGIT8 hard-drops, J/L/Z/C work cleanly)
   const settings = env.context.__TWFOX_INTERNAL__.foxmodCanvas.readTetrioUserSettings();
@@ -767,9 +824,11 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
 
   env.dispatchDocEvent('keydown', { key: '8', code: 'Digit8' });
 
-  // Back returns PENTOMINOS -> PRACTICA -> FOXMOD (exits twfox-ingame chrome cleanly)
+  // Back returns PENTOMINOS -> PENTOMINOS lobby -> PRACTICA -> FOXMOD (exits twfox-ingame chrome cleanly)
   env.backBtn.click();
   assert.equal(env.body.classList.contains('twfox-ingame'), false);
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_solo_lobby');
+  env.backBtn.click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
   env.backBtn.click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');

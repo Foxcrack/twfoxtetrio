@@ -18,6 +18,7 @@ const SOURCE_FILES = [
   'src/features/quickplay-logic.js',
   'src/features/multiplayer-logic.js',
   'src/features/zen-qp-logic.js',
+  'src/features/solo-lobby-logic.js',
   'src/features/fox-paw-logic.js',
   'src/core/top-hud.js',
   'src/core/runtime.js',

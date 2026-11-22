@@ -15,6 +15,7 @@
   const quickPlayLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.quickPlayLogic;
   const multiplayerLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.multiplayerLogic;
   const zenQpLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.zenQpLogic;
+  const soloLobbyLogic = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.soloLobbyLogic;
   if (!blitzLogic || !fortyLinesLogic || !quickPlayLogic || !multiplayerLogic) {
     return;
   }
@@ -539,6 +540,93 @@
   let practiceZenRequested = false;
   let practiceZenActive = false;
   let lastEndedPracticeZen = false;
+  let pendingSoloPractice = null;
+  let activeSoloPractice = null;
+  let lastEndedSoloPractice = null;
+
+  function applySoloOptionsToSetopts(setopts, rawOpts) {
+    if (!setopts || typeof setopts !== 'object') return;
+    const opts = soloLobbyLogic ? soloLobbyLogic.normalizeModeOptions(rawOpts) : rawOpts || {};
+    setopts.stride = Boolean(opts.stride);
+    setopts.no_szo = Boolean(opts.stride);
+    setopts.pro = Boolean(opts.pro);
+    setopts.pro_alert = Boolean(opts.pro && opts.proAlert);
+    setopts.pro_retry = Boolean(opts.pro && opts.proRetry);
+    if (opts.stride) {
+      setopts.countdown = true;
+      setopts.countdown_interval = 450;
+      setopts.precountdown = 0;
+      setopts.prestart = 250;
+      setopts.zoominto = 'fast';
+    }
+    if (opts.pro) {
+      setopts.slot_counter4 = 'keys';
+      setopts.slot_counter5 = 'finesse';
+    }
+  }
+
+  function recordActiveSoloRun(menusEl, menuType) {
+    if (!activeSoloPractice || !soloLobbyLogic) return false;
+    const gState = activeSoloPractice.wrapper && activeSoloPractice.wrapper.state;
+    const stats = gState && gState.stats;
+    let score = Number(stats && stats.score) || 0;
+    let lines = Number(stats && stats.lines) || 0;
+    const frame = Number(gState && gState.frame) || 0;
+    let timeMs = frame > 0 ? Math.round(frame * (1000 / 60)) : 0;
+    let completed = activeSoloPractice.modeKey === 'marathon' && lines >= 150;
+
+    if (menuType === 'results' && menusEl) {
+      const headerEl = document.getElementById('result_header');
+      const resultEl = document.getElementById('result_result');
+      if (headerEl && resultEl) {
+        const headerText = headerEl.textContent || '';
+        if (/FINAL SCORE/i.test(headerText)) {
+          const parsedScore = blitzLogic.parseScoreText(resultEl.textContent);
+          if (parsedScore > score) score = parsedScore;
+          if (activeSoloPractice.modeKey === 'marathon') completed = true;
+        } else if (/FINAL TIME/i.test(headerText)) {
+          const parsedTime = fortyLinesLogic.parseTimeText(resultEl.textContent);
+          if (parsedTime > 0) timeMs = parsedTime;
+          if (activeSoloPractice.modeKey === 'marathon') {
+            lines = Math.max(lines, 150);
+            completed = true;
+          }
+        }
+      }
+    }
+
+    if (score <= 0 && lines <= 0 && !completed) return false;
+    const rec = soloLobbyLogic.recordSoloResult(activeSoloPractice.modeKey, activeSoloPractice.opts, {
+      score,
+      lines,
+      timeMs,
+      completed
+    });
+    return Boolean(rec && rec.updated);
+  }
+
+  function attachSoloPracticeWrapper(wrapper) {
+    if (!wrapper || typeof wrapper !== 'object') return;
+    const gState = wrapper.state;
+    if (!gState || !gState.setoptions || gState.setoptions.usezenconfig) return;
+
+    const spec = pendingSoloPractice || (activeSoloPractice && activeSoloPractice.wrapper !== wrapper
+      ? { modeKey: activeSoloPractice.modeKey, opts: activeSoloPractice.opts }
+      : null);
+    if (!spec) return;
+
+    if (activeSoloPractice && activeSoloPractice.wrapper && activeSoloPractice.wrapper !== wrapper) {
+      recordActiveSoloRun(null, null);
+    }
+
+    pendingSoloPractice = null;
+    applySoloOptionsToSetopts(gState.setoptions, spec.opts);
+    activeSoloPractice = {
+      modeKey: spec.modeKey,
+      opts: spec.opts,
+      wrapper
+    };
+  }
 
   function setPracticeZenPanelVisibility(visible) {
     const zenPanel = document.getElementById('zen_panel');
@@ -691,6 +779,7 @@
       if (value !== null && typeof value === 'object') {
         rosterTracker.observeMapSet(this, key, value);
         attachZenGameWrapper(value);
+        attachSoloPracticeWrapper(value);
       }
       return result;
     }
@@ -798,6 +887,22 @@
         let needEmit = false;
         if (!menusHidden) {
           const onResults = menuType === 'results';
+          if (activeSoloPractice) {
+            if (recordActiveSoloRun(menusEl, menuType)) {
+              needEmit = true;
+            }
+            if (onResults) {
+              lastEndedSoloPractice = {
+                modeKey: activeSoloPractice.modeKey,
+                opts: activeSoloPractice.opts
+              };
+            } else {
+              lastEndedSoloPractice = null;
+            }
+            activeSoloPractice = null;
+          } else if (!onResults) {
+            lastEndedSoloPractice = null;
+          }
           if (practiceZenActive && exitPracticeZenSession(onResults)) {
             needEmit = true;
           } else if (!onResults) {
@@ -833,6 +938,9 @@
         startResultsBtn.addEventListener('click', function () {
           if (lastEndedPracticeZen) {
             practiceZenRequested = true;
+          }
+          if (lastEndedSoloPractice) {
+            pendingSoloPractice = lastEndedSoloPractice;
           }
         });
       }
@@ -915,6 +1023,15 @@
     enterPracticeZen() {
       practiceZenRequested = true;
       lastEndedPracticeZen = false;
+    },
+    prepareSoloPracticeLaunch(modeKey, opts) {
+      pendingSoloPractice = { modeKey, opts: opts || {} };
+      lastEndedSoloPractice = null;
+    },
+    clearSoloPracticeLaunch() {
+      pendingSoloPractice = null;
+      activeSoloPractice = null;
+      lastEndedSoloPractice = null;
     },
     exitPracticeZen() {
       if (exitPracticeZenSession(false)) {
