@@ -1632,6 +1632,8 @@ body.twfox-ingame #menus > #footer {
 
     let activeFoxView = null;
     let isNavigatingInternal = false;
+    let pendingPracticeReturn = false;
+    let practiceRunEntered = false;
     let scrollersInjected = false;
     let backHooked = false;
     let statusEl = null;
@@ -1741,6 +1743,10 @@ body.twfox-ingame #menus > #footer {
 
       stopPlayControllers();
 
+      if (!isFoxTarget) {
+        pendingPracticeReturn = false;
+        practiceRunEntered = false;
+      }
       isNavigatingInternal = true;
       try {
         for (const el of collectMenuViews(menusEl)) {
@@ -1844,6 +1850,16 @@ body.twfox-ingame #menus > #footer {
       );
     }
 
+    function launchCustomPracticeMode(presetMap, isZen) {
+      hideFoxmodScrollersImmediately();
+      pendingPracticeReturn = true;
+      practiceRunEntered = false;
+      if (isZen && typeof runtimeApi.enterPracticeZen === 'function') {
+        runtimeApi.enterPracticeZen();
+      }
+      applyCustomSoloPreset(presetMap);
+    }
+
     function buildPracticeMenuScroller() {
       const items = [
         makeGiantBanner(
@@ -1861,8 +1877,7 @@ body.twfox-ingame #menus > #footer {
             hit: 'confirm'
           },
           function () {
-            hideFoxmodScrollersImmediately();
-            applyCustomSoloPreset(CUSTOM_SOLO_PRESETS.fourWide);
+            launchCustomPracticeMode(CUSTOM_SOLO_PRESETS.fourWide, false);
           }
         ),
         makeGiantBanner(
@@ -1899,8 +1914,7 @@ body.twfox-ingame #menus > #footer {
             hit: 'confirm'
           },
           function () {
-            hideFoxmodScrollersImmediately();
-            applyCustomSoloPreset(CUSTOM_SOLO_PRESETS.marathon);
+            launchCustomPracticeMode(CUSTOM_SOLO_PRESETS.marathon, false);
           }
         ),
         makeGiantBanner(
@@ -1918,11 +1932,7 @@ body.twfox-ingame #menus > #footer {
             hit: 'confirm'
           },
           function () {
-            hideFoxmodScrollersImmediately();
-            if (typeof runtimeApi.enterPracticeZen === 'function') {
-              runtimeApi.enterPracticeZen();
-            }
-            applyCustomSoloPreset(CUSTOM_SOLO_PRESETS.zen);
+            launchCustomPracticeMode(CUSTOM_SOLO_PRESETS.zen, true);
           }
         )
       ];
@@ -3411,9 +3421,26 @@ body.twfox-ingame #menus > #footer {
     const menusEl = document.getElementById('menus');
     if (menusEl && typeof root.MutationObserver === 'function') {
       const menuObserver = new root.MutationObserver(function () {
-        if (isNavigatingInternal || !activeFoxView) return;
+        if (isNavigatingInternal) return;
+        const menusHidden = menusEl.classList.contains('hidden');
         const menuType = menusEl.getAttribute('data-menu-type');
-        if (menusEl.classList.contains('hidden') || (menuType && !menuType.startsWith('foxmod'))) {
+
+        if (pendingPracticeReturn) {
+          if (menusHidden || menuType === 'none') {
+            practiceRunEntered = true;
+          } else if (practiceRunEntered && (menuType === 'home' || menuType === 'custom')) {
+            pendingPracticeReturn = false;
+            practiceRunEntered = false;
+            navigateMenu('foxmod_practice');
+            return;
+          } else if (practiceRunEntered && menuType !== 'results') {
+            pendingPracticeReturn = false;
+            practiceRunEntered = false;
+          }
+        }
+
+        if (!activeFoxView) return;
+        if (menusHidden || (menuType && !menuType.startsWith('foxmod'))) {
           hideFoxmodScrollersImmediately();
         }
       });
@@ -3426,6 +3453,10 @@ body.twfox-ingame #menus > #footer {
     runtimeApi.subscribe(function (state, cfg) {
       ensureHomeButton();
       ensureNativeScrollers();
+      if (state && state.inGame && state.mode && state.mode !== 'Custom Solo') {
+        pendingPracticeReturn = false;
+        practiceRunEntered = false;
+      }
       if (state && (state.inGame || state.inMultiplayer) && activeFoxView) {
         hideFoxmodScrollersImmediately();
         return;

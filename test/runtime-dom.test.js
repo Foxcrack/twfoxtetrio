@@ -724,19 +724,32 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.customContainer.children[0].value, '4');
   assert.equal(env.customContainer.children[1].textContent, 'none');
 
-  // Reopen FOXMOD -> PRACTICA -> click MARATHON -> configures 150 lines & levels=true
-  foxmodBtn.click();
-  env.elements.get('twfoxtetrio-card-practice').click();
+  // Exiting 4WIDE (TETR.IO hides menus during game, then Ni('home')) returns directly to PRACTICA
+  env.menus.setAttribute('data-menu-type', 'none');
+  env.menus.classList.add('hidden');
+  env.menus.setAttribute('data-menu-type', 'home');
+  env.menus.classList.remove('hidden');
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
+  assert.equal(env.headerText.textContent, 'PRACTICA');
+  assert.equal(practiceMenuPane.classList.contains('hidden'), false);
+
+  // Directly click MARATHON from returned PRACTICA -> configures 150 lines & levels=true -> exiting via results->custom returns to PRACTICA
   env.elements.get('twfoxtetrio-prac-marathon').click();
   assert.equal(env.getCustomStarts(), 2);
   assert.equal(env.customContainer.children[0].value, '10');
   assert.equal(env.customContainer.children[1].textContent, 'lines');
   assert.equal(env.customContainer.children[2].value, '150');
   assert.equal(env.customContainer.children[3].checked, true);
+  env.menus.setAttribute('data-menu-type', 'none');
+  env.menus.classList.add('hidden');
+  env.menus.setAttribute('data-menu-type', 'results');
+  env.menus.classList.remove('hidden');
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'results', 'Results screen stays visible before returning');
+  env.menus.setAttribute('data-menu-type', 'custom');
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
+  assert.equal(practiceMenuPane.classList.contains('hidden'), false);
 
-  // Reopen FOXMOD -> PRACTICA -> click PENTOMINOS -> full-stage TETR.IO-styled Pentominoes + custom userConfig controls
-  foxmodBtn.click();
-  env.elements.get('twfoxtetrio-card-practice').click();
+  // Directly click PENTOMINOS from PRACTICA -> full-stage TETR.IO-styled Pentominoes + custom userConfig controls
   env.elements.get('twfoxtetrio-prac-pentomino').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_pentomino');
   assert.equal(pentominoStagePane.classList.contains('hidden'), false);
@@ -1236,9 +1249,11 @@ test('vanilla SOLO -> ZEN stays untouched while FOXMOD -> PRACTICA -> ZEN shows 
   assert.equal(zenGameWrapper.state.g, 0.02);
   assert.equal(zenGameWrapper.state.setoptions.locktime, 30);
 
-  // Exiting back to menus hides #zen_panel & #twfoxtetrio-zen-qp-section cleanly
+  // Exiting back to menus hides #zen_panel & #twfoxtetrio-zen-qp-section and returns cleanly to PRACTICA
   env.menus.setAttribute('data-menu-type', 'home');
   env.menus.classList.remove('hidden');
   assert.equal(env.elements.get('zen_panel').classList.contains('hidden'), true);
   assert.equal(zenSection.classList.contains('hidden'), true);
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
+  assert.equal(env.elements.get('twfoxtetrio-pane-practice').classList.contains('hidden'), false);
 });
