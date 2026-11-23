@@ -18,7 +18,13 @@ const {
   stripModSnippet,
   injectModIntoPreload
 } = require('../scripts/build');
-const { parseArgs } = require('../scripts/install');
+const {
+  parseArgs,
+  resolveAsarCandidate,
+  getTetrioAsarCandidates,
+  findTetrioAsar,
+  parseLinuxRunningProcesses
+} = require('../scripts/install');
 
 function createSyntheticAsar(targetPath) {
   const preloadBuf = Buffer.from('window.IS_ELECTRON = true;\nwindow.CLIENT_VERSION = 10;\n', 'utf8');
@@ -144,4 +150,70 @@ test('injectModIntoMain adds allowlisted twfoxtetrio-fetch IPC and stripMainMod 
   // Idempotent on re-injection and clean strip back to original content
   assert.equal(injectModIntoMain(patchedMain), patchedMain);
   assert.equal(stripMainMod(patchedMain), origMain);
+});
+
+test('Linux installer resolves distro, wrapper script, Flatpak, extracted AppImage, and process detection paths', () => {
+  const mkFs = (entries) => {
+    const map = new Map(Object.entries(entries));
+    return {
+      existsSync: (target) => map.has(target),
+      statSync: (target) => {
+        const entry = map.get(target);
+        if (!entry) throw new Error('ENOENT: ' + target);
+        return {
+          isFile: () => entry.type === 'file',
+          isDirectory: () => entry.type === 'dir',
+          size: entry.content ? Buffer.byteLength(entry.content) : 0
+        };
+      },
+      realpathSync: (target) => (map.get(target) && map.get(target).real) || target,
+      readFileSync: (target) => Buffer.from((map.get(target) && map.get(target).content) || '')
+    };
+  };
+
+  // Wrapper script in /usr/bin pointing to /opt/TETR.IO/tetrio-desktop
+  const fakeLinuxFs = mkFs({
+    '/usr/bin/tetrio-desktop': { type: 'file', content: '#!/bin/sh\nexec /opt/TETR.IO/tetrio-desktop "$@"\n' },
+    '/opt/TETR.IO/tetrio-desktop': { type: 'file', content: '\x7fELF...' },
+    '/opt/TETR.IO/resources/app.asar': { type: 'file', content: 'asar' }
+  });
+  const candidates = getTetrioAsarCandidates({
+    platform: 'linux',
+    env: { PATH: '/usr/bin' },
+    homeDir: '/home/fox',
+    fs: fakeLinuxFs,
+    pathImpl: path.posix
+  });
+  assert.ok(candidates.includes('/opt/TETR.IO/resources/app.asar'));
+  assert.equal(
+    findTetrioAsar(null, { platform: 'linux', env: { PATH: '/usr/bin' }, homeDir: '/home/fox', fs: fakeLinuxFs, pathImpl: path.posix }),
+    '/opt/TETR.IO/resources/app.asar'
+  );
+
+  // Extracted AppImage squashfs-root directory
+  const squashFs = mkFs({
+    '/tmp/squashfs-root': { type: 'dir' },
+    '/tmp/squashfs-root/usr/lib/tetrio-desktop/resources/app.asar': { type: 'file', content: 'asar' }
+  });
+  assert.equal(
+    resolveAsarCandidate('/tmp/squashfs-root', squashFs, path.posix),
+    '/tmp/squashfs-root/usr/lib/tetrio-desktop/resources/app.asar'
+  );
+
+  // Raw .AppImage throws actionable extract guidance
+  assert.throws(
+    () => resolveAsarCandidate('/home/fox/TETR.IO.AppImage', squashFs, path.posix),
+    /--appimage-extract/
+  );
+
+  // Process detection catches running TETR.IO Desktop on Linux but ignores our own installer script
+  const selfPid = 9001;
+  assert.equal(
+    parseLinuxRunningProcesses('9001 node /repo/scripts/install.js\n1234 tetrio-desktop /opt/TETR.IO/tetrio-desktop\n', selfPid),
+    true
+  );
+  assert.equal(
+    parseLinuxRunningProcesses('9001 bash install.sh\n4321 gnome-shell /usr/bin/gnome-shell\n', selfPid),
+    false
+  );
 });

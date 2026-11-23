@@ -83,6 +83,47 @@ node scripts/install.js --path "C:\Ruta\A\tetrio-desktop"
 
 ---
 
+## 🐧 Instalación en Linux (TETR.IO Desktop)
+
+Compatible con instalaciones `.deb`, `.rpm`, Arch/AUR (`tetrio-desktop`), `.tar.gz`, Flatpak y AppImage extraído. **No necesitas instalar paquetes npm**, solo **Node.js**.
+
+### Instalación rápida
+1. Cierra **TETR.IO Desktop** por completo.
+2. Clona el repositorio o descarga/descomprime el ZIP de GitHub:
+   ```bash
+   git clone https://github.com/Foxcrack/twfoxtetrio.git
+   cd twfoxtetrio
+   ```
+3. Ejecuta el instalador para Linux (detecta `/opt/TETR.IO`, `/usr/lib/tetrio-desktop`, `~/.local/share`, Flatpak y tu `$PATH`, y pide `sudo` automáticamente solo si tu carpeta de TETR.IO es del sistema):
+   ```bash
+   bash install.sh
+   ```
+   *(También puedes darle permisos con `chmod +x install.sh uninstall.sh` y ejecutar `./install.sh`).*
+
+### Si usas ruta personalizada o `.AppImage`
+- Ruta personalizada:
+  ```bash
+  bash install.sh --path "/ruta/a/tetrio-desktop"
+  ```
+- **AppImage:** Los `.AppImage` son imágenes de solo lectura; primero extráelo y luego instala el mod sobre `squashfs-root`:
+  ```bash
+  ./TETR.IO.AppImage --appimage-extract
+  bash install.sh --path "./squashfs-root"
+  # Y luego ejecuta ./squashfs-root/AppRun
+  ```
+
+### Verificar estado o desinstalar en Linux
+- Ver estado:
+  ```bash
+  node scripts/install.js --status
+  ```
+- Desinstalar (restaura `app.asar.bak`):
+  ```bash
+  bash uninstall.sh
+  ```
+
+---
+
 ## 🧩 Estructura para colaboradores de la comunidad
 
 ```text
@@ -109,7 +150,9 @@ twfoxtetrio/
 │   └── install.js                 # Instalador / desinstalador seguro con backup
 ├── test/                          # Pruebas unitarias y simulación DOM en VM
 ├── install.bat
-└── uninstall.bat
+├── install.sh
+├── uninstall.bat
+└── uninstall.sh
 ```
 
 ### Cómo agregar una nueva modificación
