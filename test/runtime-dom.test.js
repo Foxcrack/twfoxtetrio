@@ -1213,11 +1213,26 @@ test('vanilla SOLO -> ZEN stays untouched while FOXMOD -> PRACTICA -> ZEN shows 
   assert.equal(env.elements.get('twfoxtetrio-zen-qp-section'), undefined);
   assert.equal(vanillaZenWrapper.state.setoptions.__twfoxZenHooked, undefined);
 
-  // Now open FOXMOD -> PRACTICA -> ZEN: arms Practice ZEN, starts custom preset, and opens #zen_panel + QP Cards
+  // Capture temporary #custom_content_container boolean options during #start_custom dispatch
+  const capturedCustomKeys = {};
+  env.elements.get('start_custom').addEventListener('click', () => {
+    for (const item of env.customContainer.children) {
+      const k = item.getAttribute('data-index');
+      if (k === 'can_undo' || k === 'retryisclear' || k === 'stride') {
+        capturedCustomKeys[k] = Boolean(item.checked);
+      }
+    }
+  });
+
+  // Now open FOXMOD -> PRACTICA -> ZEN: arms Practice ZEN, starts custom preset (with can_undo=true), and opens #zen_panel + QP Cards
   env.elements.get('twfoxtetrio-home-foxmod').click();
   env.elements.get('twfoxtetrio-card-practice').click();
   env.elements.get('twfoxtetrio-prac-zen').click();
   assert.equal(env.getCustomStarts(), 1);
+  assert.equal(capturedCustomKeys.can_undo, true);
+  assert.equal(capturedCustomKeys.retryisclear, true);
+  assert.equal(capturedCustomKeys.stride, true);
+  assert.equal(env.customContainer.children.length, 4, 'Temporary custom option inputs must be cleaned up after launch');
 
   let createHolderCalls = 0;
   const zenGameWrapper = {
@@ -1264,9 +1279,11 @@ test('vanilla SOLO -> ZEN stays untouched while FOXMOD -> PRACTICA -> ZEN shows 
     Object.assign(env.context, { zenWrapperRef: zenGameWrapper })
   );
 
-  // Uses real #zen_panel sidebar (not hidden) with usezenconfig=true and zenlevels=false (no /api/games/zen writes)
+  // Uses real #zen_panel sidebar (not hidden) with usezenconfig=true, can_undo=true (Ctrl+Z / Ctrl+Y) and zenlevels=false
   assert.equal(env.elements.get('zen_panel').classList.contains('hidden'), false);
   assert.equal(zenGameWrapper.state.setoptions.usezenconfig, true);
+  assert.equal(zenGameWrapper.state.setoptions.can_undo, true);
+  assert.equal(zenGameWrapper.state.setoptions.stride, true);
   assert.equal(zenGameWrapper.state.setoptions.zenlevels, false);
   const zenSection = env.elements.get('twfoxtetrio-zen-qp-section');
   assert.ok(zenSection, 'Expected Quick Play Cards section inside #zen_panel_content');
@@ -1301,8 +1318,9 @@ test('vanilla SOLO -> ZEN stays untouched while FOXMOD -> PRACTICA -> ZEN shows 
   assert.equal(zenGameWrapper.state.g, 20);
   assert.equal(zenGameWrapper.state.setoptions.locktime, 16);
 
-  // Clicking RESET clears all active QP cards and restores clean base ZEN flags
+  // Clicking RESET clears all active QP cards and restores clean base ZEN flags while keeping can_undo active
   env.elements.get('twfoxtetrio-zen-qp-reset').click();
+  assert.equal(zenGameWrapper.state.setoptions.can_undo, true);
   assert.equal(zenGameWrapper.state.setoptions.display_hold, true);
   assert.equal(zenGameWrapper.state.holdlocked, false);
   assert.equal(zenGameWrapper.state.setoptions.zenith_allspin, false);

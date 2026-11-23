@@ -696,6 +696,7 @@
           if (practiceZenActive && !applyingZenMods && zenQpLogic) {
             applyingZenMods = true;
             try {
+              setopts.can_undo = true;
               zenQpLogic.applyZenQpModsToGameState(gState, config.zenQuickPlayMods);
               hookAppliedDuringPull = true;
             } finally {
@@ -747,6 +748,8 @@
     setopts.zenlevels = false;
     setopts.nolockout = true;
     setopts.retryisclear = true;
+    setopts.can_undo = true;
+    setopts.stride = true;
     setopts.infinite_stock = true;
     setopts.pro = true;
     setopts.garbagespecialbonus = true;

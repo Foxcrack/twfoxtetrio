@@ -158,3 +158,61 @@ test('playfield controller Stride Mode triggers instant retry on tap while non-S
   assert.equal(normalGame.getSnapshot().pieces, 0);
   ctrlNormal.stop();
 });
+
+test('ZEN mode supports Ctrl+Z undo and Ctrl+Y / Ctrl+Shift+Z redo without triggering rotateCCW', () => {
+  const fakeCtx = new Proxy(
+    {},
+    {
+      get(target, prop) {
+        return typeof target[prop] === 'function' ? target[prop] : () => {};
+      },
+      set() {
+        return true;
+      }
+    }
+  );
+  const fakeCanvas = { width: 640, height: 620, getContext: () => fakeCtx };
+
+  const game = pentominoEngine.createGame({ pieceSet: 'tetromino', mode: 'zen', seed: 4242 });
+  const ctrl = foxmodCanvas.createPlayfieldController({ canvas: fakeCanvas, game });
+  ctrl.start();
+
+  const firstKey = game.getSnapshot().active.key;
+  assert.equal(game.getSnapshot().canUndo, true);
+  assert.equal(game.getSnapshot().undoCount, 0);
+
+  // Drop 2 pieces -> board & count reflect 2 pieces placed
+  game.hardDrop();
+  const secondKey = game.getSnapshot().active.key;
+  game.hardDrop();
+  const thirdKey = game.getSnapshot().active.key;
+  assert.equal(game.getSnapshot().pieces, 2);
+  assert.equal(game.getSnapshot().undoCount, 2);
+
+  // Ctrl+Z should undo piece #2 (leaving 1 piece placed and secondKey active at rotation 0!)
+  assert.equal(ctrl.handleKeyDown({ key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: false, repeat: false }), true);
+  let snap = game.getSnapshot();
+  assert.equal(snap.pieces, 1);
+  assert.equal(snap.active.key, secondKey);
+  assert.equal(snap.active.rot, 0);
+  assert.equal(snap.redoCount, 1);
+
+  // Ctrl+Y should redo piece #2 (back to 2 pieces placed and thirdKey active)
+  assert.equal(ctrl.handleKeyDown({ key: 'y', code: 'KeyY', ctrlKey: true, shiftKey: false, repeat: false }), true);
+  snap = game.getSnapshot();
+  assert.equal(snap.pieces, 2);
+  assert.equal(snap.active.key, thirdKey);
+  assert.equal(snap.redoCount, 0);
+
+  // Two Ctrl+Z undoes back to initial state with firstKey, then Ctrl+Shift+Z redoes one step
+  ctrl.handleKeyDown({ key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: false, repeat: false });
+  ctrl.handleKeyDown({ key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: false, repeat: false });
+  assert.equal(game.getSnapshot().pieces, 0);
+  assert.equal(game.getSnapshot().active.key, firstKey);
+
+  ctrl.handleKeyDown({ key: 'Z', code: 'KeyZ', ctrlKey: true, shiftKey: true, repeat: false });
+  assert.equal(game.getSnapshot().pieces, 1);
+  assert.equal(game.getSnapshot().active.key, secondKey);
+
+  ctrl.stop();
+});

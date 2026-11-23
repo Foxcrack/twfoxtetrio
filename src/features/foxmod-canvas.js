@@ -579,6 +579,13 @@
       ctx.fillText('HOLD [R] TO RETRY (STRIDE OFF)', boardX + boardW / 2, boardY + 24);
     }
 
+    if (snap.canUndo) {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(216, 200, 255, 0.68)';
+      ctx.font = '700 10px HUN, Segoe UI, sans-serif';
+      ctx.fillText(`CTRL+Z UNDO (${snap.undoCount || 0}) · CTRL+Y REDO (${snap.redoCount || 0})`, boardX + 4, boardY + boardH - 6);
+    }
+
     if (snap.finished) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
       ctx.fillRect(boardX, boardY, boardW, boardH);
@@ -716,6 +723,30 @@
 
     function handleKeyDown(ev) {
       if (!active || !game || !ev) return false;
+      if (ev.ctrlKey || ev.metaKey) {
+        const rawKey = String(ev.key || '').toLowerCase();
+        const rawCode = String(ev.code || '').toUpperCase();
+        if (rawKey === 'z' || rawCode === 'KEYZ') {
+          if (ev.shiftKey) {
+            if (typeof game.redo === 'function') {
+              game.redo();
+              return true;
+            }
+          } else if (typeof game.undo === 'function') {
+            game.undo();
+            return true;
+          }
+          return false;
+        }
+        if (rawKey === 'y' || rawCode === 'KEYY') {
+          if (typeof game.redo === 'function') {
+            game.redo();
+            return true;
+          }
+          return false;
+        }
+        return false;
+      }
       const candidates = buildEventKeyCandidates(ev);
       let handled = true;
 

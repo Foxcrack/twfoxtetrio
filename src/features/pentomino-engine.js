@@ -181,12 +181,19 @@
     h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
     h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
     let state = ((h ^ (h >>> 16)) >>> 0) || 0x9e3779b9;
-    return function nextFloat() {
+    function nextFloat() {
       state = (state + 0x6d2b79f5) >>> 0;
       let t = Math.imul(state ^ (state >>> 15), 1 | state);
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    nextFloat.getState = function () {
+      return state;
     };
+    nextFloat.setState = function (nextState) {
+      state = (Number(nextState) >>> 0) || 0x9e3779b9;
+    };
+    return nextFloat;
   }
 
   function getPiecePool(pieceSet) {
@@ -265,6 +272,7 @@
         noSzoFirst: false,
         proMode: false,
         strideMode: true,
+        canUndo: undefined,
         onAttack: null,
         onTopOut: null,
         onFinish: null,
@@ -300,6 +308,91 @@
     let winReason = null;
     let finishNotified = false;
     let incomingGarbage = [];
+    const undoStack = [];
+    const redoStack = [];
+    let currentTurnSnapshot = null;
+
+    function isUndoEnabled() {
+      return opts.canUndo !== undefined ? Boolean(opts.canUndo) : opts.mode === 'zen';
+    }
+
+    function ejectTurnSnapshot() {
+      return {
+        board: board.map((r) => r.slice()),
+        bag: bag.slice(),
+        active: active ? { ...active } : null,
+        holdKey,
+        canHold,
+        score,
+        lines,
+        pieces,
+        attackSent,
+        combo,
+        b2b,
+        elapsedMs,
+        incomingGarbage: incomingGarbage.slice(),
+        rngState: typeof rng.getState === 'function' ? rng.getState() : 0
+      };
+    }
+
+    function restoreTurnSnapshot(snap) {
+      if (!snap) return;
+      board = snap.board.map((r) => r.slice());
+      bag = snap.bag.slice();
+      active = snap.active ? { ...snap.active } : null;
+      holdKey = snap.holdKey;
+      canHold = snap.canHold;
+      score = snap.score;
+      lines = snap.lines;
+      pieces = snap.pieces;
+      attackSent = snap.attackSent;
+      combo = snap.combo;
+      b2b = snap.b2b;
+      elapsedMs = snap.elapsedMs;
+      incomingGarbage = snap.incomingGarbage.slice();
+      if (typeof rng.setState === 'function') {
+        rng.setState(snap.rngState);
+      }
+      gravityAccRows = 0;
+      lockTimerMs = 0;
+      lockResets = 0;
+      maxYReached = active ? active.y : 0;
+      lastCallout = '';
+      calloutTimerMs = 0;
+      finished = false;
+      toppedOut = false;
+      winReason = null;
+      finishNotified = false;
+      currentTurnSnapshot = ejectTurnSnapshot();
+    }
+
+    function pushUndoSnapshot(snap) {
+      if (!isUndoEnabled() || !snap) return;
+      undoStack.push(snap);
+      if (undoStack.length > 100) {
+        undoStack.shift();
+      }
+      redoStack.length = 0;
+    }
+
+    function undo() {
+      if (!isUndoEnabled() || finished || undoStack.length === 0) return false;
+      redoStack.push(currentTurnSnapshot || ejectTurnSnapshot());
+      const prev = undoStack.pop();
+      restoreTurnSnapshot(prev);
+      return true;
+    }
+
+    function redo() {
+      if (!isUndoEnabled() || finished || redoStack.length === 0) return false;
+      undoStack.push(currentTurnSnapshot || ejectTurnSnapshot());
+      if (undoStack.length > 100) {
+        undoStack.shift();
+      }
+      const next = redoStack.pop();
+      restoreTurnSnapshot(next);
+      return true;
+    }
 
     function emitFinishOnce() {
       if (finishNotified) return;
@@ -351,7 +444,7 @@
       return false;
     }
 
-    function spawnPiece(explicitKey) {
+    function spawnPiece(explicitKey, holdRestore) {
       ensureBag();
       const key = explicitKey || bag.shift();
       const def = PIECE_DEFS[key];
@@ -381,6 +474,8 @@
           opts.onTopOut(getSnapshot());
         }
         emitFinishOnce();
+      } else if (!holdRestore) {
+        currentTurnSnapshot = ejectTurnSnapshot();
       }
     }
 
@@ -434,6 +529,7 @@
 
     function lockActivePiece() {
       if (!active || finished) return;
+      pushUndoSnapshot(currentTurnSnapshot || ejectTurnSnapshot());
       const def = PIECE_DEFS[active.key];
       for (const [gx, gy] of getCells(active.key, active.rot, active.x, active.y)) {
         if (gy >= 0 && gy < TOTAL_HEIGHT && gx >= 0 && gx < BOARD_WIDTH) {
@@ -595,11 +691,11 @@
       canHold = false;
       if (holdKey === null) {
         holdKey = currentKey;
-        spawnPiece();
+        spawnPiece(undefined, true);
       } else {
         const swapKey = holdKey;
         holdKey = currentKey;
-        spawnPiece(swapKey);
+        spawnPiece(swapKey, true);
       }
       return true;
     }
@@ -693,18 +789,23 @@
     }
 
     function reset(nextOptions) {
+      const hasOptionsObj = Boolean(nextOptions && typeof nextOptions === 'object');
       if (pieces > 0 && !finished && typeof opts.onReset === 'function') {
         try {
           opts.onReset(getSnapshot());
         } catch (_) {}
       }
+      if (!hasOptionsObj && isUndoEnabled() && (pieces > 0 || !finished) && currentTurnSnapshot) {
+        pushUndoSnapshot(currentTurnSnapshot);
+      }
       const hasNextSeed =
-        nextOptions &&
-        typeof nextOptions === 'object' &&
+        hasOptionsObj &&
         nextOptions.seed !== undefined &&
         nextOptions.seed !== null;
-      if (nextOptions && typeof nextOptions === 'object') {
+      if (hasOptionsObj) {
         Object.assign(opts, nextOptions);
+        undoStack.length = 0;
+        redoStack.length = 0;
       }
       if (hasNextSeed) {
         opts.seed = (Number(nextOptions.seed) >>> 0) || 0x9e3779b9;
@@ -785,6 +886,9 @@
         winReason,
         proMode: Boolean(opts.proMode),
         strideMode: Boolean(opts.strideMode),
+        canUndo: isUndoEnabled(),
+        undoCount: undoStack.length,
+        redoCount: redoStack.length,
         compactBoard: getCompactVisibleBoard()
       };
     }
@@ -798,6 +902,8 @@
       rotate,
       hardDrop,
       hold,
+      undo,
+      redo,
       step,
       reset,
       receiveGarbage,

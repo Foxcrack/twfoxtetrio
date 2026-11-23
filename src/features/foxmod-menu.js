@@ -297,6 +297,11 @@
       levels: false,
       objective_type: 'none',
       topoutisclear: false,
+      can_undo: true,
+      retryisclear: true,
+      stride: true,
+      usezenconfig: true,
+      display_zen: true,
       mission: 'ZEN',
       slot_counter1: '---empty---',
       slot_counter2: '---empty---',
@@ -2014,13 +2019,31 @@ body.twfox-ingame #menus > #footer {
     return result;
   }
 
+  const EXTRA_CUSTOM_OPTION_KEYS = new Set([
+    'can_undo',
+    'retryisclear',
+    'stride',
+    'no_szo',
+    'pro',
+    'pro_alert',
+    'pro_retry',
+    'countdown',
+    'countdown_interval',
+    'precountdown',
+    'prestart',
+    'usezenconfig',
+    'display_zen'
+  ]);
+
   function applyCustomSoloPreset(presetMap) {
     const container = document.getElementById('custom_content_container');
     const startBtn = document.getElementById('start_custom');
     if (!container || !startBtn) return false;
 
+    const existingKeys = new Set();
     for (const item of collectIndexedItems(container)) {
       const key = item.getAttribute('data-index');
+      if (key) existingKeys.add(key);
       if (!Object.prototype.hasOwnProperty.call(presetMap, key)) continue;
       const val = presetMap[key];
       const inputType = item.getAttribute('type');
@@ -2033,6 +2056,27 @@ body.twfox-ingame #menus > #footer {
       }
     }
 
+    const tempInjected = [];
+    for (const extraKey of EXTRA_CUSTOM_OPTION_KEYS) {
+      if (existingKeys.has(extraKey)) continue;
+      if (!Object.prototype.hasOwnProperty.call(presetMap, extraKey)) continue;
+      const val = presetMap[extraKey];
+      const input = document.createElement('input');
+      input.className = 'room_config_item twfox-temp-opt';
+      if (input.setAttribute) {
+        input.setAttribute('data-index', extraKey);
+        input.setAttribute('type', typeof val === 'boolean' ? 'checkbox' : 'number');
+        input.setAttribute('style', 'display:none');
+      }
+      if (typeof val === 'boolean') {
+        input.checked = val;
+      } else {
+        input.value = String(val);
+      }
+      container.appendChild(input);
+      tempInjected.push(input);
+    }
+
     const musicPicker = document.getElementById('music_picker_custom');
     const prevSong = musicPicker ? musicPicker.getAttribute('data-song') : null;
     if (musicPicker && presetMap.song) {
@@ -2041,6 +2085,16 @@ body.twfox-ingame #menus > #footer {
     try {
       startBtn.click();
     } finally {
+      for (const tempEl of tempInjected) {
+        if (typeof container.removeChild === 'function') {
+          try {
+            container.removeChild(tempEl);
+          } catch (_) {}
+        } else if (Array.isArray(container.children)) {
+          const idx = container.children.indexOf(tempEl);
+          if (idx >= 0) container.children.splice(idx, 1);
+        }
+      }
       if (musicPicker && presetMap.song && prevSong !== null) {
         musicPicker.setAttribute('data-song', prevSong);
       }
