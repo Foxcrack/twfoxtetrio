@@ -478,3 +478,45 @@ test('3-player Versus KO ranks Nº1 survivor down to first eliminated player in 
   c3.close();
   host.close();
 });
+
+test('room supports playing <-> spectating toggle and excludes spectators from match start and standings', async () => {
+  const rtcFactory = createLoopbackRtcFactory();
+  const host = p2p.createHostServer({ hostName: 'TWFoxcrack', rtcFactory });
+  const c2 = p2p.createClientPeer({ playerName: 'PlayerTwo', rtcFactory });
+  const c3 = p2p.createClientPeer({ playerName: 'SpecFriend', rtcFactory });
+
+  for (const [peer, name] of [[c2, 'PlayerTwo'], [c3, 'SpecFriend']]) {
+    const inv = await host.createInvite(name);
+    const ans = await peer.joinFromInvite(inv.code);
+    await host.acceptAnswer(inv.peerId, ans);
+  }
+  await new Promise((r) => setTimeout(r, 35));
+
+  c3.setSpectator(true);
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(host.getSnapshot().players.find((p) => p.name === 'SpecFriend').spectator, true);
+
+  c2.setSpectator(true);
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(host.startMatch(), null);
+
+  c2.setSpectator(false);
+  await new Promise((r) => setTimeout(r, 25));
+  const started = host.startMatch();
+  assert.ok(started);
+  await new Promise((r) => setTimeout(r, 25));
+  const specInGame = host.getSnapshot().players.find((p) => p.name === 'SpecFriend');
+  assert.equal(specInGame.alive, false);
+
+  c2.reportSelfKo({ vs: 22.0, attackSent: 4, lines: 8 });
+  await new Promise((r) => setTimeout(r, 25));
+  const results = host.getSnapshot().room.lastResults;
+  assert.deepEqual(
+    results.map((r) => r.name),
+    ['TWFoxcrack', 'PlayerTwo']
+  );
+
+  c3.close();
+  c2.close();
+  host.close();
+});

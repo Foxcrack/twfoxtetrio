@@ -593,6 +593,7 @@
       name: hostName,
       isHost: true,
       ready: true,
+      spectator: false,
       alive: true,
       finished: false,
       koOrder: null,
@@ -702,8 +703,9 @@
       } else {
         room.winner = 'DRAW';
       }
+      const activeRoster = Array.from(players.values()).filter((p) => !p.spectator);
       const standings = buildRoundStandings(
-        Array.from(players.values()),
+        activeRoster,
         roundDisconnected,
         room.gameMode,
         roundStartAt,
@@ -730,14 +732,16 @@
     }
 
     function pickBlitzWinner() {
-      const ranked = Array.from(players.values()).sort(
-        (a, b) => (b.score - a.score) || (b.lines - a.lines) || (Number(b.alive) - Number(a.alive))
-      );
+      const ranked = Array.from(players.values())
+        .filter((p) => !p.spectator)
+        .sort(
+          (a, b) => (b.score - a.score) || (b.lines - a.lines) || (Number(b.alive) - Number(a.alive))
+        );
       return ranked[0] || null;
     }
 
     function markPlayerEliminated(player, extraStats) {
-      if (!player || !player.alive || room.status !== 'playing') return false;
+      if (!player || player.spectator || !player.alive || room.status !== 'playing') return false;
       if (extraStats && typeof extraStats === 'object') {
         if (extraStats.score !== undefined) player.score = Number(extraStats.score) || 0;
         if (extraStats.lines !== undefined) player.lines = Number(extraStats.lines) || 0;
@@ -751,15 +755,16 @@
       eliminationSeq += 1;
       player.koOrder = eliminationSeq;
       player.eliminatedAt = Date.now();
-      const aliveRemaining = Array.from(players.values()).filter((p) => p.alive).length;
+      const aliveRemaining = Array.from(players.values()).filter((p) => !p.spectator && p.alive).length;
       player.placement = aliveRemaining + 1;
       return true;
     }
 
     function evaluateRoundEnd() {
       if (room.status !== 'playing') return;
+      const activePlayers = Array.from(players.values()).filter((p) => !p.spectator);
       if (room.gameMode === 'blitz') {
-        const everyoneDone = Array.from(players.values()).every((p) => !p.alive || p.finished);
+        const everyoneDone = activePlayers.every((p) => !p.alive || p.finished);
         if (everyoneDone) {
           const top = pickBlitzWinner();
           const pts = top ? Math.round(top.score || 0).toLocaleString('en-US') : '0';
@@ -768,11 +773,11 @@
         return;
       }
 
-      const alivePlayers = Array.from(players.values()).filter((p) => p.alive);
-      if (players.size >= 2 && alivePlayers.length <= 1) {
+      const alivePlayers = activePlayers.filter((p) => p.alive);
+      if (activePlayers.length >= 2 && alivePlayers.length <= 1) {
         finalizeRound(alivePlayers[0] || null);
-      } else if (players.size === 1 && alivePlayers.length === 0) {
-        finalizeRound(players.get('host') || null);
+      } else if (activePlayers.length === 1 && alivePlayers.length === 0) {
+        finalizeRound(activePlayers[0] || players.get('host') || null);
       }
     }
 
@@ -820,6 +825,15 @@
         case 'ready':
           player.ready = Boolean(msg.ready);
           broadcastRoomState();
+          break;
+        case 'spectator':
+          player.spectator = Boolean(msg.spectator);
+          if (player.spectator && room.status === 'playing' && player.alive) {
+            player.alive = false;
+            player.finished = true;
+          }
+          broadcastRoomState();
+          if (room.status === 'playing') evaluateRoundEnd();
           break;
         case 'chat':
           pushChat(player.name, msg.text, false);
@@ -880,6 +894,7 @@
             name: slotName,
             isHost: false,
             ready: true,
+            spectator: false,
             alive: room.status !== 'playing',
             finished: false,
             koOrder: null,
@@ -901,7 +916,7 @@
       channel.onmessage = (ev) => handlePeerMessage(peerId, ev && ev.data);
       channel.onclose = () => {
         const left = players.get(peerId);
-        if (left && room.status === 'playing') {
+        if (left && !left.spectator && room.status === 'playing') {
           const snapshotLeft = { ...left, disconnected: true };
           if (snapshotLeft.alive) {
             snapshotLeft.alive = false;
@@ -996,7 +1011,8 @@
     }
 
     function startMatch() {
-      if (players.size < 2) {
+      const activePlayers = Array.from(players.values()).filter((p) => !p.spectator);
+      if (activePlayers.length < 2) {
         notify('start_blocked', { reason: 'need_2_players' });
         return null;
       }
@@ -1014,8 +1030,8 @@
           : (Math.floor(Math.random() * 0x100000000) >>> 0);
       const seed = ((Date.now() ^ randBits ^ Math.imul(room.round, 0x9e3779b1)) >>> 0) || 1;
       for (const p of players.values()) {
-        p.alive = true;
-        p.finished = false;
+        p.alive = !p.spectator;
+        p.finished = Boolean(p.spectator);
         p.koOrder = null;
         p.placement = null;
         p.eliminatedAt = null;
@@ -1223,6 +1239,20 @@
       listeners.clear();
     }
 
+    function setSelfSpectator(val) {
+      const self = players.get('host');
+      if (!self) return false;
+      self.spectator = Boolean(val);
+      if (self.spectator && room.status === 'playing' && self.alive) {
+        self.alive = false;
+        self.finished = true;
+      }
+      notify('self_spectator', { spectator: self.spectator });
+      broadcastRoomState();
+      if (room.status === 'playing') evaluateRoundEnd();
+      return self.spectator;
+    }
+
     return {
       subscribe(fn) {
         listeners.add(fn);
@@ -1233,6 +1263,7 @@
       createInvite,
       acceptAnswer,
       updateSettings,
+      setSelfSpectator,
       startMatch,
       sendChat(text) {
         pushChat(hostName, text, false);
@@ -1262,6 +1293,7 @@
     let selfId = null;
     let connected = false;
     let ready = true;
+    let spectator = false;
     let closed = false;
     let activeSignalBus = null;
     let room = {
@@ -1287,6 +1319,7 @@
         selfId,
         connected,
         ready,
+        spectator,
         room: { ...room },
         players: players.map((p) => ({ ...p })),
         chat: chat.slice()
@@ -1325,7 +1358,11 @@
           break;
         case 'room_state':
           if (msg.room) room = msg.room;
-          if (Array.isArray(msg.players)) players = msg.players;
+          if (Array.isArray(msg.players)) {
+            players = msg.players;
+            const me = selfId ? players.find((p) => p.id === selfId) : null;
+            if (me) spectator = Boolean(me.spectator);
+          }
           if (Array.isArray(msg.chat)) chat = msg.chat;
           notify('room_state');
           break;
@@ -1390,6 +1427,9 @@
             activeSignalBus = null;
           }
           send({ type: 'hello', name: playerName });
+          if (spectator) {
+            send({ type: 'spectator', spectator: true });
+          }
           notify('connected');
         };
         channel.onmessage = (mEv) => handleServerMessage(mEv && mEv.data);
@@ -1608,6 +1648,11 @@
       setReady(val) {
         ready = Boolean(val);
         send({ type: 'ready', ready });
+      },
+      setSpectator(val) {
+        spectator = Boolean(val);
+        send({ type: 'spectator', spectator });
+        notify('self_spectator', { spectator });
       },
       sendChat(text) {
         send({ type: 'chat', text });

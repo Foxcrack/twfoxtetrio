@@ -854,13 +854,26 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').getAttribute('style'), null);
   assert.equal(env.elements.get('twfoxtetrio-lobby-room-title').textContent, "TWFOXCRACK'S FOXROOM");
-  assert.equal(env.elements.get('twfoxtetrio-host-wing-btn').classList.contains('hidden'), false);
+  const wingBtn = env.elements.get('twfoxtetrio-host-wing-btn');
+  assert.equal(wingBtn.classList.contains('hidden'), false);
+  assert.equal(wingBtn.children[0].textContent, 'PLAYING');
+  assert.equal(wingBtn.children[1].textContent, 'CLICK TO SWITCH TO SPECTATORS');
   assert.equal(env.elements.get('twfoxtetrio-client-ready-btn').classList.contains('hidden'), true);
   assert.equal(env.elements.get('twfoxtetrio-client-wait-tag').classList.contains('hidden'), true);
   const playersBox = env.elements.get('twfoxtetrio-lobby-players');
   assert.equal(playersBox.children.length, 1);
   assert.equal(playersBox.children[0].children[0].textContent, 'TWFOXCRACK');
   assert.equal(playersBox.children[0].children[0].classList.contains('twfox-paw-target'), true);
+  // Clicking bottom-left wing switches Host between PLAYING and SPECTATING
+  wingBtn.click();
+  assert.equal(wingBtn.children[0].textContent, 'SPECTATING');
+  assert.equal(wingBtn.children[1].textContent, 'CLICK TO SWITCH TO PLAYERS');
+  assert.equal(env.body.classList.contains('twfox-spectating'), true);
+  assert.equal(playersBox.children[0].classList.contains('is-spectator'), true);
+  wingBtn.click();
+  assert.equal(wingBtn.children[0].textContent, 'PLAYING');
+  assert.equal(env.body.classList.contains('twfox-spectating'), false);
+  assert.equal(playersBox.children[0].classList.contains('is-spectator'), false);
   assert.equal(foxStyle.textContent.includes("#menus[data-menu-type='foxmod_multi'] #header"), true);
   assert.equal(foxStyle.textContent.includes('background-color: #372b51;'), true);
 

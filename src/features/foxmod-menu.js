@@ -761,19 +761,36 @@ body.twfox-ingame #menus > #footer {
   color: #ffffff;
   letter-spacing: 0.05em;
 }
-#menus[data-menu-type='foxmod_multi'] #header,
-#menus[data-menu-type='foxmod_multi'] #header_text,
-#menus[data-menu-type='foxmod_multi'] #back,
-#menus[data-menu-type='foxmod_multi'] #footer {
-  opacity: 0;
-  pointer-events: none;
-  transition: .3s opacity;
+body #menus[data-menu-type='foxmod_multi'] #header {
+  background: linear-gradient(to bottom, #472869 0, #221344 100%);
+  border-bottom: 2px solid #351d77;
+}
+body #menus[data-menu-type='foxmod_multi'] #header_text,
+body #menus[data-menu-type='foxmod_multi'] #back,
+body #menus[data-menu-type='foxmod_multi'] #footer_text {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+body #menus[data-menu-type='foxmod_multi'] #footer {
+  background: linear-gradient(to bottom, #251c3f 0, #371d53 100%);
+  border-top: 2px solid #3f1c7a;
+}
+body.twfox-spectating #menus[data-menu-type='foxmod_multi'] #header {
+  background: linear-gradient(to bottom, #160529 0, #090218 100%);
+  border-bottom: 2px solid #5225cf;
+}
+body.twfox-spectating #menus[data-menu-type='foxmod_multi'] #footer {
+  background: linear-gradient(to bottom, #120b26 0, #210e35 100%);
+  border-top: 2px solid #5225cf;
+}
+.twfox-pfw {
+  font-family: PFW, 'Segoe UI', sans-serif !important;
 }
 #twfoxtetrio-pane-multi {
   position: fixed !important;
-  top: 0 !important;
+  top: 4.2em !important;
   right: 0 !important;
-  bottom: 0 !important;
+  bottom: 3.2em !important;
   left: 0 !important;
   width: auto !important;
   height: auto !important;
@@ -783,32 +800,35 @@ body.twfox-ingame #menus > #footer {
   margin: 0 !important;
   background: transparent !important;
   text-align: left;
-  overflow: hidden !important;
+  overflow: visible !important;
   box-sizing: border-box !important;
+  z-index: 11;
+  pointer-events: none;
 }
 #twfoxtetrio-multi-lobby {
   width: 100%;
   height: 100%;
-  padding-top: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   box-sizing: border-box;
   background: transparent;
 }
 #twfoxtetrio-lobby-top {
-  position: relative;
-  flex: 0 0 auto;
-  width: 100%;
-  height: 3.85em;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4.2em;
   pointer-events: none;
-  z-index: 4;
+  z-index: 12;
 }
 #twfoxtetrio-leave-room-btn {
   pointer-events: all;
   position: fixed;
   left: 0;
-  top: 0.3em;
+  top: 0.35em;
   transform: translateX(-1.4em);
   background-color: #0006;
   border-top: 3px solid #1116;
@@ -821,19 +841,24 @@ body.twfox-ingame #menus > #footer {
   padding: .34em .85em .24em 2.5em;
   border-radius: 3px;
   cursor: pointer;
-  transition: .35s transform, .35s filter;
+  transition: .25s transform, .25s filter, .25s background-color, .25s color;
 }
 #twfoxtetrio-leave-room-btn:hover {
   transform: translateX(-.45em);
-  filter: brightness(1.3);
+  filter: brightness(1.2);
+  background-color: #4006;
+  border-top-color: #4116;
+  border-right-color: #4226;
+  border-bottom-color: #4006;
+  color: #faa;
 }
 #twfoxtetrio-lobby-invite-banner {
   pointer-events: all;
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: min(22em, calc(100vw - 14em));
-  top: 0.25em;
+  width: min(22em, calc(100vw - 28em));
+  top: 0.32em;
   height: 3.45em;
   background-color: #0004;
   border: 1px solid #1114;
@@ -846,39 +871,41 @@ body.twfox-ingame #menus > #footer {
   transition: filter 180ms ease, border-color 180ms ease;
 }
 #twfoxtetrio-lobby-invite-banner:hover {
-  filter: brightness(1.15);
+  filter: brightness(1.1);
 }
 #twfoxtetrio-lobby-invite-banner.is-copied {
   border-color: #42e88a;
   box-shadow: inset 0 0 12px rgba(66, 232, 138, 0.28);
 }
 .twfox-invite-sub {
-  color: #fff5;
+  color: #fff4;
   font-family: HUN, sans-serif;
-  font-size: 0.72em;
+  font-size: 0.78em;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  margin-top: 0.35em;
+  letter-spacing: 0.06em;
+  margin-top: 0.18em;
   text-transform: uppercase;
 }
 .twfox-invite-id {
   color: #ffffff;
   font-family: PFW, 'Segoe UI', sans-serif;
-  font-size: 1.55em;
+  font-size: 2.0em;
   font-weight: 900;
-  letter-spacing: 0.08em;
-  line-height: 1.1;
-  text-shadow: 0 2px 6px #0008;
+  letter-spacing: 0.06em;
+  line-height: 1.0;
+  text-shadow: 0 0 4px #fff;
 }
 .twfox-lobby-grid {
   flex: 1 1 0;
   min-height: 0;
-  width: 100%;
+  width: calc(100% + 1.5em);
+  margin: 0 -0.75em;
   display: grid;
-  grid-template-columns: minmax(14em, 25%) minmax(0, 1fr) minmax(14em, 25%);
-  gap: 0.85em;
-  padding: 0.35em 0.75em 0.55em;
+  grid-template-columns: minmax(15em, 26%) minmax(0, 1fr) minmax(15em, 26%);
+  gap: 0.75em;
+  padding: 0.9em 0 1.25em;
   box-sizing: border-box;
+  pointer-events: all;
 }
 .twfox-lobby-col {
   background-color: #0006;
@@ -891,34 +918,36 @@ body.twfox-ingame #menus > #footer {
   overflow: hidden;
 }
 .twfox-col-heading {
-  margin: 0.38em 0.65em 0.28em;
+  margin: 0.42em 0.8em 0.25em;
   font-family: HUN, sans-serif;
-  font-size: 1.95em;
+  font-size: 2.0em;
   font-weight: 800;
   color: #ffffff;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   text-shadow: 0 2px 6px #000;
 }
-.twfox-col-heading.right { text-align: right; }
+.twfox-lobby-col:first-child .twfox-col-heading { margin-left: 1.35em; }
+.twfox-col-heading.right { text-align: right; margin-right: 1.35em; }
 .twfox-col-heading.center {
   text-align: center;
-  margin: 0.38em 0.65em 0.25em;
+  margin: 0.42em 0.65em 0.25em;
 }
 .twfox-player-list {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 0.1em 0.65em 0.5em 0;
+  padding: 0.1em 0.55em 0.5em 0;
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 .twfox-player-row {
+  order: 1;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 2px;
-  padding: 0.32em 0.55em 0.26em 1.25em;
-  margin-bottom: 0.4em;
+  padding: 0.3em 0.5em 0.22em 1.85em;
+  margin-bottom: 0.45em;
   background-color: #372b51;
   border-top: 3px solid #453469;
   border-left: 0;
@@ -930,12 +959,18 @@ body.twfox-ingame #menus > #footer {
   color: #d9bef3;
   font-weight: 700;
 }
-.twfox-player-row.is-host {
-  background-color: #372b51;
-  border-top-color: #453469;
+.twfox-player-row.is-spectator {
+  order: 2;
+  background-color: #150b2b;
+  border-top-color: #211340;
+  border-right-color: #120923;
+  border-bottom-color: #090415;
 }
 .twfox-player-row.is-ready .twfox-player-name {
   color: #fff;
+}
+.twfox-player-row.is-spectator .twfox-player-name {
+  color: #583ab8;
 }
 .twfox-player-name {
   display: block;
@@ -943,7 +978,7 @@ body.twfox-ingame #menus > #footer {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 1.32em;
+  font-size: 1.4em;
   font-weight: 800;
   color: #d9bef3;
   letter-spacing: 0.02em;
@@ -953,31 +988,39 @@ body.twfox-ingame #menus > #footer {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 0.85em;
-  color: #bba8d6;
+  font-size: 0.88em;
+  color: #d9bef3;
 }
 .twfox-player-tag {
   display: inline-block;
-  padding: 1px 6px;
-  border-radius: 2px;
-  background: #0006;
-  color: #e4d9f5;
-  font-size: 0.85em;
+  min-width: 4em;
+  text-align: center;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background-color: #0004;
+  box-shadow: inset 0 2px 8px #0006;
+  color: #fff;
+  font-size: 0.9em;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
 }
 .twfox-player-tag.is-ready {
-  background: rgba(66, 232, 138, 0.22);
+  background-color: #0f3626aa;
   color: #82ffba;
+}
+.twfox-player-tag.is-spectator {
+  color: #7c5fd1;
 }
 .twfox-player-wins {
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  color: #d8cef0;
+  font-weight: 700;
+  color: #d9bef3;
 }
 .twfox-lobby-tabs {
   display: flex;
   width: 100%;
+  padding: 0 0.5em;
+  box-sizing: border-box;
 }
 .twfox-room-tab {
   flex: 1 1 0;
@@ -987,7 +1030,7 @@ body.twfox-ingame #menus > #footer {
   text-align: center;
   color: #aaa;
   padding: .4em 0;
-  font-size: 1.35em;
+  font-size: 1.4em;
   font-weight: 800;
   cursor: pointer;
   filter: brightness(1);
@@ -1001,8 +1044,10 @@ body.twfox-ingame #menus > #footer {
 .twfox-room-center-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
-  background: transparent;
-  padding: 0.6em 0.9em;
+  background-color: #0005;
+  margin: 0 0.5em;
+  border-radius: 0 0 3px 3px;
+  padding: 0.7em 0.9em;
   display: flex;
   flex-direction: column;
   gap: 0.35em;
@@ -1038,20 +1083,26 @@ body.twfox-ingame #menus > #footer {
   font-family: HUN, sans-serif;
   font-size: 1.35em;
   font-weight: 800;
-  padding: .42em 0.7em;
+  padding: .38em 0.7em;
 }
 .twfox-room-savebar.has-winner {
   color: #ffe066;
 }
+#twfoxtetrio-multi-winner {
+  font-family: PFW, 'Segoe UI', sans-serif;
+  font-size: 0.78em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
 .twfox-chat-log {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 0.15em 0.65em 0.5em;
+  padding: 0.15em 1.25em 0.5em 0.65em;
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-family: PFW, 'Segoe UI', sans-serif;
-  font-size: 0.95em;
+  font-size: 0.98em;
 }
 .twfox-chat-entry {
   padding: 2px 4px;
@@ -1076,7 +1127,7 @@ body.twfox-ingame #menus > #footer {
   color: #b5a3d4;
 }
 .twfox-chat-bar {
-  padding: 0.45em 0.65em 0.65em;
+  padding: 0.45em 1.25em 0.65em 0.65em;
   display: flex;
   gap: 6px;
   border-top: 0;
@@ -1091,132 +1142,171 @@ body.twfox-ingame #menus > #footer {
   box-shadow: 0 2px 6px #000A;
   border: 1px solid #060606;
   border-radius: 3px;
-  padding: 0.25em 0.45em;
+  padding: 0.22em 0.4em;
 }
 #twfoxtetrio-lobby-chat-send {
-  background: #1d1629;
-  border-top: 2px solid #3c2e54;
-  border-left: 2px solid #2c213d;
-  border-right: 2px solid #130e1c;
-  border-bottom: 2px solid #09070d;
-  color: #ccc;
-  padding: 0.25em 0.7em;
-  font-size: 0.95em;
+  background: #000B;
+  border: 1px solid #221c2e;
+  border-radius: 3px;
+  color: #888;
+  padding: 0.2em 0.55em;
+  font-size: 0.9em;
+}
+#twfoxtetrio-lobby-chat-send:hover {
+  color: #fff;
+  border-color: #4f3a75;
 }
 .twfox-lobby-footer {
-  flex: 0 0 auto;
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 3.9em;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4.4em;
   background: transparent;
   border-top: 0;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: end;
   padding: 0;
+  z-index: 12;
   pointer-events: none;
 }
 .twfox-footer-wing-wrap {
+  position: relative;
   justify-self: start;
   pointer-events: all;
   min-width: min(19em, 30vw);
-  background: linear-gradient(180deg, #372852 0%, #241938 100%);
-  border-top: 3px solid #594182;
-  padding: 0.35em 1.8em 0.45em 1em;
-  clip-path: polygon(0 0, 90% 0, 100% 100%, 0 100%);
-  filter: drop-shadow(0 -2px 0 #16101E) drop-shadow(2px 0 0 #16101E);
+  padding: 0.42em 2.2em 0.45em 1.25em;
+  filter: brightness(1) drop-shadow(0px -2px #16101E) drop-shadow(-2px 0px #16101E) drop-shadow(2px 0px #16101E) drop-shadow(0px 4px 8px #0004);
+  transition: .2s transform, .2s filter;
+}
+.twfox-footer-wing-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, #2e1c49 0, #221437 100%);
+  clip-path: polygon(0 100%, 0% 0, 90% 0, 100% 100%);
+  z-index: -1;
+}
+.twfox-footer-wing-wrap:hover {
+  transform: translateY(-0.12em);
+  filter: brightness(1.2) drop-shadow(0px -2px #16101E) drop-shadow(-2px 0px #16101E) drop-shadow(2px 0px #16101E) drop-shadow(0px 4px 8px #0004);
+}
+body.twfox-spectating .twfox-footer-wing-wrap {
+  filter: brightness(1) drop-shadow(0px -2px #5225CF) drop-shadow(-2px 0px #5225CF) drop-shadow(2px 0px #5225CF) drop-shadow(0px 4px 8px #0004);
+}
+body.twfox-spectating .twfox-footer-wing-wrap::before {
+  background: linear-gradient(to bottom, #110721 0, #0c0319 100%);
 }
 .twfox-footer-wing-btn {
   cursor: pointer;
-  color: #e4d4ff;
+  color: #b190e2;
   font-family: HUN, sans-serif;
-  font-size: 1.45em;
-  line-height: 1.05;
+  font-size: 1.75em;
+  line-height: 1.0;
   font-weight: 900;
-  text-align: left;
-  transition: .2s filter, .2s color;
+  text-align: center;
+  transition: .2s color;
 }
-.twfox-footer-wing-btn.is-host-wing {
-  cursor: default;
-}
-.twfox-footer-wing-btn.is-ready {
-  color: #6effa8;
+.twfox-footer-wing-btn.is-spectating {
+  color: #cbb2ff;
 }
 .twfox-footer-wing-btn span {
   display: block;
-  font-size: 0.44em;
-  font-weight: 700;
-  color: #a993cf;
+  margin-top: 2px;
+  font-size: 0.36em;
+  font-weight: 500;
+  color: #634c85;
+}
+.twfox-footer-wing-btn.is-spectating span {
+  color: #8f6ee0;
 }
 .twfox-footer-wait-tag {
+  position: relative;
   pointer-events: none;
-  min-width: min(21em, 34vw);
-  background: repeating-linear-gradient(-45deg, #271b3c 0, #271b3c 10px, #1e1430 10px, #1e1430 20px);
-  border: 0;
-  border-top: 3px solid #533b7d;
-  clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
-  color: #cbb5ed;
+  min-width: min(19em, 34vw);
+  background: linear-gradient(to bottom, #2e1c49 0, #221437 100%);
+  clip-path: polygon(0 100%, 10% 0, 90% 0, 100% 100%);
+  color: #b190e2;
   font-family: HUN, sans-serif;
-  font-size: 1.45em;
-  line-height: 1.1;
+  font-size: 1.55em;
+  line-height: 1.05;
   font-weight: 900;
-  padding: 0.44em 2.4em 0.52em;
+  padding: 0.48em 2.4em 0.52em;
   text-align: center;
-  filter: drop-shadow(0 -2px 0 #16101E);
+  filter: drop-shadow(0px -2px #16101E) drop-shadow(-2px 0px #16101E) drop-shadow(2px 0px #16101E) drop-shadow(0px 4px 8px #0004);
 }
 .twfox-footer-start-btn {
   pointer-events: all;
-  min-width: min(21em, 34vw);
-  background: repeating-linear-gradient(-45deg, #2d1d47 0, #2d1d47 10px, #24163b 10px, #24163b 20px);
+  min-width: min(19em, 34vw);
+  background: linear-gradient(to bottom, #2e1c49 0, #221437 100%);
   border: 0;
-  border-top: 3px solid #6b4ea3;
-  clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
-  color: #e4d4ff;
+  clip-path: polygon(0 100%, 10% 0, 90% 0, 100% 100%);
+  color: #b190e2;
   font-family: HUN, sans-serif;
-  font-size: 1.65em;
-  line-height: 1.05;
+  font-size: 1.75em;
+  line-height: 1.0;
   font-weight: 900;
-  padding: 0.32em 2.4em 0.42em;
+  padding: 0.38em 2.6em 0.44em;
   cursor: pointer;
   text-align: center;
-  filter: drop-shadow(0 -2px 0 #16101E) drop-shadow(0 4px 10px #0006);
-  transition: filter 160ms ease, transform 90ms ease;
+  filter: brightness(1) drop-shadow(0px -2px #16101E) drop-shadow(-2px 0px #16101E) drop-shadow(2px 0px #16101E) drop-shadow(0px 4px 8px #0004);
+  transition: .2s transform, .2s filter, .2s opacity;
 }
 .twfox-footer-start-btn:hover {
-  filter: brightness(1.22) drop-shadow(0 -2px 0 #16101E);
+  transform: translateY(-0.12em);
+  filter: brightness(1.2) drop-shadow(0px -2px #16101E) drop-shadow(-2px 0px #16101E) drop-shadow(2px 0px #16101E) drop-shadow(0px 4px 8px #0004);
 }
 .twfox-footer-start-btn.is-disabled,
 .twfox-footer-start-btn:disabled {
-  background: repeating-linear-gradient(-45deg, #1b1329 0, #1b1329 10px, #150e20 10px, #150e20 20px);
-  border-top-color: #3d2c59;
-  color: #7e6b9c;
-  opacity: 0.85;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 .twfox-footer-start-btn.is-disabled:hover,
 .twfox-footer-start-btn:disabled:hover {
-  filter: drop-shadow(0 -2px 0 #16101E);
+  transform: none;
+  filter: drop-shadow(0px -2px #16101E) drop-shadow(-2px 0px #16101E) drop-shadow(2px 0px #16101E) drop-shadow(0px 4px 8px #0004);
 }
 .twfox-footer-start-btn span {
   display: block;
-  font-size: 0.42em;
-  font-weight: 700;
-  color: #b49bd9;
+  margin-top: 2px;
+  font-size: 0.36em;
+  font-weight: 500;
+  color: #634c85;
 }
 .twfox-footer-mode-tag {
   justify-self: end;
-  min-width: min(19em, 30vw);
   text-align: right;
   font-family: HUN, sans-serif;
-  font-size: 1.45em;
-  line-height: 1.1;
+  font-size: 1.7em;
+  line-height: 1.0;
   font-weight: 900;
-  color: #7c62a6;
-  letter-spacing: 0.05em;
-  background: linear-gradient(180deg, #271c3a 0%, #171024 100%);
-  border-top: 3px solid #3f2d5e;
-  padding: 0.48em 1em 0.5em 2.2em;
-  clip-path: polygon(10% 0, 100% 0, 100% 100%, 0 100%);
+  color: #634d83;
+  letter-spacing: 0.03em;
+  background: transparent;
+  border: 0;
+  padding: 0 0.65em 0.38em 0;
+  clip-path: none;
+}
+#twfoxtetrio-multi-game,
+#twfoxtetrio-multi-results {
+  position: fixed;
+  inset: 0;
+  pointer-events: all;
+  z-index: 15;
+}
+.twfox-spectator-banner {
+  padding: 4px 12px;
+  background: rgba(17, 7, 33, 0.88);
+  border: 1px solid #5225cf;
+  border-radius: 3px;
+  color: #cbb2ff;
+  font-family: HUN, sans-serif;
+  font-size: 1.05em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: center;
+  margin-bottom: 6px;
 }
 .twfox-multi-arena {
   display: flex;
@@ -1594,15 +1684,15 @@ body.twfox-ingame #menus > #footer {
   font-size: 1.9em;
   letter-spacing: 0.12em;
 }
-#menus[data-menu-type^='foxmod'] #header_text {
+#menus[data-menu-type^='foxmod']:not([data-menu-type='foxmod_multi']) #header_text {
   color: #ffbe8e;
   transition: .5s color;
 }
-#menus[data-menu-type^='foxmod'] #footer {
+#menus[data-menu-type^='foxmod']:not([data-menu-type='foxmod_multi']) #footer {
   background: linear-gradient(to bottom, #1e1510 0, #362218 100%);
   border-top: 2px solid #4d2c1b;
 }
-#menus[data-menu-type^='foxmod'] #footer_text {
+#menus[data-menu-type^='foxmod']:not([data-menu-type='foxmod_multi']) #footer_text {
   color: #ffbe8e;
 }
 .twfox-invite-stack {
@@ -2297,6 +2387,9 @@ body.twfox-ingame #menus > #footer {
         activeFoxView === 'foxmod_pentomino' ||
         (activeFoxView === 'foxmod_multi' && multiSubMode === 'playing');
       setClass(document.body, 'twfox-ingame', inStage);
+      if (activeFoxView !== 'foxmod_multi') {
+        setClass(document.body, 'twfox-spectating', false);
+      }
     }
 
     function stopPlayControllers() {
@@ -3097,40 +3190,55 @@ body.twfox-ingame #menus > #footer {
     function renderMultiSnapshot(snap, evType, detail) {
       if (!multiDom || !snap) return;
 
+      const isHost = snap.role === 'host';
+      const selfId = isHost ? 'host' : snap.selfId;
+      const selfPlayer = (snap.players || []).find((p) => p.id === selfId) || null;
+      const amSpectating = Boolean(selfPlayer ? selfPlayer.spectator : snap.spectator);
+
       if (evType === 'match_start' && detail && pentominoEngine && foxmodCanvas) {
         clearFinishTransition();
-        const cfg = detail.config || {};
-        const matchMode = cfg.gameMode === 'blitz' ? 'blitz' : 'vs';
-        multiGame = pentominoEngine.createGame({
-          pieceSet: cfg.pieceSet || 'tetromino',
-          mode: matchMode,
-          seed: detail.seed,
-          blitzDurationMs: cfg.blitzDurationMs || 120000,
-          gravityLevel: cfg.gravityLevel || 1,
-          garbageMultiplier: cfg.garbageMultiplier || 1,
-          onAttack(amount, callout) {
-            if (peerSession && matchMode === 'vs') peerSession.sendSelfAttack(amount, callout);
-          },
-          onTopOut(gSnap) {
-            const finalSnap = gSnap || (multiGame && typeof multiGame.getSnapshot === 'function' ? multiGame.getSnapshot() : null);
-            if (peerSession) {
-              if (finalSnap && typeof peerSession.updateSelfBoard === 'function') {
-                peerSession.updateSelfBoard(finalSnap);
+        if (amSpectating) {
+          multiGame = null;
+          if (multiController) multiController.setGame(null);
+          setClass(multiCanvas, 'hidden', true);
+          if (multiDom.spectatorBanner) setClass(multiDom.spectatorBanner, 'hidden', false);
+          showMultiSubMode('playing');
+        } else {
+          setClass(multiCanvas, 'hidden', false);
+          if (multiDom.spectatorBanner) setClass(multiDom.spectatorBanner, 'hidden', true);
+          const cfg = detail.config || {};
+          const matchMode = cfg.gameMode === 'blitz' ? 'blitz' : 'vs';
+          multiGame = pentominoEngine.createGame({
+            pieceSet: cfg.pieceSet || 'tetromino',
+            mode: matchMode,
+            seed: detail.seed,
+            blitzDurationMs: cfg.blitzDurationMs || 120000,
+            gravityLevel: cfg.gravityLevel || 1,
+            garbageMultiplier: cfg.garbageMultiplier || 1,
+            onAttack(amount, callout) {
+              if (peerSession && matchMode === 'vs') peerSession.sendSelfAttack(amount, callout);
+            },
+            onTopOut(gSnap) {
+              const finalSnap = gSnap || (multiGame && typeof multiGame.getSnapshot === 'function' ? multiGame.getSnapshot() : null);
+              if (peerSession) {
+                if (finalSnap && typeof peerSession.updateSelfBoard === 'function') {
+                  peerSession.updateSelfBoard(finalSnap);
+                }
+                peerSession.reportSelfKo(finalSnap);
               }
-              peerSession.reportSelfKo(finalSnap);
+            },
+            onFinish(gSnap) {
+              if (peerSession && typeof peerSession.reportSelfFinish === 'function') {
+                peerSession.reportSelfFinish(gSnap);
+              }
             }
-          },
-          onFinish(gSnap) {
-            if (peerSession && typeof peerSession.reportSelfFinish === 'function') {
-              peerSession.reportSelfFinish(gSnap);
-            }
-          }
-        });
-        multiController.setGame(multiGame);
-        showMultiSubMode('playing');
+          });
+          multiController.setGame(multiGame);
+          showMultiSubMode('playing');
+        }
       }
 
-      if (evType === 'garbage' && detail && multiGame) {
+      if (evType === 'garbage' && detail && multiGame && !amSpectating) {
         multiGame.receiveGarbage(detail.amount || 0);
       }
 
@@ -3138,12 +3246,11 @@ body.twfox-ingame #menus > #footer {
         if (multiController) multiController.stop();
         renderResultsScreen(snap, detail);
         if (multiSubMode === 'playing') {
-          const isHostRole = snap.role === 'host';
-          const myId = isHostRole ? 'host' : snap.selfId;
+          const myId = isHost ? 'host' : snap.selfId;
           const standings = Array.isArray(detail.standings) ? detail.standings : [];
           const selfEntry = standings.find((r) => r.id === myId) || null;
           const winnerName = detail.winner || snap.room.winner || 'DRAW';
-          const isVictory = Boolean(winnerName !== 'DRAW' && selfEntry && selfEntry.placement === 1);
+          const isVictory = Boolean(!amSpectating && winnerName !== 'DRAW' && selfEntry && selfEntry.placement === 1);
           if (multiDom.finishCard) {
             setClass(multiDom.finishCard, 'is-defeat', !isVictory);
           }
@@ -3162,7 +3269,9 @@ body.twfox-ingame #menus > #footer {
               ? 'ROUND ENDED IN A TIE'
               : isVictory
                 ? ((detail.gameMode || snap.room.gameMode) === 'blitz' ? 'Nº1 HIGH SCORE CHAMPION' : 'Nº1 LAST SURVIVOR')
-                : (selfEntry ? `YOU PLACED Nº${selfEntry.placement} OF ${standings.length}` : 'MATCH RESULTS READY');
+                : amSpectating
+                  ? 'SPECTATOR VIEW · MATCH COMPLETE'
+                  : (selfEntry ? `YOU PLACED Nº${selfEntry.placement} OF ${standings.length}` : 'MATCH RESULTS READY');
           }
           if (multiDom.finishOverlay) {
             setClass(multiDom.finishOverlay, 'hidden', false);
@@ -3196,7 +3305,6 @@ body.twfox-ingame #menus > #footer {
         }
       }
 
-      const isHost = snap.role === 'host';
       const roomCode = (snap.room && snap.room.roomCode) || '';
       const activeMode = (snap.room && snap.room.gameMode) === 'blitz' ? 'blitz' : 'vs';
       const activeSet = (snap.room && snap.room.pieceSet) || 'tetromino';
@@ -3227,23 +3335,42 @@ body.twfox-ingame #menus > #footer {
       if (!isHost && multiDom.hostManualPanel) {
         setClass(multiDom.hostManualPanel, 'hidden', true);
       }
-      setClass(multiDom.hostStartBtn, 'hidden', !isHost);
-      setClass(multiDom.clientReadyBtn, 'hidden', isHost);
-      if (multiDom.hostWingLabel) {
-        setClass(multiDom.hostWingLabel, 'hidden', !isHost);
+      if (document.body && document.body.classList) {
+        setClass(document.body, 'twfox-spectating', activeFoxView === 'foxmod_multi' && amSpectating);
       }
+      if (multiDom.hostWingLabel) {
+        setClass(multiDom.hostWingLabel, 'hidden', false);
+        setClass(multiDom.hostWingLabel, 'is-spectating', amSpectating);
+      }
+      if (multiDom.hostWingTitle) {
+        multiDom.hostWingTitle.textContent = amSpectating ? 'SPECTATING' : 'PLAYING';
+      }
+      if (multiDom.hostWingSub) {
+        multiDom.hostWingSub.textContent = amSpectating
+          ? 'CLICK TO SWITCH TO PLAYERS'
+          : 'CLICK TO SWITCH TO SPECTATORS';
+      }
+      if (multiDom.clientReadyBtn) {
+        setClass(multiDom.clientReadyBtn, 'hidden', true);
+      }
+      setClass(multiDom.hostStartBtn, 'hidden', !isHost);
       if (multiDom.clientWaitTag) {
         setClass(multiDom.clientWaitTag, 'hidden', isHost);
+        multiDom.clientWaitTag.textContent = amSpectating ? 'SPECTATING MATCH' : 'WAITING FOR HOST';
       }
 
-      const count = (snap.players || []).length;
-      const canStart = count >= 2;
-      multiDom.playersHeading.textContent = `PLAYERS (${count})`;
+      const activePlayers = (snap.players || []).filter((p) => !p.spectator);
+      const activeCount = activePlayers.length;
+      const specCount = (snap.players || []).length - activeCount;
+      const canStart = activeCount >= 2;
+      multiDom.playersHeading.textContent = specCount > 0
+        ? `PLAYERS (${activeCount} + ${specCount} SPEC)`
+        : `PLAYERS (${activeCount})`;
       multiDom.hostStartBtn.disabled = !canStart;
       setClass(multiDom.hostStartBtn, 'is-disabled', !canStart);
       multiDom.startCountSub.textContent = canStart
-        ? `${count} PLAYERS`
-        : `NEED 2+ PLAYERS (${count}/2)`;
+        ? `${activeCount} PLAYERS`
+        : `NEED 2+ PLAYERS (${activeCount}/2)`;
 
       if (multiDom.pieceSelect) {
         multiDom.pieceSelect.value = activeSet;
@@ -3302,25 +3429,17 @@ body.twfox-ingame #menus > #footer {
         }
       }
 
-      if (!isHost && multiDom.clientReadyBtn) {
-        setClass(multiDom.clientReadyBtn, 'is-ready', Boolean(snap.ready));
-        if (multiDom.clientReadySub) {
-          multiDom.clientReadySub.textContent = snap.ready
-            ? 'WAITING FOR HOST TO START'
-            : 'CLICK TO TOGGLE READY STATUS';
-        }
-      }
-      if (!isHost && multiDom.clientWaitTag) {
-        multiDom.clientWaitTag.textContent = snap.ready ? 'READY TO PLAY' : 'WAITING FOR HOST';
-      }
-
       multiDom.playersList.innerHTML = '';
       for (const p of snap.players || []) {
-        const roleTag = p.isHost ? 'HOST' : p.ready ? 'READY' : 'WAIT';
+        const isSpec = Boolean(p.spectator);
+        const roleTag = isSpec ? 'SPECTATOR' : (p.isHost ? 'HOST' : p.ready ? 'READY' : 'WAIT');
         const rowClass = [
           'twfox-player-row',
-          p.isHost ? 'is-host' : (p.ready ? 'is-ready' : '')
+          isSpec ? 'is-spectator' : (p.isHost ? 'is-host' : (p.ready ? 'is-ready' : ''))
         ].filter(Boolean).join(' ');
+        const tagClass = isSpec
+          ? 'twfox-player-tag is-spectator'
+          : (!p.isHost && p.ready ? 'twfox-player-tag is-ready' : 'twfox-player-tag');
         multiDom.playersList.appendChild(
           createEl('div', { className: rowClass }, [
             createEl('span', {
@@ -3329,7 +3448,7 @@ body.twfox-ingame #menus > #footer {
               attrs: { 'data-username': p.name || '' }
             }),
             createEl('div', { className: 'twfox-player-meta' }, [
-              createEl('span', { className: p.ready ? 'twfox-player-tag is-ready' : 'twfox-player-tag', text: roleTag }),
+              createEl('span', { className: tagClass, text: roleTag }),
               createEl('span', { className: 'twfox-player-wins', text: `${p.wins || 0} / ${snap.room.round || 0}` })
             ])
           ])
@@ -3369,8 +3488,8 @@ body.twfox-ingame #menus > #footer {
       }
 
       if (multiSubMode === 'playing' && foxmodCanvas) {
-        const selfId = isHost ? 'host' : snap.selfId;
-        const rankedPlayers = (snap.players || []).slice().sort((a, b) => {
+        const playingPool = (snap.players || []).filter((p) => !p.spectator);
+        const rankedPlayers = playingPool.slice().sort((a, b) => {
           if (activeMode === 'blitz') {
             return ((Number(b.score) || 0) - (Number(a.score) || 0)) || ((b.lines || 0) - (a.lines || 0));
           }
@@ -3415,7 +3534,7 @@ body.twfox-ingame #menus > #footer {
           });
         }
 
-        const opponents = (snap.players || []).filter((p) => p.id !== selfId);
+        const opponents = playingPool.filter((p) => p.id !== selfId);
         multiDom.opponentsGrid.innerHTML = '';
         for (const opp of opponents) {
           const oppRankIdx = rankedPlayers.findIndex((x) => x.id === opp.id);
@@ -3623,9 +3742,15 @@ body.twfox-ingame #menus > #footer {
       const chatSendBtn = createEl('button', { id: 'twfoxtetrio-lobby-chat-send', className: 'twfox-btn', text: 'SEND', type: 'button' });
 
       // Bottom 3-wing bar
-      const hostWingLabel = createEl('div', { id: 'twfoxtetrio-host-wing-btn', className: 'twfox-footer-wing-btn is-host-wing' }, [
-        createEl('div', { text: 'PLAYING' }),
-        createEl('span', { text: 'HOST SERVER · P2P' })
+      const hostWingTitle = createEl('div', { text: 'PLAYING' });
+      const hostWingSub = createEl('span', { text: 'CLICK TO SWITCH TO SPECTATORS' });
+      const hostWingLabel = createEl('div', {
+        id: 'twfoxtetrio-host-wing-btn',
+        className: 'twfox-footer-wing-btn ns',
+        attrs: { 'data-hover': 'hover', 'data-hit': 'click' }
+      }, [
+        hostWingTitle,
+        hostWingSub
       ]);
       const clientReadySub = createEl('span', { text: 'CLICK TO TOGGLE READY STATUS' });
       const clientReadyBtn = createEl('div', { id: 'twfoxtetrio-client-ready-btn', className: 'twfox-footer-wing-btn hidden' }, [
@@ -3670,6 +3795,11 @@ body.twfox-ingame #menus > #footer {
       ]);
 
       // In-game VS / BLITZ stage with right-side score leaderboard, opponent mini boards & finish overlay
+      const spectatorBanner = createEl('div', {
+        id: 'twfoxtetrio-spectator-banner',
+        className: 'twfox-spectator-banner hidden',
+        text: 'SPECTATING · WATCHING MATCH LIVE'
+      });
       multiCanvas = createEl('canvas', {
         id: 'twfoxtetrio-multi-canvas',
         className: 'twfox-game-canvas',
@@ -3715,6 +3845,7 @@ body.twfox-ingame #menus > #footer {
       }, [finishCard]);
       const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'twfox-stage-inner hidden' }, [
         backLobbyBtn,
+        spectatorBanner,
         createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, sideCol]),
         finishOverlay
       ]);
@@ -3786,6 +3917,9 @@ body.twfox-ingame #menus > #footer {
         joinStatus,
         hostStartBtn,
         hostWingLabel,
+        hostWingTitle,
+        hostWingSub,
+        spectatorBanner,
         clientReadyBtn,
         clientReadySub,
         clientWaitTag,
@@ -4084,6 +4218,19 @@ body.twfox-ingame #menus > #footer {
 
       hostStartBtn.addEventListener('click', function () {
         if (peerSession && peerSession.getSnapshot().role === 'host') peerSession.startMatch();
+      });
+
+      hostWingLabel.addEventListener('click', function () {
+        const snap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
+        if (!snap) return;
+        const selfId = snap.role === 'host' ? 'host' : snap.selfId;
+        const selfPlayer = (snap.players || []).find((p) => p.id === selfId);
+        const nextSpec = !(selfPlayer ? selfPlayer.spectator : snap.spectator);
+        if (snap.role === 'host' && typeof peerSession.setSelfSpectator === 'function') {
+          peerSession.setSelfSpectator(nextSpec);
+        } else if (snap.role === 'client' && typeof peerSession.setSpectator === 'function') {
+          peerSession.setSpectator(nextSpec);
+        }
       });
 
       clientReadyBtn.addEventListener('click', function () {
