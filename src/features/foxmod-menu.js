@@ -800,10 +800,18 @@ body.twfox-spectating #menus[data-menu-type='foxmod_multi'] #footer {
   margin: 0 !important;
   background: transparent !important;
   text-align: left;
+  transform: none !important;
   overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  transition: .3s opacity !important;
   box-sizing: border-box !important;
   z-index: 11;
   pointer-events: none;
+}
+#twfoxtetrio-pane-multi.hidden,
+#twfoxtetrio-pane-multi.thidden {
+  display: none !important;
 }
 #twfoxtetrio-multi-lobby {
   width: 100%;
@@ -903,7 +911,7 @@ body.twfox-spectating #menus[data-menu-type='foxmod_multi'] #footer {
   display: grid;
   grid-template-columns: minmax(15em, 26%) minmax(0, 1fr) minmax(15em, 26%);
   gap: 0.75em;
-  padding: 0.9em 0 1.25em;
+  padding: 0.85em 0 1.4em;
   box-sizing: border-box;
   pointer-events: all;
 }
@@ -958,6 +966,11 @@ body.twfox-spectating #menus[data-menu-type='foxmod_multi'] #footer {
   font-family: HUN, sans-serif;
   color: #d9bef3;
   font-weight: 700;
+  cursor: pointer;
+  transition: .18s filter;
+}
+.twfox-player-row:hover {
+  filter: brightness(1.18);
 }
 .twfox-player-row.is-spectator {
   order: 2;
@@ -3143,6 +3156,8 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
         const statCol3 = createEl('div', { className: 'twfox-res-stat', html: `<span>TIME</span>${formatMatchDuration(entry.durationMs)}` });
         const statCol4 = createEl('div', { className: 'twfox-res-stat', html: `<span>WINS</span>${entry.wins || 0}` });
 
+        const resUser = String(entry.name || '').trim().toLowerCase();
+        const isRealResUser = /^[a-z0-9_-]{2,20}$/.test(resUser) && !['host', 'player', 'anon'].includes(resUser);
         const row = createEl(
           'div',
           {
@@ -3153,9 +3168,10 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
             createEl('div', { className: 'twfox-res-place', text: `Nº${rank}` }),
             createEl('div', { className: 'twfox-res-player' }, [
               createEl('span', {
-                className: 'twfox-paw-target',
+                className: isRealResUser ? 'twfox-paw-target tetra_pop' : 'twfox-paw-target',
                 text: entry.name + (isSelf ? ' (YOU)' : ''),
-                attrs: { 'data-username': entry.name || '' }
+                style: isRealResUser ? 'cursor:pointer;' : '',
+                attrs: { 'data-username': isRealResUser ? resUser : (entry.name || '') }
               }),
               createEl('span', { className: 'twfox-badge', text: roleBadgeText })
             ]),
@@ -3433,15 +3449,21 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
       for (const p of snap.players || []) {
         const isSpec = Boolean(p.spectator);
         const roleTag = isSpec ? 'SPECTATOR' : (p.isHost ? 'HOST' : p.ready ? 'READY' : 'WAIT');
+        const profileUser = String(p.name || '').trim().toLowerCase();
+        const isRealUser = /^[a-z0-9_-]{2,20}$/.test(profileUser) && !['host', 'player', 'anon'].includes(profileUser);
         const rowClass = [
           'twfox-player-row',
-          isSpec ? 'is-spectator' : (p.isHost ? 'is-host' : (p.ready ? 'is-ready' : ''))
+          isSpec ? 'is-spectator' : (p.isHost ? 'is-host' : (p.ready ? 'is-ready' : '')),
+          isRealUser ? 'tetra_pop' : ''
         ].filter(Boolean).join(' ');
         const tagClass = isSpec
           ? 'twfox-player-tag is-spectator'
           : (!p.isHost && p.ready ? 'twfox-player-tag is-ready' : 'twfox-player-tag');
+        const rowAttrs = isRealUser
+          ? { 'data-username': profileUser, 'data-hover': 'tap', 'data-hit': 'click', title: 'Click to view TETR.IO profile' }
+          : undefined;
         multiDom.playersList.appendChild(
-          createEl('div', { className: rowClass }, [
+          createEl('div', { className: rowClass, attrs: rowAttrs }, [
             createEl('span', {
               className: 'twfox-player-name twfox-paw-target',
               text: p.name,
@@ -3473,12 +3495,14 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
               })
             );
           } else {
+            const chatUser = String(entry.author || '').trim().toLowerCase();
+            const isRealChatUser = /^[a-z0-9_-]{2,20}$/.test(chatUser) && !['host', 'player', 'anon'].includes(chatUser);
             multiDom.chatLog.appendChild(
               createEl('div', { className: 'twfox-chat-entry' }, [
                 createEl('h1', {
-                  className: 'chat_tag twfox-paw-target',
+                  className: isRealChatUser ? 'chat_tag twfox-paw-target tetra_pop' : 'chat_tag twfox-paw-target',
                   text: entry.author,
-                  attrs: { 'data-username': entry.author || '' }
+                  attrs: { 'data-username': isRealChatUser ? chatUser : (entry.author || '') }
                 }),
                 createEl('span', { text: entry.text })
               ])

@@ -864,6 +864,9 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(playersBox.children.length, 1);
   assert.equal(playersBox.children[0].children[0].textContent, 'TWFOXCRACK');
   assert.equal(playersBox.children[0].children[0].classList.contains('twfox-paw-target'), true);
+  assert.equal(playersBox.children[0].classList.contains('tetra_pop'), true);
+  assert.equal(playersBox.children[0].getAttribute('data-username'), 'twfoxcrack');
+  assert.equal(foxStyle.textContent.includes('transform: none !important;'), true);
   // Clicking bottom-left wing switches Host between PLAYING and SPECTATING
   wingBtn.click();
   assert.equal(wingBtn.children[0].textContent, 'SPECTATING');
