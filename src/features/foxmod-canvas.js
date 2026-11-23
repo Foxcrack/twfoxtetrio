@@ -613,7 +613,7 @@
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#06080f';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.fillRect(0, 0, w, h);
 
     if (Array.isArray(compactBoard) && compactBoard.length > 0) {
@@ -639,9 +639,15 @@
       }
     }
 
-    ctx.strokeStyle = alive === false ? '#ff4666' : '#53679c';
+    // Open-top U-shaped border matching real TETR.IO opponent boards
+    ctx.beginPath();
+    ctx.moveTo(1, 0);
+    ctx.lineTo(1, h - 1);
+    ctx.lineTo(w - 1, h - 1);
+    ctx.lineTo(w - 1, 0);
     ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, w, h);
+    ctx.strokeStyle = alive === false ? '#ff3d5c' : '#ffffff';
+    ctx.stroke();
 
     if (alive === false) {
       ctx.fillStyle = 'rgba(8, 6, 12, 0.62)';

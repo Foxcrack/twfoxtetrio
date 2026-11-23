@@ -854,9 +854,15 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').classList.contains('hidden'), false);
   assert.equal(env.elements.get('twfoxtetrio-host-invite-box').getAttribute('style'), null);
   assert.equal(env.elements.get('twfoxtetrio-lobby-room-title').textContent, "TWFOXCRACK'S FOXROOM");
+  assert.equal(env.elements.get('twfoxtetrio-host-wing-btn').classList.contains('hidden'), false);
+  assert.equal(env.elements.get('twfoxtetrio-client-ready-btn').classList.contains('hidden'), true);
+  assert.equal(env.elements.get('twfoxtetrio-client-wait-tag').classList.contains('hidden'), true);
   const playersBox = env.elements.get('twfoxtetrio-lobby-players');
   assert.equal(playersBox.children.length, 1);
   assert.equal(playersBox.children[0].children[0].textContent, 'TWFOXCRACK');
+  assert.equal(playersBox.children[0].children[0].classList.contains('twfox-paw-target'), true);
+  assert.equal(foxStyle.textContent.includes("#menus[data-menu-type='foxmod_multi'] #header"), true);
+  assert.equal(foxStyle.textContent.includes('background-color: #372b51;'), true);
 
   // Top #CODE banner matches Host code card and clicking copies #CODE
   const topBannerCode = env.elements.get('twfoxtetrio-lobby-invite-code').textContent;

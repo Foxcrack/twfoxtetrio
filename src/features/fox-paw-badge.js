@@ -62,24 +62,12 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
 .social_relationship h1 > span[${logic.FOX_PAW_ATTR}="1"]::before,
 .social_notification h1 > span[${logic.FOX_PAW_ATTR}="1"]::before,
 #social_dm_username[${logic.FOX_PAW_ATTR}="1"]::before,
-.tetra_modal > h2[${logic.FOX_PAW_ATTR}="1"]::before {
+.tetra_modal > h2[${logic.FOX_PAW_ATTR}="1"]::before,
+.twfox-player-name[${logic.FOX_PAW_ATTR}="1"]::before {
   width: 0.92em;
   height: 0.92em;
   vertical-align: -0.12em;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
-}
-.twfox-player-row .twfox-player-name[${logic.FOX_PAW_ATTR}="1"]::before {
-  content: "";
-  width: 1.65em;
-  height: 1.65em;
-  margin-right: 0;
-  vertical-align: middle;
-  background-color: rgba(255, 139, 56, 0.16);
-  background-image: url("${logic.FOX_PAW_DATA_URL}");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 78%;
-  border-color: rgba(255, 139, 56, 0.65);
 }
 `;
 

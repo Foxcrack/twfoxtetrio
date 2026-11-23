@@ -537,18 +537,19 @@
   top: 0.35em;
   z-index: 8;
   transform: translateX(-1.2em);
-  background-color: #120e18;
+  background-color: #0006;
   border: 0;
-  border-top: 3px solid #2b2238;
-  border-right: 3px solid #211a2c;
-  border-bottom: 3px solid #09070d;
-  color: #fffb;
+  border-top: 3px solid #1116;
+  border-right: 3px solid #2226;
+  border-bottom: 3px solid #0006;
+  box-shadow: 0 0 8px #0004;
+  color: #fffA;
   font-family: HUN, sans-serif;
-  font-size: 1.5em;
-  padding: .3em .85em .28em 2em;
+  font-size: 1.65em;
+  padding: .34em .85em .24em 2em;
   border-radius: 3px;
   cursor: pointer;
-  transition: .25s transform, .25s filter;
+  transition: .35s transform, .35s filter;
 }
 .twfox-corner-back-btn:hover {
   transform: translateX(-.4em);
@@ -760,6 +761,7 @@ body.twfox-ingame #menus > #footer {
   color: #ffffff;
   letter-spacing: 0.05em;
 }
+#menus[data-menu-type='foxmod_multi'] #header,
 #menus[data-menu-type='foxmod_multi'] #header_text,
 #menus[data-menu-type='foxmod_multi'] #back,
 #menus[data-menu-type='foxmod_multi'] #footer {
@@ -787,42 +789,43 @@ body.twfox-ingame #menus > #footer {
 #twfoxtetrio-multi-lobby {
   width: 100%;
   height: 100%;
-  padding-top: 3.4em;
+  padding-top: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
-  background: radial-gradient(ellipse at top center, rgba(96, 56, 160, 0.22) 0%, rgba(10, 8, 16, 0.35) 70%);
+  background: transparent;
 }
 #twfoxtetrio-lobby-top {
   position: relative;
   flex: 0 0 auto;
   width: 100%;
-  height: 3.9em;
+  height: 3.85em;
   pointer-events: none;
   z-index: 4;
 }
 #twfoxtetrio-leave-room-btn {
   pointer-events: all;
-  position: absolute;
+  position: fixed;
   left: 0;
-  top: .2em;
-  transform: translateX(-1.2em);
-  background: linear-gradient(180deg, #1b1426 0%, #100b17 100%);
-  border-top: 3px solid #3c2e52;
-  border-right: 3px solid #2b213b;
-  border-bottom: 3px solid #09070d;
-  color: #fffb;
+  top: 0.3em;
+  transform: translateX(-1.4em);
+  background-color: #0006;
+  border-top: 3px solid #1116;
+  border-right: 3px solid #2226;
+  border-bottom: 3px solid #0006;
+  box-shadow: 0 0 8px #0004;
+  color: #fffA;
   font-family: HUN, sans-serif;
-  font-size: 1.75em;
-  padding: .32em .8em .28em 2.2em;
+  font-size: 1.8em;
+  padding: .34em .85em .24em 2.5em;
   border-radius: 3px;
   cursor: pointer;
-  transition: .25s transform, .25s filter;
+  transition: .35s transform, .35s filter;
 }
 #twfoxtetrio-leave-room-btn:hover {
-  transform: translateX(-.4em);
-  filter: brightness(1.25);
+  transform: translateX(-.45em);
+  filter: brightness(1.3);
 }
 #twfoxtetrio-lobby-invite-banner {
   pointer-events: all;
@@ -832,24 +835,41 @@ body.twfox-ingame #menus > #footer {
   width: min(22em, calc(100vw - 14em));
   top: 0.25em;
   height: 3.45em;
-  background: linear-gradient(180deg, rgba(35, 23, 56, 0.9) 0%, rgba(18, 12, 30, 0.94) 100%);
-  border: 1px solid rgba(154, 108, 224, 0.45);
-  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.38);
-  border-radius: 5px;
+  background-color: #0004;
+  border: 1px solid #1114;
+  box-shadow: inset 0 4px 8px #0003;
+  border-radius: 3px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 180ms ease, filter 180ms ease, transform 120ms ease;
+  font-family: HUN, sans-serif;
+  overflow: hidden;
+  transition: filter 180ms ease, border-color 180ms ease;
 }
 #twfoxtetrio-lobby-invite-banner:hover {
-  filter: brightness(1.18);
-  border-color: rgba(196, 152, 255, 0.78);
+  filter: brightness(1.15);
 }
 #twfoxtetrio-lobby-invite-banner.is-copied {
   border-color: #42e88a;
-  box-shadow: 0 0 18px rgba(66, 232, 138, 0.35);
+  box-shadow: inset 0 0 12px rgba(66, 232, 138, 0.28);
 }
-.twfox-invite-sub { color: #b7a2db; font-size: 0.76em; font-weight: 700; letter-spacing: 0.1em; margin-top: 4px; }
-.twfox-invite-id { color: #ffffff; font-size: 1.6em; font-weight: 900; letter-spacing: 0.12em; text-shadow: 0 2px 8px rgba(0,0,0,0.65); }
+.twfox-invite-sub {
+  color: #fff5;
+  font-family: HUN, sans-serif;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-top: 0.35em;
+  text-transform: uppercase;
+}
+.twfox-invite-id {
+  color: #ffffff;
+  font-family: PFW, 'Segoe UI', sans-serif;
+  font-size: 1.55em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-shadow: 0 2px 6px #0008;
+}
 .twfox-lobby-grid {
   flex: 1 1 0;
   min-height: 0;
@@ -857,273 +877,353 @@ body.twfox-ingame #menus > #footer {
   display: grid;
   grid-template-columns: minmax(14em, 25%) minmax(0, 1fr) minmax(14em, 25%);
   gap: 0.85em;
-  padding: 0.3em 0.8em 0.7em;
+  padding: 0.35em 0.75em 0.55em;
   box-sizing: border-box;
 }
 .twfox-lobby-col {
-  background: linear-gradient(180deg, rgba(16, 13, 25, 0.78) 0%, rgba(10, 9, 16, 0.84) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.38);
+  background-color: #0006;
+  border: 0;
+  box-shadow: none;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  backdrop-filter: blur(4px);
 }
 .twfox-col-heading {
-  margin: 0.45em 0.7em 0.35em;
+  margin: 0.38em 0.65em 0.28em;
   font-family: HUN, sans-serif;
-  font-size: 1.9em;
+  font-size: 1.95em;
   font-weight: 800;
   color: #ffffff;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   text-shadow: 0 2px 6px #000;
 }
 .twfox-col-heading.right { text-align: right; }
 .twfox-col-heading.center {
   text-align: center;
-  margin-bottom: 0.25em;
-  padding-bottom: 0.2em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 0.38em 0.65em 0.25em;
 }
 .twfox-player-list {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 0 0.7em 0.7em;
+  padding: 0.1em 0.65em 0.5em 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5em;
+  gap: 0;
 }
 .twfox-player-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0.52em 0.72em;
-  background: linear-gradient(90deg, rgba(46, 35, 64, 0.92) 0%, rgba(25, 20, 36, 0.94) 100%);
-  border-top: 2px solid #594178;
-  border-left: 3px solid #6b4e93;
-  border-bottom: 2px solid #0d0913;
-  border-radius: 4px;
-  color: #fff;
-  font-weight: 800;
-  transition: transform 120ms ease, border-color 140ms ease;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0.32em 0.55em 0.26em 1.25em;
+  margin-bottom: 0.4em;
+  background-color: #372b51;
+  border-top: 3px solid #453469;
+  border-left: 0;
+  border-right: 3px solid #302742;
+  border-bottom: 3px solid #211c2c;
+  box-shadow: 0 0 8px #000;
+  border-radius: 0 3px 3px 0;
+  font-family: HUN, sans-serif;
+  color: #d9bef3;
+  font-weight: 700;
 }
 .twfox-player-row.is-host {
-  border-left-color: #ff9c42;
-  background: linear-gradient(90deg, rgba(64, 41, 28, 0.88) 0%, rgba(27, 20, 34, 0.94) 100%);
+  background-color: #372b51;
+  border-top-color: #453469;
 }
-.twfox-player-row.is-ready {
-  border-left-color: #42e88a;
+.twfox-player-row.is-ready .twfox-player-name {
+  color: #fff;
 }
 .twfox-player-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 1.02em;
+  font-size: 1.32em;
+  font-weight: 800;
+  color: #d9bef3;
+  letter-spacing: 0.02em;
 }
-.twfox-player-name::before {
-  content: attr(data-initial);
-  display: inline-flex;
+.twfox-player-meta {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 1.65em;
-  height: 1.65em;
-  border-radius: 4px;
-  font-family: HUN, sans-serif;
-  font-size: 0.88em;
-  font-weight: 900;
-  color: #fff;
-  background: linear-gradient(135deg, #7449ba 0%, #442775 100%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85em;
+  color: #bba8d6;
 }
-.twfox-player-row.is-host .twfox-player-name::before {
-  background: linear-gradient(135deg, #e87a24 0%, #993f10 100%);
+.twfox-player-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: #0006;
+  color: #e4d9f5;
+  font-size: 0.85em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.twfox-player-tag.is-ready {
+  background: rgba(66, 232, 138, 0.22);
+  color: #82ffba;
+}
+.twfox-player-wins {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: #d8cef0;
 }
 .twfox-lobby-tabs {
   display: flex;
   width: 100%;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 .twfox-room-tab {
   flex: 1 1 0;
   border-radius: 3px 3px 0 0;
-  background: linear-gradient(to bottom, rgba(170,170,170,0.1) 0, transparent 100%);
+  background: linear-gradient(to bottom, #aaa2 0, transparent 100%);
   font-family: HUN, sans-serif;
   text-align: center;
-  color: #9e96b3;
-  padding: .45em 0;
-  font-size: 1.3em;
+  color: #aaa;
+  padding: .4em 0;
+  font-size: 1.35em;
   font-weight: 800;
   cursor: pointer;
-  transition: .2s filter, .2s color, .2s background;
+  filter: brightness(1);
+  transition: .3s filter, .2s color;
 }
 .twfox-room-tab:hover { filter: brightness(1.3); color: #eee; }
 .twfox-room-tab.active {
-  background: linear-gradient(to bottom, #b785ff 0, #b785ff 3px, rgba(168, 115, 255, 0.22) 3px, transparent 100%);
+  background: linear-gradient(to bottom, #fff 0, #fff 3px, #aaa4 3px, transparent 100%);
   color: #fff;
 }
 .twfox-room-center-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
-  background: rgba(5, 4, 10, 0.36);
-  padding: 1em 1.25em;
+  background: transparent;
+  padding: 0.6em 0.9em;
   display: flex;
   flex-direction: column;
-  gap: 0.85em;
+  gap: 0.35em;
 }
 .twfox-room-opt-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0.65em 0.85em;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 5px;
-  color: #d6c8eb;
-  font-size: 1.08em;
+  padding: 0.45em 0.2em;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #fff1;
+  border-radius: 0;
+  color: #b7a3d4;
+  font-family: HUN, sans-serif;
+  font-size: 1.15em;
   font-weight: 700;
+  text-transform: uppercase;
 }
-.twfox-room-opt-row:first-of-type { margin-top: 2px; }
+.twfox-room-opt-row:first-of-type { border-top: 0; }
 .twfox-room-savebar {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   flex-wrap: wrap;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 0, rgba(140, 100, 210, 0.14) 100%);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(to bottom, transparent 0, #aaa2 100%);
+  border-top: 0;
   text-align: center;
-  color: #e2d6f5;
+  color: #aaa;
   font-family: HUN, sans-serif;
-  font-size: 1.25em;
+  font-size: 1.35em;
   font-weight: 800;
-  padding: .48em 0.7em;
+  padding: .42em 0.7em;
 }
 .twfox-room-savebar.has-winner {
   color: #ffe066;
-  background: linear-gradient(to bottom, rgba(255, 215, 80, 0.06) 0, rgba(255, 190, 50, 0.16) 100%);
 }
 .twfox-chat-log {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 0 0.7em 0.5em;
+  padding: 0.15em 0.65em 0.5em;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-family: monospace;
-  font-size: 0.94em;
+  gap: 4px;
+  font-family: PFW, 'Segoe UI', sans-serif;
+  font-size: 0.95em;
 }
 .twfox-chat-entry {
-  padding: 4px 7px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 2px 4px;
+  border-radius: 0;
+  background: transparent;
   line-height: 1.3;
   word-break: break-word;
+  color: #ddd;
+}
+.twfox-chat-entry .chat_tag {
+  display: inline;
+  font-family: HUN, sans-serif;
+  font-size: 1em;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0.45em 0 0;
 }
 .twfox-chat-entry.is-system {
-  background: rgba(255, 162, 75, 0.11);
-  border-left: 2px solid #ffbe8e;
+  background: transparent;
+  border-left: 2px solid #9e7bd6;
+  padding-left: 6px;
+  color: #b5a3d4;
 }
 .twfox-chat-bar {
-  padding: 0.5em 0.7em 0.7em;
+  padding: 0.45em 0.65em 0.65em;
   display: flex;
   gap: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 0;
 }
-.twfox-chat-bar .twfox-input { flex: 1 1 auto; min-width: 0; }
+.twfox-chat-bar .twfox-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: PFW, 'Segoe UI', sans-serif;
+  color: #fff;
+  font-size: 1.05em;
+  background: #000D;
+  box-shadow: 0 2px 6px #000A;
+  border: 1px solid #060606;
+  border-radius: 3px;
+  padding: 0.25em 0.45em;
+}
+#twfoxtetrio-lobby-chat-send {
+  background: #1d1629;
+  border-top: 2px solid #3c2e54;
+  border-left: 2px solid #2c213d;
+  border-right: 2px solid #130e1c;
+  border-bottom: 2px solid #09070d;
+  color: #ccc;
+  padding: 0.25em 0.7em;
+  font-size: 0.95em;
+}
 .twfox-lobby-footer {
   flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
-  min-height: 3.6em;
-  background: linear-gradient(to bottom, #1c1328 0%, #2b1a40 100%);
-  border-top: 2px solid #593b7d;
+  min-height: 3.9em;
+  background: transparent;
+  border-top: 0;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  padding: 0.32em 1.2em;
+  align-items: end;
+  padding: 0;
+  pointer-events: none;
+}
+.twfox-footer-wing-wrap {
+  justify-self: start;
+  pointer-events: all;
+  min-width: min(19em, 30vw);
+  background: linear-gradient(180deg, #372852 0%, #241938 100%);
+  border-top: 3px solid #594182;
+  padding: 0.35em 1.8em 0.45em 1em;
+  clip-path: polygon(0 0, 90% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 -2px 0 #16101E) drop-shadow(2px 0 0 #16101E);
 }
 .twfox-footer-wing-btn {
-  justify-self: start;
   cursor: pointer;
-  color: #d4b9f5;
+  color: #e4d4ff;
   font-family: HUN, sans-serif;
-  font-size: 1.5em;
-  font-weight: 800;
+  font-size: 1.45em;
+  line-height: 1.05;
+  font-weight: 900;
   text-align: left;
   transition: .2s filter, .2s color;
 }
+.twfox-footer-wing-btn.is-host-wing {
+  cursor: default;
+}
 .twfox-footer-wing-btn.is-ready {
-  color: #5aff9c;
+  color: #6effa8;
 }
 .twfox-footer-wing-btn span {
   display: block;
-  font-size: 0.45em;
-  color: #9378b5;
+  font-size: 0.44em;
+  font-weight: 700;
+  color: #a993cf;
+}
+.twfox-footer-wait-tag {
+  pointer-events: none;
+  min-width: min(21em, 34vw);
+  background: repeating-linear-gradient(-45deg, #271b3c 0, #271b3c 10px, #1e1430 10px, #1e1430 20px);
+  border: 0;
+  border-top: 3px solid #533b7d;
+  clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
+  color: #cbb5ed;
+  font-family: HUN, sans-serif;
+  font-size: 1.45em;
+  line-height: 1.1;
+  font-weight: 900;
+  padding: 0.44em 2.4em 0.52em;
+  text-align: center;
+  filter: drop-shadow(0 -2px 0 #16101E);
 }
 .twfox-footer-start-btn {
-  background: linear-gradient(to bottom, #6335a6 0%, #3a1c66 100%);
-  border: 2px solid #a674eb;
-  border-bottom-color: #190b2e;
-  border-radius: 5px;
-  color: #ffffff;
+  pointer-events: all;
+  min-width: min(21em, 34vw);
+  background: repeating-linear-gradient(-45deg, #2d1d47 0, #2d1d47 10px, #24163b 10px, #24163b 20px);
+  border: 0;
+  border-top: 3px solid #6b4ea3;
+  clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%);
+  color: #e4d4ff;
   font-family: HUN, sans-serif;
-  font-size: 1.55em;
-  line-height: 1.08;
+  font-size: 1.65em;
+  line-height: 1.05;
   font-weight: 900;
-  padding: 0.2em 2.3em;
+  padding: 0.32em 2.4em 0.42em;
   cursor: pointer;
   text-align: center;
-  box-shadow: 0 0 22px rgba(154, 98, 240, 0.46);
-  transition: filter 160ms ease, transform 90ms ease, box-shadow 160ms ease;
+  filter: drop-shadow(0 -2px 0 #16101E) drop-shadow(0 4px 10px #0006);
+  transition: filter 160ms ease, transform 90ms ease;
 }
 .twfox-footer-start-btn:hover {
-  filter: brightness(1.2);
-  box-shadow: 0 0 28px rgba(178, 125, 255, 0.65);
+  filter: brightness(1.22) drop-shadow(0 -2px 0 #16101E);
 }
 .twfox-footer-start-btn.is-disabled,
 .twfox-footer-start-btn:disabled {
-  background: linear-gradient(to bottom, #2a2138 0%, #191224 100%);
-  border-color: #4f3d69;
-  color: #a99bc2;
-  opacity: 0.55;
-  filter: grayscale(0.45);
+  background: repeating-linear-gradient(-45deg, #1b1329 0, #1b1329 10px, #150e20 10px, #150e20 20px);
+  border-top-color: #3d2c59;
+  color: #7e6b9c;
+  opacity: 0.85;
   cursor: not-allowed;
-  box-shadow: none;
 }
 .twfox-footer-start-btn.is-disabled:hover,
 .twfox-footer-start-btn:disabled:hover {
-  filter: grayscale(0.45);
-  box-shadow: none;
+  filter: drop-shadow(0 -2px 0 #16101E);
 }
 .twfox-footer-start-btn span {
   display: block;
   font-size: 0.42em;
   font-weight: 700;
-  color: #d7c3f7;
+  color: #b49bd9;
 }
 .twfox-footer-mode-tag {
   justify-self: end;
+  min-width: min(19em, 30vw);
+  text-align: right;
   font-family: HUN, sans-serif;
-  font-size: 1.4em;
-  font-weight: 800;
-  color: #cab3eb;
-  letter-spacing: 0.06em;
+  font-size: 1.45em;
+  line-height: 1.1;
+  font-weight: 900;
+  color: #7c62a6;
+  letter-spacing: 0.05em;
+  background: linear-gradient(180deg, #271c3a 0%, #171024 100%);
+  border-top: 3px solid #3f2d5e;
+  padding: 0.48em 1em 0.5em 2.2em;
+  clip-path: polygon(10% 0, 100% 0, 100% 100%, 0 100%);
 }
 .twfox-multi-arena {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: clamp(12px, 2vw, 24px);
+  gap: clamp(14px, 2.2vw, 28px);
   max-width: 100vw;
   max-height: 96vh;
   padding: 0 14px;
@@ -1133,15 +1233,16 @@ body.twfox-ingame #menus > #footer {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
-  min-width: 255px;
-  max-width: 360px;
+  gap: 10px;
+  min-width: 240px;
+  max-width: 340px;
 }
 .twfox-score-lb {
-  background: rgba(14, 18, 29, 0.9);
-  border: 1px solid #41517a;
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.52);
+  background: #0006;
+  border: 0;
+  border-top: 2px solid #fff3;
+  border-radius: 2px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   text-align: left;
   font-family: HUN, sans-serif;
@@ -1150,13 +1251,13 @@ body.twfox-ingame #menus > #footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 11px;
-  background: linear-gradient(90deg, rgba(44, 56, 88, 0.92) 0%, rgba(25, 32, 52, 0.92) 100%);
-  border-bottom: 1px solid #41517a;
-  font-size: 1.05em;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid #fff2;
+  font-size: 0.96em;
   font-weight: 800;
-  color: #e4ecff;
-  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.08em;
 }
 .twfox-score-lb-rows {
   display: flex;
@@ -1167,62 +1268,69 @@ body.twfox-ingame #menus > #footer {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 11px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 1.02em;
+  padding: 5px 10px;
+  border-top: 1px solid #fff1;
+  font-size: 0.98em;
   font-weight: 800;
-  color: #e6ecff;
+  color: #edf1ff;
 }
 .twfox-score-lb-row:first-child { border-top: 0; }
 .twfox-score-lb-row.is-first { color: #ffe066; }
-.twfox-score-lb-row.is-self { background: rgba(34, 96, 148, 0.65); }
-.twfox-score-lb-row.is-ko { opacity: 0.55; color: #ffa0b2; }
+.twfox-score-lb-row.is-self { background: rgba(72, 184, 255, 0.16); }
+.twfox-score-lb-row.is-ko { opacity: 0.48; color: #ff8ea3; }
 .twfox-score-lb-val {
   font-variant-numeric: tabular-nums;
   color: #ffffff;
 }
-.twfox-opponents-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.twfox-opponents-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
 .twfox-opp-card {
-  background: rgba(12, 15, 24, 0.9);
-  border: 1.5px solid #4d6294;
-  border-radius: 6px;
-  padding: 6px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 2px 4px;
   text-align: center;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  transition: border-color 180ms ease, opacity 180ms ease;
+  box-shadow: none;
+  transition: opacity 180ms ease;
 }
 .twfox-opp-card.is-ko {
-  border-color: #ff4666;
-  opacity: 0.78;
+  opacity: 0.65;
 }
 .twfox-opp-hdr {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  padding: 2px 5px;
+  background: #0007;
+  border-radius: 2px 2px 0 0;
   font-family: HUN, sans-serif;
   font-weight: 800;
-  font-size: 0.92em;
-  margin-bottom: 4px;
+  font-size: 0.94em;
+  margin-bottom: 2px;
   color: #ffffff;
 }
+.twfox-opp-card.is-ko .twfox-opp-hdr {
+  color: #ff8ea3;
+}
 .twfox-opp-rank {
-  padding: 1px 5px;
-  border-radius: 3px;
+  padding: 0 4px;
+  border-radius: 2px;
   font-size: 0.85em;
   background: rgba(255, 255, 255, 0.12);
-  color: #dce4ff;
+  color: #ffffff;
 }
 .twfox-opp-card.is-ko .twfox-opp-rank {
-  background: rgba(255, 70, 102, 0.25);
-  color: #ff9eb0;
+  background: rgba(217, 54, 84, 0.35);
+  color: #ffb8c4;
 }
 .twfox-opp-stats {
-  margin-top: 4px;
-  font-size: 0.84em;
+  margin-top: 3px;
+  font-family: HUN, sans-serif;
+  font-size: 0.8em;
   font-weight: 700;
-  color: #9aa8cf;
+  color: rgba(255, 255, 255, 0.72);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 4px #000;
 }
 .twfox-finish-overlay {
   position: fixed;
@@ -1231,20 +1339,22 @@ body.twfox-ingame #menus > #footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at center, rgba(16, 12, 28, 0.72) 0%, rgba(4, 5, 10, 0.88) 100%);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.65);
 }
 .twfox-finish-card {
   position: relative;
   overflow: hidden;
-  min-width: min(460px, 88vw);
-  padding: 26px 38px;
-  border-radius: 10px;
+  min-width: min(440px, 86vw);
+  padding: 24px 36px;
+  border-radius: 3px;
   text-align: center;
-  background: linear-gradient(180deg, rgba(35, 24, 56, 0.96) 0%, rgba(16, 12, 26, 0.98) 100%);
-  border: 2px solid #ffd84d;
-  box-shadow: 0 0 48px rgba(255, 216, 77, 0.35), 0 18px 46px rgba(0, 0, 0, 0.78);
-  animation: twfoxWinnerBurst 460ms cubic-bezier(0.2, 1.28, 0.4, 1) forwards;
+  background-color: #271c38;
+  border-top: 3px solid #594182;
+  border-left: 3px solid #412f61;
+  border-right: 3px solid #201730;
+  border-bottom: 3px solid #140d1f;
+  box-shadow: 0 12px 42px rgba(0, 0, 0, 0.85);
+  animation: twfoxWinnerBurst 380ms cubic-bezier(0.2, 1.2, 0.4, 1) forwards;
 }
 .twfox-finish-card::after {
   content: "";
@@ -1253,44 +1363,44 @@ body.twfox-ingame #menus > #footer {
   left: -60%;
   width: 45%;
   height: 160%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
   transform: rotate(22deg);
-  animation: twfoxWinnerSweep 1.3s ease-out 180ms forwards;
+  animation: twfoxWinnerSweep 1.1s ease-out 150ms forwards;
 }
 .twfox-finish-card.is-defeat {
-  border-color: #7c96db;
-  box-shadow: 0 0 38px rgba(100, 140, 255, 0.28), 0 18px 46px rgba(0, 0, 0, 0.78);
+  background-color: #1c1829;
+  border-top-color: #463a66;
 }
 .twfox-finish-kicker {
   font-family: HUN, sans-serif;
   font-size: 1em;
   font-weight: 800;
-  letter-spacing: 0.2em;
-  color: #ffdf80;
+  letter-spacing: 0.18em;
+  color: #c9b2ed;
   text-transform: uppercase;
 }
 .twfox-finish-card.is-defeat .twfox-finish-kicker {
-  color: #a8beff;
+  color: #a69ac7;
 }
 .twfox-finish-title {
   margin: 6px 0 4px;
   font-family: HUN, sans-serif;
-  font-size: clamp(30px, 4.4vw, 52px);
+  font-size: clamp(30px, 4.4vw, 50px);
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: #ffffff;
-  text-shadow: 0 4px 18px rgba(255, 216, 77, 0.45);
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.7);
 }
 .twfox-finish-sub {
   font-family: HUN, sans-serif;
-  font-size: 1.25em;
+  font-size: 1.2em;
   font-weight: 800;
-  color: #d7e2ff;
-  letter-spacing: 0.06em;
+  color: #dfd1f7;
+  letter-spacing: 0.05em;
 }
 @keyframes twfoxWinnerBurst {
-  0% { opacity: 0; transform: scale(0.68) translateY(18px); }
-  70% { opacity: 1; transform: scale(1.04) translateY(-2px); }
+  0% { opacity: 0; transform: scale(0.72) translateY(14px); }
+  75% { opacity: 1; transform: scale(1.03) translateY(-1px); }
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 @keyframes twfoxWinnerSweep {
@@ -1300,13 +1410,13 @@ body.twfox-ingame #menus > #footer {
 #twfoxtetrio-multi-results {
   width: 100%;
   height: 100%;
-  padding: 2.2em 1.2em 1.4em;
+  padding: 2em 1.2em 1.2em;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at top center, rgba(112, 74, 184, 0.24) 0%, rgba(8, 7, 14, 0.85) 75%);
+  background: rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 .twfox-results-shell {
@@ -1314,12 +1424,12 @@ body.twfox-ingame #menus > #footer {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  background: linear-gradient(180deg, rgba(20, 16, 32, 0.95) 0%, rgba(11, 10, 19, 0.97) 100%);
-  border: 1.5px solid rgba(154, 108, 224, 0.48);
-  border-radius: 10px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.72);
-  padding: 18px 22px;
+  gap: 10px;
+  background-color: #0007;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.72);
+  padding: 16px 20px;
   box-sizing: border-box;
 }
 .twfox-res-hero {
@@ -1328,25 +1438,28 @@ body.twfox-ingame #menus > #footer {
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
-  padding: 14px 18px;
-  border-radius: 8px;
-  background: linear-gradient(90deg, rgba(255, 208, 72, 0.16) 0%, rgba(110, 62, 180, 0.24) 100%);
-  border: 1px solid rgba(255, 214, 92, 0.45);
+  padding: 12px 16px;
+  border-radius: 3px;
+  background-color: #372b51;
+  border-top: 3px solid #453469;
+  border-left: 3px solid #413163;
+  border-right: 3px solid #2b2140;
+  border-bottom: 3px solid #1b1429;
 }
 .twfox-res-hero-tag {
   font-family: HUN, sans-serif;
   font-size: 0.9em;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  color: #ffe285;
+  letter-spacing: 0.12em;
+  color: #cbb5ed;
 }
 .twfox-res-hero-name {
   font-family: HUN, sans-serif;
   font-size: clamp(24px, 3vw, 36px);
   font-weight: 900;
   color: #ffffff;
-  letter-spacing: 0.05em;
-  text-shadow: 0 2px 12px rgba(255, 208, 72, 0.35);
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
 }
 .twfox-res-hero-meta {
   text-align: right;
@@ -1358,7 +1471,7 @@ body.twfox-ingame #menus > #footer {
 .twfox-res-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   overflow-y: auto;
   max-height: 52vh;
   padding-right: 2px;
@@ -1368,35 +1481,37 @@ body.twfox-ingame #menus > #footer {
   grid-template-columns: 58px minmax(0, 1.3fr) repeat(4, auto);
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-left: 4px solid #63739c;
+  padding: 8px 14px;
+  border-radius: 3px;
+  background-color: #2c2242;
+  border-top: 2px solid #3f315e;
+  border-right: 2px solid #241c36;
+  border-bottom: 2px solid #171224;
+  border-left: 4px solid #6b5399;
   font-family: HUN, sans-serif;
   color: #eef3ff;
-  animation: twfoxResultRowIn 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: twfoxResultRowIn 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 .twfox-res-row.is-rank-1 {
-  background: linear-gradient(90deg, rgba(255, 210, 68, 0.2) 0%, rgba(44, 34, 22, 0.72) 100%);
-  border-color: rgba(255, 216, 77, 0.45);
+  background-color: #3d3120;
+  border-top-color: #7d6438;
   border-left-color: #ffd84d;
 }
 .twfox-res-row.is-rank-2 {
-  background: linear-gradient(90deg, rgba(210, 222, 240, 0.14) 0%, rgba(28, 32, 46, 0.7) 100%);
+  background-color: #2f3344;
   border-left-color: #d6e0f0;
 }
 .twfox-res-row.is-rank-3 {
-  background: linear-gradient(90deg, rgba(224, 152, 92, 0.14) 0%, rgba(36, 26, 22, 0.7) 100%);
+  background-color: #352926;
   border-left-color: #e0985c;
 }
 .twfox-res-row.is-self {
-  box-shadow: inset 0 0 0 1px rgba(96, 198, 255, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 .twfox-res-place {
   font-size: 1.35em;
   font-weight: 900;
-  color: #c8d2eb;
+  color: #cbbbe6;
   letter-spacing: 0.04em;
 }
 .twfox-res-row.is-rank-1 .twfox-res-place { color: #ffe066; }
@@ -1415,13 +1530,13 @@ body.twfox-ingame #menus > #footer {
   font-variant-numeric: tabular-nums;
   font-size: 0.96em;
   font-weight: 700;
-  color: #bfcbe8;
+  color: #d5cce6;
   min-width: 64px;
 }
 .twfox-res-stat span {
   display: block;
   font-size: 0.72em;
-  color: #7d8cb3;
+  color: #9382b3;
   letter-spacing: 0.06em;
 }
 .twfox-res-actions {
@@ -1431,7 +1546,7 @@ body.twfox-ingame #menus > #footer {
   gap: 10px;
   flex-wrap: wrap;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid #fff1;
 }
 @keyframes twfoxResultRowIn {
   0% { opacity: 0; transform: translateY(12px); }
@@ -1439,13 +1554,45 @@ body.twfox-ingame #menus > #footer {
 }
 .twfox-badge {
   display: inline-block;
-  padding: 3px 8px;
-  border-radius: 3px;
-  font-size: 0.9em;
+  padding: 2px 7px;
+  border-radius: 2px;
+  font-size: 0.85em;
   font-weight: 800;
-  background: rgba(255, 140, 66, 0.16);
-  border: 1px solid rgba(255, 140, 66, 0.42);
-  color: #ffbe8e;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e4d9f5;
+}
+#twfoxtetrio-pane-multi .twfox-btn {
+  background-color: #29203b;
+  border-top-color: #463666;
+  border-left-color: #36294f;
+  border-right-color: #1f172e;
+  border-bottom-color: #140f1f;
+  color: #e2d6f5;
+}
+#twfoxtetrio-pane-multi .twfox-btn.is-pri {
+  background-color: #472e6b;
+  border-top-color: #7952b3;
+  border-left-color: #5e3e8c;
+  border-right-color: #33204f;
+  border-bottom-color: #1d1130;
+  color: #ffffff;
+}
+#twfoxtetrio-pane-multi .twfox-select,
+#twfoxtetrio-pane-multi .twfox-input {
+  background: #000B;
+  border: 1px solid #fff2;
+  color: #fff;
+}
+#twfoxtetrio-pane-multi .twfox-code-card {
+  background: #0006;
+  border: 1px solid #fff2;
+  border-radius: 3px;
+}
+#twfoxtetrio-pane-multi .twfox-code-value {
+  font-family: PFW, 'Segoe UI', monospace;
+  font-size: 1.9em;
+  letter-spacing: 0.12em;
 }
 #menus[data-menu-type^='foxmod'] #header_text {
   color: #ffbe8e;
@@ -1468,16 +1615,16 @@ body.twfox-ingame #menus > #footer {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  background: rgba(18, 12, 28, 0.88);
-  border: 2px solid #634292;
-  border-radius: 4px;
+  padding: 10px 14px;
+  background: #0006;
+  border: 1px solid #fff2;
+  border-radius: 3px;
 }
 .twfox-code-value {
-  font-family: HUN, monospace;
-  font-size: 2.2em;
+  font-family: PFW, 'Segoe UI', monospace;
+  font-size: 2.0em;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   color: #ffffff;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
@@ -3082,6 +3229,12 @@ body.twfox-ingame #menus > #footer {
       }
       setClass(multiDom.hostStartBtn, 'hidden', !isHost);
       setClass(multiDom.clientReadyBtn, 'hidden', isHost);
+      if (multiDom.hostWingLabel) {
+        setClass(multiDom.hostWingLabel, 'hidden', !isHost);
+      }
+      if (multiDom.clientWaitTag) {
+        setClass(multiDom.clientWaitTag, 'hidden', isHost);
+      }
 
       const count = (snap.players || []).length;
       const canStart = count >= 2;
@@ -3151,12 +3304,19 @@ body.twfox-ingame #menus > #footer {
 
       if (!isHost && multiDom.clientReadyBtn) {
         setClass(multiDom.clientReadyBtn, 'is-ready', Boolean(snap.ready));
+        if (multiDom.clientReadySub) {
+          multiDom.clientReadySub.textContent = snap.ready
+            ? 'WAITING FOR HOST TO START'
+            : 'CLICK TO TOGGLE READY STATUS';
+        }
+      }
+      if (!isHost && multiDom.clientWaitTag) {
+        multiDom.clientWaitTag.textContent = snap.ready ? 'READY TO PLAY' : 'WAITING FOR HOST';
       }
 
       multiDom.playersList.innerHTML = '';
       for (const p of snap.players || []) {
         const roleTag = p.isHost ? 'HOST' : p.ready ? 'READY' : 'WAIT';
-        const initial = String(p.name || 'P').trim().charAt(0).toUpperCase() || 'P';
         const rowClass = [
           'twfox-player-row',
           p.isHost ? 'is-host' : (p.ready ? 'is-ready' : '')
@@ -3166,9 +3326,12 @@ body.twfox-ingame #menus > #footer {
             createEl('span', {
               className: 'twfox-player-name twfox-paw-target',
               text: p.name,
-              attrs: { 'data-initial': initial, 'data-username': p.name || '' }
+              attrs: { 'data-username': p.name || '' }
             }),
-            createEl('span', { className: 'twfox-badge', text: `${roleTag} · ${p.wins || 0}/${snap.room.round || 0}` })
+            createEl('div', { className: 'twfox-player-meta' }, [
+              createEl('span', { className: p.ready ? 'twfox-player-tag is-ready' : 'twfox-player-tag', text: roleTag }),
+              createEl('span', { className: 'twfox-player-wins', text: `${p.wins || 0} / ${snap.room.round || 0}` })
+            ])
           ])
         );
       }
@@ -3177,20 +3340,31 @@ body.twfox-ingame #menus > #footer {
       if (!snap.chat || snap.chat.length === 0) {
         multiDom.chatLog.appendChild(
           createEl('div', {
-            className: 'twfox-chat-entry',
-            style: 'color:#8a7ca3',
-            text: 'Welcome to FOXMOD P2P chat! Host PC acts as the room server.'
+            className: 'twfox-chat-entry is-system',
+            text: 'Welcome to chat! Host PC acts as the room server.'
           })
         );
       } else {
         for (const entry of snap.chat) {
-          multiDom.chatLog.appendChild(
-            createEl('div', {
-              className: entry.system ? 'twfox-chat-entry is-system' : 'twfox-chat-entry',
-              style: entry.system ? 'color:#ffbe8e' : 'color:#dce4ff',
-              text: entry.system ? `* ${entry.text}` : `${entry.author}: ${entry.text}`
-            })
-          );
+          if (entry.system) {
+            multiDom.chatLog.appendChild(
+              createEl('div', {
+                className: 'twfox-chat-entry is-system',
+                text: entry.text
+              })
+            );
+          } else {
+            multiDom.chatLog.appendChild(
+              createEl('div', { className: 'twfox-chat-entry' }, [
+                createEl('h1', {
+                  className: 'chat_tag twfox-paw-target',
+                  text: entry.author,
+                  attrs: { 'data-username': entry.author || '' }
+                }),
+                createEl('span', { text: entry.text })
+              ])
+            );
+          }
         }
       }
 
@@ -3248,7 +3422,7 @@ body.twfox-ingame #menus > #footer {
           const oppRank = opp.alive === false && opp.placement ? opp.placement : (oppRankIdx >= 0 ? oppRankIdx + 1 : '-');
           const miniCanvas = createEl('canvas', {
             attrs: { width: '100', height: '200' },
-            style: 'background:#06080f;display:block;border-radius:3px;'
+            style: 'background:transparent;display:block;'
           });
           foxmodCanvas.renderMiniBoard(miniCanvas, opp.board, opp.alive, opp.placement);
           const statText = activeMode === 'blitz'
@@ -3449,10 +3623,20 @@ body.twfox-ingame #menus > #footer {
       const chatSendBtn = createEl('button', { id: 'twfoxtetrio-lobby-chat-send', className: 'twfox-btn', text: 'SEND', type: 'button' });
 
       // Bottom 3-wing bar
+      const hostWingLabel = createEl('div', { id: 'twfoxtetrio-host-wing-btn', className: 'twfox-footer-wing-btn is-host-wing' }, [
+        createEl('div', { text: 'PLAYING' }),
+        createEl('span', { text: 'HOST SERVER · P2P' })
+      ]);
+      const clientReadySub = createEl('span', { text: 'CLICK TO TOGGLE READY STATUS' });
       const clientReadyBtn = createEl('div', { id: 'twfoxtetrio-client-ready-btn', className: 'twfox-footer-wing-btn hidden' }, [
         createEl('div', { text: 'READY' }),
-        createEl('span', { text: 'CLICK TO TOGGLE READY STATUS' })
+        clientReadySub
       ]);
+      const clientWaitTag = createEl('div', {
+        id: 'twfoxtetrio-client-wait-tag',
+        className: 'twfox-footer-wait-tag hidden',
+        text: 'WAITING FOR HOST'
+      });
       const startCountSub = createEl('span', { text: 'NEED 2+ PLAYERS (1/2)' });
       const hostStartBtn = createEl('button', { id: 'twfoxtetrio-host-start-btn', className: 'twfox-footer-start-btn is-disabled', type: 'button', attrs: { 'data-hover': 'hover', 'data-hit': 'confirm' } }, [
         createEl('div', { text: 'START' }),
@@ -3478,8 +3662,9 @@ body.twfox-ingame #menus > #footer {
           ])
         ]),
         createEl('div', { className: 'twfox-lobby-footer' }, [
-          createEl('div', {}, [clientReadyBtn]),
+          createEl('div', { className: 'twfox-footer-wing-wrap' }, [hostWingLabel, clientReadyBtn]),
           hostStartBtn,
+          clientWaitTag,
           lobbyModeTag
         ])
       ]);
@@ -3600,7 +3785,10 @@ body.twfox-ingame #menus > #footer {
         hostManualPanel,
         joinStatus,
         hostStartBtn,
+        hostWingLabel,
         clientReadyBtn,
+        clientReadySub,
+        clientWaitTag,
         modeSelect,
         pieceSelect,
         garbageSelect,
