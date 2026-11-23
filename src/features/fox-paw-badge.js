@@ -313,6 +313,10 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
           }
         }
 
+        if (mutualStore) {
+          mutualStore.extractFromSocialDom(queryRoot, selfNorm);
+        }
+
         // 8c. Social panel NOTIFICATIONS sender (.social_notification h1 > span)
         const socialNotifs = queryRoot.querySelectorAll('.social_notification');
         for (let i = 0; i < socialNotifs.length; i++) {
@@ -321,6 +325,23 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
           const spanEl = h1 && typeof h1.querySelector === 'function' ? h1.querySelector('span') : null;
           if (spanEl) {
             markTarget(spanEl, spanEl.textContent);
+          }
+          if (mutualStore && notif && notif.textContent) {
+            mutualStore.ingestNotificationText(notif.textContent, selfNorm);
+          }
+        }
+
+        if (mutualStore) {
+          const notifContainer =
+            (typeof document !== 'undefined' && document.getElementById && document.getElementById('notifications')) ||
+            (typeof queryRoot.querySelector === 'function' ? queryRoot.querySelector('#notifications') : null);
+          const liveToasts = notifContainer && typeof notifContainer.querySelectorAll === 'function'
+            ? notifContainer.querySelectorAll('.notification')
+            : [];
+          for (let i = 0; i < liveToasts.length; i++) {
+            if (liveToasts[i] && liveToasts[i].textContent) {
+              mutualStore.ingestNotificationText(liveToasts[i].textContent, selfNorm);
+            }
           }
         }
 
@@ -383,6 +404,44 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       }
     }
 
+    let inviteLogic = null;
+    try {
+      if (typeof require === 'function') inviteLogic = require('./fox-invite-logic');
+    } catch (_) {}
+    if (!inviteLogic) {
+      inviteLogic =
+        (root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.foxInviteLogic) ||
+        root.TWFOX_INVITE_LOGIC ||
+        null;
+    }
+
+    const mutualStore =
+      inviteLogic && typeof inviteLogic.createMutualFriendStore === 'function'
+        ? inviteLogic.createMutualFriendStore({ selfUsername: selfNorm })
+        : null;
+    const seenInviteIds = new Map();
+    const inviteListeners = new Set();
+    const presenceListeners = new Set();
+    let subscribedInviteUser = '';
+
+    function notifyPresenceListeners() {
+      for (const fn of Array.from(presenceListeners)) {
+        try {
+          fn();
+        } catch (_) {}
+      }
+    }
+
+    function syncInviteSubscription() {
+      if (!inviteLogic || !p2pRoom || !p2pRoom.mqttPacketSubscribe || !wsConnected || !enabled) return;
+      const targetUser = inviteLogic.normalizeUsername(selfNorm);
+      if (!targetUser || subscribedInviteUser === targetUser) return;
+      const topic = inviteLogic.buildInviteTopic(targetUser);
+      if (topic && sendPacket(p2pRoom.mqttPacketSubscribe(nextPacketId(), topic))) {
+        subscribedInviteUser = targetUser;
+      }
+    }
+
     function scheduleScan() {
       if (destroyed || scanTimer) return;
       scanTimer = unrefTimer(setTimeout(scanDom, SCAN_DEBOUNCE_MS));
@@ -424,6 +483,7 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         closeAfterFlushTimer = null;
       }
       wsConnected = false;
+      subscribedInviteUser = '';
       if (ws) {
         const old = ws;
         ws = null;
@@ -542,6 +602,7 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
           wsConnected = true;
           reconnectDelay = RECONNECT_MIN_MS;
           sendPacket(p2pRoom.mqttPacketSubscribe(nextPacketId(), logic.FOX_PAW_WILDCARD));
+          syncInviteSubscription();
           syncSelfPresence(true);
           scanDom();
           if (keepaliveTimer) clearInterval(keepaliveTimer);
@@ -561,10 +622,31 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
           if (offset > body.length) return;
           const topic = decodeUtf8(body.slice(2, 2 + topicLen));
           const text = decodeUtf8(body.slice(offset));
+          if (inviteLogic && topic.indexOf(inviteLogic.INVITE_TOPIC_PREFIX) === 0) {
+            const now = Date.now();
+            const invite = inviteLogic.parseInviteMessage(topic, text, now);
+            if (invite && (!selfNorm || invite.from !== selfNorm) && (!selfNorm || invite.target === selfNorm)) {
+              if (!seenInviteIds.has(invite.id)) {
+                seenInviteIds.set(invite.id, invite.expiresAt || now + inviteLogic.INVITE_TTL_MS);
+                if (seenInviteIds.size > 100) {
+                  for (const [k, exp] of seenInviteIds.entries()) {
+                    if (exp < now || seenInviteIds.size > 100) seenInviteIds.delete(k);
+                  }
+                }
+                for (const fn of Array.from(inviteListeners)) {
+                  try {
+                    fn(invite);
+                  } catch (_) {}
+                }
+              }
+            }
+            return;
+          }
           const res = registry.applyMessage(topic, text, Date.now());
           if (res.changed) {
             scheduleSaveCache();
             scheduleScan();
+            notifyPresenceListeners();
           }
         }
       });
@@ -636,6 +718,9 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
 
       enabled = nextEnabled;
       selfNorm = nextSelf;
+      if (mutualStore && selfNorm) {
+        mutualStore.setSelfUsername(selfNorm);
+      }
 
       if (toggledOff) {
         syncSelfPresence(true);
@@ -659,8 +744,10 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       }
 
       if (selfChanged || toggledOn) {
+        syncInviteSubscription();
         syncSelfPresence(false);
         scanDom();
+        notifyPresenceListeners();
       }
     }
 
@@ -712,6 +799,64 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         logic.applyPawAttribute(el, false);
         activeBadgedEls.delete(el);
       }
+      inviteListeners.clear();
+      presenceListeners.clear();
+      seenInviteIds.clear();
+    }
+
+    function sendRoomInvite(targetUsername, payloadObj) {
+      if (!inviteLogic || !p2pRoom || !p2pRoom.mqttPacketPublish) {
+        return { ok: false, reason: 'unavailable' };
+      }
+      if (!enabled) return { ok: false, reason: 'disabled' };
+      if (!wsConnected) return { ok: false, reason: 'offline' };
+      const targetNorm = inviteLogic.normalizeUsername(targetUsername);
+      const fromNorm = inviteLogic.normalizeUsername((payloadObj && payloadObj.from) || selfNorm);
+      if (!targetNorm || !fromNorm || targetNorm === fromNorm) {
+        return { ok: false, reason: 'invalid_user' };
+      }
+      const topic = inviteLogic.buildInviteTopic(targetNorm);
+      const payloadStr = typeof payloadObj === 'string'
+        ? payloadObj
+        : inviteLogic.buildInvitePayload({
+          ...(payloadObj || {}),
+          from: fromNorm,
+          ts: (payloadObj && payloadObj.ts) || Date.now()
+        });
+      const parsedCheck = inviteLogic.parseInviteMessage(topic, payloadStr, Date.now());
+      if (!parsedCheck) return { ok: false, reason: 'invalid_payload' };
+      const sent = sendPacket(p2pRoom.mqttPacketPublish(topic, payloadStr, false));
+      return { ok: Boolean(sent), target: targetNorm, reason: sent ? 'sent' : 'send_failed' };
+    }
+
+    function onInvite(listener) {
+      if (typeof listener !== 'function') return function () {};
+      inviteListeners.add(listener);
+      return function () {
+        inviteListeners.delete(listener);
+      };
+    }
+
+    function onPresenceUpdate(listener) {
+      if (typeof listener !== 'function') return function () {};
+      presenceListeners.add(listener);
+      return function () {
+        presenceListeners.delete(listener);
+      };
+    }
+
+    function listMutualFriends(options) {
+      if (!mutualStore) return [];
+      mutualStore.setSelfUsername(selfNorm);
+      return mutualStore.listMutual(selfNorm, options);
+    }
+
+    function listOnlineMutualFoxers() {
+      return listMutualFriends({
+        hasFoxer(uname) {
+          return hasFoxer(uname);
+        }
+      });
     }
 
     root.__TWFOX_INTERNAL__ = root.__TWFOX_INTERNAL__ || {};
@@ -724,6 +869,16 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         return registry.list(Date.now());
       },
       rescan: scanDom,
+      sendRoomInvite,
+      onInvite,
+      onPresenceUpdate,
+      listMutualFriends,
+      listOnlineMutualFoxers,
+      refreshMutualFriends(rootEl) {
+        if (!mutualStore) return [];
+        mutualStore.setSelfUsername(selfNorm);
+        return mutualStore.extractFromSocialDom(rootEl || (typeof document !== 'undefined' ? document : null), selfNorm);
+      },
       getStatus() {
         return {
           enabled,

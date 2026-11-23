@@ -20,6 +20,7 @@ const SOURCE_FILES = [
   'src/features/zen-qp-logic.js',
   'src/features/solo-lobby-logic.js',
   'src/features/fox-paw-logic.js',
+  'src/features/fox-invite-logic.js',
   'src/core/top-hud.js',
   'src/core/runtime.js',
   'src/features/blitz-pb-tracker.js',

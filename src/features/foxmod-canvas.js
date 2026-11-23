@@ -362,10 +362,10 @@
       ctx.lineTo(x, y + h - cut);
     }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.25;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
@@ -508,11 +508,16 @@
     const isBlitz = snap.mode === 'blitz';
     const rowStep = isBlitz ? 44 : 48;
     const statsBaseY = boardY + boardH - (isBlitz ? 174 : 135);
+    ctx.save();
     ctx.textAlign = 'right';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
 
     let statOffset = 0;
     if (isBlitz) {
-      ctx.fillStyle = '#d4d9e8';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
       ctx.font = '700 12px HUN, Segoe UI, sans-serif';
       ctx.fillText('SCORE', statRightX, statsBaseY);
       ctx.fillStyle = '#ffffff';
@@ -521,7 +526,7 @@
       statOffset += rowStep;
     }
 
-    ctx.fillStyle = '#d4d9e8';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
     ctx.fillText('PIECES', statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
@@ -529,7 +534,7 @@
     ctx.fillText(`${snap.pieces}, ${snap.pps.toFixed(2)}/S`, statRightX, statsBaseY + statOffset + 22);
     statOffset += rowStep;
 
-    ctx.fillStyle = '#d4d9e8';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
     ctx.fillText(snap.mode === '40l' ? 'LINES LEFT' : 'LINES', statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
@@ -541,7 +546,7 @@
     );
     statOffset += rowStep;
 
-    ctx.fillStyle = '#d4d9e8';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
     ctx.fillText(snap.mode === 'vs' ? 'ATTACK' : 'TIME', statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
@@ -553,6 +558,7 @@
       statRightX,
       statsBaseY + statOffset + 22
     );
+    ctx.restore();
 
     if (snap.lastCallout) {
       ctx.fillStyle = '#ffffff';
@@ -613,14 +619,31 @@
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
     ctx.fillRect(0, 0, w, h);
 
+    const cols = Array.isArray(compactBoard) && compactBoard.length > 0 && compactBoard[0] ? compactBoard[0].length || 10 : 10;
+    const rows = Array.isArray(compactBoard) && compactBoard.length > 0 ? compactBoard.length : 20;
+    const cellW = w / cols;
+    const cellH = h / rows;
+
+    // Subtle 10x20 gridlines matching TETR.IO opponent playfields
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = 1;
+    for (let gx = 1; gx < cols; gx++) {
+      ctx.beginPath();
+      ctx.moveTo(gx * cellW, 0);
+      ctx.lineTo(gx * cellW, h);
+      ctx.stroke();
+    }
+    for (let gy = 1; gy < rows; gy++) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy * cellH);
+      ctx.lineTo(w, gy * cellH);
+      ctx.stroke();
+    }
+
     if (Array.isArray(compactBoard) && compactBoard.length > 0) {
-      const cols = compactBoard[0].length || 10;
-      const rows = compactBoard.length;
-      const cellW = w / cols;
-      const cellH = h / rows;
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const val = compactBoard[y][x];
@@ -650,19 +673,21 @@
     ctx.stroke();
 
     if (alive === false) {
+      const koSize = Math.max(14, Math.round(w * 0.14));
+      const subSize = Math.max(11, Math.round(w * 0.1));
       ctx.fillStyle = 'rgba(8, 6, 12, 0.62)';
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = '#ff4b6e';
-      ctx.font = '900 15px HUN, Segoe UI, sans-serif';
+      ctx.font = `900 ${koSize}px HUN, Segoe UI, sans-serif`;
       ctx.textAlign = 'center';
       const numPlacement = Number(placement);
       if (Number.isFinite(numPlacement) && numPlacement > 0) {
         ctx.fillText('KO', w / 2, h / 2 - 2);
         ctx.fillStyle = '#ffd1da';
-        ctx.font = '800 12px HUN, Segoe UI, sans-serif';
-        ctx.fillText('Nº' + numPlacement, w / 2, h / 2 + 15);
+        ctx.font = `800 ${subSize}px HUN, Segoe UI, sans-serif`;
+        ctx.fillText('Nº' + numPlacement, w / 2, h / 2 + subSize + 4);
       } else {
-        ctx.fillText('KO', w / 2, h / 2 + 5);
+        ctx.fillText('KO', w / 2, h / 2 + Math.round(koSize * 0.35));
       }
     }
   }

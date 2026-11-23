@@ -11,6 +11,12 @@
   const p2pRoom = internals.p2pRoom || null;
   const foxmodCanvas = internals.foxmodCanvas || null;
   const soloLobbyLogic = internals.soloLobbyLogic || null;
+  const foxInviteLogic = internals.foxInviteLogic || root.TWFOX_INVITE_LOGIC || null;
+
+  function getFoxPawBadge() {
+    const bag = root.__TWFOX_INTERNAL__ || internals;
+    return (bag && bag.foxPawBadge) || null;
+  }
 
   const STYLE_ID = 'twfoxtetrio-foxmod-style';
   const MENU_BTN_ID = 'twfoxtetrio-home-foxmod';
@@ -1322,30 +1328,47 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   margin-bottom: 6px;
 }
 .twfox-multi-arena {
+  position: relative;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: clamp(14px, 2.2vw, 28px);
+  gap: clamp(14px, 2.4vw, 32px);
+  width: 100%;
   max-width: 100vw;
   max-height: 96vh;
-  padding: 0 14px;
+  padding: 0 20px;
   box-sizing: border-box;
+}
+.twfox-multi-arena.is-duel {
+  gap: clamp(22px, 3.8vw, 56px);
+}
+#twfoxtetrio-multi-game .twfox-game-canvas {
+  max-height: 88vh;
+  width: auto;
+  height: auto;
 }
 .twfox-multi-side-col {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
   gap: 10px;
-  min-width: 240px;
-  max-width: 340px;
+  min-width: 0;
+  max-width: none;
 }
 .twfox-score-lb {
-  background: #0006;
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  width: 248px;
+  z-index: 8;
+  background: rgba(0, 0, 0, 0.56);
   border: 0;
-  border-top: 2px solid #fff3;
+  border-top: 2px solid rgba(255, 255, 255, 0.22);
   border-radius: 2px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(4px);
   overflow: hidden;
   text-align: left;
   font-family: HUN, sans-serif;
@@ -1354,10 +1377,10 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 10px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.06);
   border-bottom: 1px solid #fff2;
-  font-size: 0.96em;
+  font-size: 0.88em;
   font-weight: 800;
   color: rgba(255, 255, 255, 0.85);
   letter-spacing: 0.08em;
@@ -1371,9 +1394,9 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border-top: 1px solid #fff1;
-  font-size: 0.98em;
+  font-size: 0.92em;
   font-weight: 800;
   color: #edf1ff;
 }
@@ -1385,7 +1408,19 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   font-variant-numeric: tabular-nums;
   color: #ffffff;
 }
-.twfox-opponents-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.twfox-opponents-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  align-items: flex-start;
+  max-width: min(44vw, 560px);
+}
+.twfox-opponents-grid.is-duel {
+  max-width: none;
+  flex-wrap: nowrap;
+  align-items: center;
+}
 .twfox-opp-card {
   background: transparent;
   border: 0;
@@ -1395,6 +1430,15 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   box-shadow: none;
   transition: opacity 180ms ease;
 }
+.twfox-opp-card.is-duel {
+  padding: 0;
+  margin-top: 12px;
+}
+.twfox-opp-card.is-duel canvas {
+  height: min(62vh, 440px);
+  width: auto;
+  aspect-ratio: 1 / 2;
+}
 .twfox-opp-card.is-ko {
   opacity: 0.65;
 }
@@ -1403,14 +1447,21 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 2px 5px;
-  background: #0007;
+  padding: 3px 6px;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.34));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 2px 2px 0 0;
   font-family: HUN, sans-serif;
   font-weight: 800;
   font-size: 0.94em;
   margin-bottom: 2px;
   color: #ffffff;
+  text-shadow: 0 1px 4px #000;
+}
+.twfox-opp-card.is-duel .twfox-opp-hdr {
+  padding: 4px 8px;
+  font-size: 1.08em;
+  margin-bottom: 4px;
 }
 .twfox-opp-card.is-ko .twfox-opp-hdr {
   color: #ff8ea3;
@@ -1427,13 +1478,18 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   color: #ffb8c4;
 }
 .twfox-opp-stats {
-  margin-top: 3px;
+  margin-top: 4px;
   font-family: HUN, sans-serif;
-  font-size: 0.8em;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.84em;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.78);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
   text-shadow: 0 1px 4px #000;
+}
+.twfox-opp-card.is-duel .twfox-opp-stats {
+  font-size: 0.96em;
+  margin-top: 6px;
 }
 .twfox-finish-overlay {
   position: fixed;
@@ -1744,6 +1800,189 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.twfox-mutual-invite-wrap {
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.36);
+  border: 1px solid rgba(255, 123, 28, 0.28);
+  border-left: 3px solid #FF7B1C;
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.twfox-mutual-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: HUN, sans-serif;
+  font-size: 0.92em;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #ffb47a;
+}
+.twfox-mutual-badge {
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 0.76em;
+  background: rgba(255, 123, 28, 0.22);
+  border: 1px solid rgba(255, 123, 28, 0.45);
+  color: #ffd3ad;
+}
+.twfox-mutual-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 185px;
+  overflow-y: auto;
+}
+.twfox-mutual-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  background: rgba(20, 14, 28, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+.twfox-mutual-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.twfox-mutual-name {
+  font-family: HUN, sans-serif;
+  font-size: 1em;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.twfox-mutual-sub {
+  font-size: 0.76em;
+  color: #b7a3d4;
+}
+.twfox-mutual-empty {
+  margin: 0;
+  font-size: 0.85em;
+  color: #b5a3d4;
+  line-height: 1.35;
+}
+.twfox-friend-invite-btn.is-fox-orange {
+  border-color: #FF7B1C;
+  background: linear-gradient(180deg, rgba(255, 123, 28, 0.36) 0%, rgba(168, 66, 8, 0.5) 100%);
+  color: #ffe3cc;
+}
+.twfox-friend-invite-btn.is-fox-orange:hover:not(:disabled) {
+  filter: brightness(1.16);
+  border-color: #ffa55c;
+}
+.twfox-friend-invite-btn.is-cooldown {
+  border-color: rgba(255, 123, 28, 0.42);
+  background: rgba(255, 123, 28, 0.14);
+  color: #ffb87e;
+  opacity: 0.82;
+  cursor: not-allowed;
+}
+.twfox-friend-invite-btn.is-in-room {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #9ba5c4;
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.twfox-social-invite-btn {
+  display: none;
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 3px 9px;
+  border-radius: 3px;
+  border: 1px solid #FF7B1C;
+  background: linear-gradient(180deg, rgba(255, 123, 28, 0.35), rgba(140, 52, 8, 0.52));
+  color: #ffe3cc;
+  font-family: HUN, sans-serif;
+  font-size: 0.78em;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 4;
+}
+body.twfox-in-multi-room .twfox-social-invite-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.twfox-social-invite-btn.is-cooldown,
+.twfox-social-invite-btn.is-in-room {
+  border-color: rgba(255, 123, 28, 0.38);
+  background: rgba(26, 14, 6, 0.82);
+  color: #ffa96c;
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.twfox-social-invite-btn.is-in-room {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(15, 15, 22, 0.78);
+  color: #9ba5c4;
+}
+.notification.twfox-invite-notif {
+  --pri: #FF7B1C;
+  --sec: #FF7B1C;
+  border-color: #FF7B1C !important;
+  border-left: 4px solid #FF7B1C !important;
+  background: linear-gradient(135deg, rgba(48, 22, 7, 0.96) 0%, rgba(22, 11, 5, 0.98) 100%) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.78), 0 0 20px rgba(255, 123, 28, 0.3) !important;
+  color: #fff3e8;
+}
+.notification.twfox-invite-notif .notification_icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 123, 28, 0.18);
+  border: 1px solid rgba(255, 123, 28, 0.55);
+  border-radius: 3px;
+}
+.notification.twfox-invite-notif .notification_icon svg {
+  width: 24px;
+  height: 24px;
+}
+.notification.twfox-invite-notif h1 {
+  color: #ffb070 !important;
+  font-family: HUN, sans-serif;
+  letter-spacing: 0.05em;
+}
+.notification.twfox-invite-notif p {
+  color: #ffe8d6 !important;
+}
+.notification.twfox-invite-notif .notification_timeoutbar {
+  background: #FF7B1C !important;
+}
+.notification.twfox-invite-notif .notification_button.pri {
+  background: #FF7B1C !important;
+  color: #190b02 !important;
+  font-weight: 900;
+}
+.twfox-notif-fallback {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10000010;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.twfox-notif-fallback .twfox-invite-notif {
+  pointer-events: all;
+  min-width: 310px;
+  max-width: 390px;
+  padding: 10px 12px;
+  border-radius: 4px;
 }
 .twfox-native-scroller .hidden,
 .twfox-stage-scroller .hidden,
@@ -2393,6 +2632,25 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
     let multiRequestOpen = false;
     let multiDom = null;
     let resultsTransitionTimer = null;
+    const inviteTracker = foxInviteLogic && typeof foxInviteLogic.createInviteTracker === 'function'
+      ? foxInviteLogic.createInviteTracker()
+      : null;
+    let inviteTicker = null;
+    let refreshMutualInviteUi = null;
+    let joinRoomByInviteCode = null;
+    let showOrangeInviteNotification = null;
+    let sendInviteToFriend = null;
+    const activeInviteToasts = new Map();
+    let badgeInviteUnsub = null;
+    let badgePresenceUnsub = null;
+    let socialObserver = null;
+
+    function syncBodyRoomClass() {
+      if (!document.body || !document.body.classList) return;
+      const snap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
+      const inRoom = Boolean(snap && snap.room && snap.room.roomCode);
+      setClass(document.body, 'twfox-in-multi-room', inRoom);
+    }
 
     function syncIngameChromeClass() {
       if (!document.body || !document.body.classList) return;
@@ -2403,6 +2661,7 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
       if (activeFoxView !== 'foxmod_multi') {
         setClass(document.body, 'twfox-spectating', false);
       }
+      syncBodyRoomClass();
     }
 
     function stopPlayControllers() {
@@ -3053,9 +3312,24 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
       );
     }
 
+    function clearSocialInviteButtons() {
+      const queryRoot = document.body || document.documentElement || document;
+      if (!queryRoot || typeof queryRoot.querySelectorAll !== 'function') return;
+      const btns = queryRoot.querySelectorAll('.twfox-social-invite-btn');
+      for (let i = 0; i < btns.length; i++) {
+        if (btns[i] && btns[i].parentNode && typeof btns[i].parentNode.removeChild === 'function') {
+          btns[i].parentNode.removeChild(btns[i]);
+        }
+      }
+    }
+
     function teardownPeerSession() {
       clearFinishTransition();
       if (multiController) multiController.stop();
+      if (inviteTicker && typeof root.clearInterval === 'function') {
+        root.clearInterval(inviteTicker);
+        inviteTicker = null;
+      }
       if (peerUnsub) {
         peerUnsub();
         peerUnsub = null;
@@ -3067,6 +3341,10 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
       multiGame = null;
       multiSubMode = 'lobby';
       syncIngameChromeClass();
+      clearSocialInviteButtons();
+      if (typeof refreshMutualInviteUi === 'function') {
+        refreshMutualInviteUi();
+      }
     }
 
     function showMultiSubMode(nextSub) {
@@ -3559,20 +3837,28 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
         }
 
         const opponents = playingPool.filter((p) => p.id !== selfId);
+        const isDuel = opponents.length === 1;
+        if (multiDom.multiArena) {
+          setClass(multiDom.multiArena, 'is-duel', isDuel);
+        }
+        setClass(multiDom.opponentsGrid, 'is-duel', isDuel);
         multiDom.opponentsGrid.innerHTML = '';
         for (const opp of opponents) {
           const oppRankIdx = rankedPlayers.findIndex((x) => x.id === opp.id);
           const oppRank = opp.alive === false && opp.placement ? opp.placement : (oppRankIdx >= 0 ? oppRankIdx + 1 : '-');
           const miniCanvas = createEl('canvas', {
-            attrs: { width: '100', height: '200' },
+            attrs: isDuel ? { width: '220', height: '440' } : { width: '120', height: '240' },
             style: 'background:transparent;display:block;'
           });
           foxmodCanvas.renderMiniBoard(miniCanvas, opp.board, opp.alive, opp.placement);
           const statText = activeMode === 'blitz'
             ? `${Math.round(Number(opp.score) || 0).toLocaleString('en-US')} PTS · L:${opp.lines || 0}`
             : `${Number(opp.vs || 0).toFixed(1)} VS · ATK:${opp.attack || 0}`;
+          const cardClasses = ['twfox-opp-card'];
+          if (isDuel) cardClasses.push('is-duel');
+          if (opp.alive === false) cardClasses.push('is-ko');
           multiDom.opponentsGrid.appendChild(
-            createEl('div', { className: opp.alive === false ? 'twfox-opp-card is-ko' : 'twfox-opp-card' }, [
+            createEl('div', { className: cardClasses.join(' ') }, [
               createEl('div', { className: 'twfox-opp-hdr' }, [
                 createEl('span', {
                   className: 'twfox-paw-target',
@@ -3591,6 +3877,10 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
       const foxBadge = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.foxPawBadge;
       if (foxBadge && typeof foxBadge.rescan === 'function') {
         foxBadge.rescan();
+      }
+      syncBodyRoomClass();
+      if (typeof refreshMutualInviteUi === 'function') {
+        refreshMutualInviteUi();
       }
     }
 
@@ -3666,10 +3956,26 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
         setClass(hostManualPanel, 'hidden', !hostManualPanel.classList.contains('hidden'));
       });
 
+      const mutualInviteList = createEl('div', { id: 'twfoxtetrio-mutual-invite-list', className: 'twfox-mutual-list' });
+      const mutualInviteEmpty = createEl('p', {
+        id: 'twfoxtetrio-mutual-invite-empty',
+        className: 'twfox-mutual-empty',
+        text: 'No online mutual FOXMOD friends detected yet. Open PEOPLE once to sync mutual friends.'
+      });
+      const mutualInviteWrap = createEl('div', { id: 'twfoxtetrio-mutual-invite-wrap', className: 'twfox-mutual-invite-wrap' }, [
+        createEl('div', { className: 'twfox-mutual-hdr' }, [
+          createEl('span', { text: 'INVITE MUTUAL FRIENDS' }),
+          createEl('span', { className: 'twfox-mutual-badge', text: 'FOXMOD · 1-CLICK' })
+        ]),
+        mutualInviteEmpty,
+        mutualInviteList
+      ]);
+
       const hostInviteBox = createEl('div', { id: 'twfoxtetrio-host-invite-box', className: 'twfox-invite-stack' }, [
         createEl('p', { style: 'margin:0;color:#c9b9db;', text: 'ROOM INVITE CODE — Friends enter this #CODE in JOIN LOBBY:' }),
         createEl('div', { className: 'twfox-code-card' }, [hostRoomCodeLabel, hostCopyCodeBtn]),
         hostInviteStatus,
+        mutualInviteWrap,
         hostManualToggleBtn,
         hostManualPanel
       ]);
@@ -3867,10 +4173,11 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
         id: 'twfoxtetrio-multi-finish-overlay',
         className: 'twfox-finish-overlay hidden'
       }, [finishCard]);
+      const multiArena = createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, sideCol]);
       const gameView = createEl('div', { id: 'twfoxtetrio-multi-game', className: 'twfox-stage-inner hidden' }, [
         backLobbyBtn,
         spectatorBanner,
-        createEl('div', { className: 'twfox-multi-arena' }, [multiCanvas, sideCol]),
+        multiArena,
         finishOverlay
       ]);
 
@@ -3936,6 +4243,10 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
         roomInfoOwner,
         roomInfoStatus,
         hostInviteBox,
+        mutualInviteWrap,
+        mutualInviteList,
+        mutualInviteEmpty,
+        multiArena,
         hostManualToggleBtn,
         hostManualPanel,
         joinStatus,
@@ -4217,6 +4528,437 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
       joinOfferInput.addEventListener('keydown', function (ev) {
         if (ev && (ev.key === 'Enter' || ev.code === 'Enter')) handleJoinSubmit();
       });
+
+      function applyInviteBtnState(btn, username, players, hasRoomCode, baseClass, idleLabel) {
+        const now = Date.now();
+        const inRoom = Boolean(foxInviteLogic && foxInviteLogic.isUserInRoom(username, players));
+        const cooldownSec = inviteTracker ? inviteTracker.getCooldownRemainingSec(username, now) : 0;
+        let nextDisabled = false;
+        let nextText = idleLabel;
+        let nextClass = `${baseClass} is-fox-orange`;
+        let inCooldown = false;
+
+        if (!hasRoomCode) {
+          nextDisabled = true;
+          nextText = 'NO CODE';
+          nextClass = `${baseClass} is-in-room`;
+        } else if (inRoom) {
+          nextDisabled = true;
+          nextText = 'IN ROOM';
+          nextClass = `${baseClass} is-in-room`;
+        } else if (cooldownSec > 0) {
+          nextDisabled = true;
+          nextText = `WAIT ${cooldownSec}S`;
+          nextClass = `${baseClass} is-cooldown`;
+          inCooldown = true;
+        }
+
+        if (btn.disabled !== nextDisabled) btn.disabled = nextDisabled;
+        if (btn.textContent !== nextText) btn.textContent = nextText;
+        if (btn.className !== nextClass) btn.className = nextClass;
+        return inCooldown;
+      }
+
+      function ensureInviteTicker() {
+        if (inviteTicker || typeof root.setInterval !== 'function') return;
+        inviteTicker = root.setInterval(function () {
+          let anyCooldown = false;
+          const now = Date.now();
+          const snap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
+          const players = (snap && snap.players) || [];
+          const hasRoomCode = Boolean(snap && snap.room && snap.room.roomCode);
+
+          if (multiDom && multiDom.mutualInviteList && typeof multiDom.mutualInviteList.querySelectorAll === 'function') {
+            const btns = multiDom.mutualInviteList.querySelectorAll('.twfox-friend-invite-btn');
+            for (let i = 0; i < btns.length; i++) {
+              const btn = btns[i];
+              const uname = btn.getAttribute ? btn.getAttribute('data-fox-invite-user') : '';
+              if (uname && applyInviteBtnState(btn, uname, players, hasRoomCode, 'twfox-btn is-sm twfox-friend-invite-btn', 'INVITE')) {
+                anyCooldown = true;
+              }
+            }
+          }
+
+          const docRoot = document.body || document.documentElement || document;
+          if (docRoot && typeof docRoot.querySelectorAll === 'function') {
+            const sBtns = docRoot.querySelectorAll('.twfox-social-invite-btn');
+            for (let i = 0; i < sBtns.length; i++) {
+              const btn = sBtns[i];
+              const uname = btn.getAttribute ? btn.getAttribute('data-fox-invite-user') : '';
+              if (uname && applyInviteBtnState(btn, uname, players, hasRoomCode, 'twfox-social-invite-btn', 'INVITE FOX')) {
+                anyCooldown = true;
+              }
+            }
+          }
+
+          if (!anyCooldown && inviteTracker) {
+            if (!hasRoomCode && typeof root.clearInterval === 'function') {
+              root.clearInterval(inviteTicker);
+              inviteTicker = null;
+            } else if (anyCooldown === false && inviteTicker) {
+              // Keep idle ticker stopped until next invite is sent.
+              if (typeof root.clearInterval === 'function') {
+                root.clearInterval(inviteTicker);
+                inviteTicker = null;
+              }
+            }
+          }
+          void now;
+        }, 1000);
+        if (inviteTicker && typeof inviteTicker.unref === 'function') {
+          inviteTicker.unref();
+        }
+      }
+
+      sendInviteToFriend = function (targetUsername) {
+        const foxBadge = getFoxPawBadge();
+        const snap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
+        const room = snap && snap.room ? snap.room : null;
+        const roomCode = room && room.roomCode ? String(room.roomCode) : '';
+        if (!roomCode) {
+          if (multiDom && multiDom.hostInviteStatus) {
+            multiDom.hostInviteStatus.textContent = 'Create or join a room before inviting friends.';
+          }
+          return false;
+        }
+        if (!foxInviteLogic || !foxBadge || typeof foxBadge.sendRoomInvite !== 'function') {
+          if (multiDom && multiDom.hostInviteStatus) {
+            multiDom.hostInviteStatus.textContent = 'FOXMOD invite relay unavailable right now.';
+          }
+          return false;
+        }
+        const targetNorm = foxInviteLogic.normalizeUsername(targetUsername);
+        if (!targetNorm) return false;
+        if (foxInviteLogic.isUserInRoom(targetNorm, snap.players)) {
+          if (multiDom && multiDom.hostInviteStatus) {
+            multiDom.hostInviteStatus.textContent = `${targetNorm.toUpperCase()} is already in the room.`;
+          }
+          if (typeof refreshMutualInviteUi === 'function') refreshMutualInviteUi();
+          return false;
+        }
+        const now = Date.now();
+        if (inviteTracker && !inviteTracker.canInvite(targetNorm, now, snap.players)) {
+          const rem = inviteTracker.getCooldownRemainingSec(targetNorm, now);
+          if (multiDom && multiDom.hostInviteStatus && rem > 0) {
+            multiDom.hostInviteStatus.textContent = `Wait ${rem}s before inviting ${targetNorm.toUpperCase()} again.`;
+          }
+          return false;
+        }
+        if (typeof foxBadge.hasFoxer === 'function' && !foxBadge.hasFoxer(targetNorm)) {
+          if (multiDom && multiDom.hostInviteStatus) {
+            multiDom.hostInviteStatus.textContent = `${targetNorm.toUpperCase()} does not appear online with FOXMOD.`;
+          }
+          return false;
+        }
+
+        const fromName = resolveLocalUsername(runtimeApi, 'HOST');
+        const res = foxBadge.sendRoomInvite(targetNorm, {
+          from: fromName,
+          roomCode,
+          roomName: room.roomName || '',
+          gameMode: room.gameMode || 'vs',
+          pieceSet: room.pieceSet || 'tetromino',
+          ts: now
+        });
+
+        if (res && res.ok) {
+          if (inviteTracker) inviteTracker.recordSent(targetNorm, now);
+          if (multiDom && multiDom.hostInviteStatus) {
+            multiDom.hostInviteStatus.textContent = `Sent orange FOXMOD invite to ${targetNorm.toUpperCase()}! (30s cooldown)`;
+          }
+          if (typeof refreshMutualInviteUi === 'function') refreshMutualInviteUi();
+          ensureInviteTicker();
+          return true;
+        }
+
+        if (multiDom && multiDom.hostInviteStatus) {
+          const errMsg = res && res.reason === 'offline'
+            ? 'Relay offline — cannot deliver direct FOXMOD invite yet.'
+            : 'Could not send invite right now.';
+          multiDom.hostInviteStatus.textContent = errMsg;
+        }
+        return false;
+      };
+
+      function syncSocialInviteButtons(snap) {
+        const queryRoot = document.body || document.documentElement || document;
+        if (!foxInviteLogic || !queryRoot || typeof queryRoot.querySelectorAll !== 'function') return;
+        const roomCode = snap && snap.room && snap.room.roomCode ? snap.room.roomCode : '';
+        if (!roomCode) {
+          clearSocialInviteButtons();
+          return;
+        }
+        const foxBadge = getFoxPawBadge();
+        if (!foxBadge || typeof foxBadge.hasFoxer !== 'function') return;
+        if (typeof foxBadge.refreshMutualFriends === 'function') {
+          foxBadge.refreshMutualFriends(document);
+        }
+        const mutualList = typeof foxBadge.listMutualFriends === 'function' ? foxBadge.listMutualFriends() : [];
+        const mutualSet = new Set(mutualList.map((m) => m.username));
+        const rows = queryRoot.querySelectorAll('.social_relationship');
+        const players = (snap && snap.players) || [];
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || typeof row.querySelector !== 'function') continue;
+          const h1El = row.querySelector('h1');
+          const spanEl = h1El && typeof h1El.querySelector === 'function' ? h1El.querySelector('span') : null;
+          const nameEl = spanEl || h1El;
+          const uname = foxInviteLogic.normalizeUsername(nameEl && nameEl.textContent ? nameEl.textContent : '');
+          let existingBtn = row.querySelector('.twfox-social-invite-btn');
+          const statusEl = row.querySelector('p');
+          const statusTxt = statusEl && statusEl.textContent ? statusEl.textContent : '';
+          const invBtn = row.querySelector('.social_relationship_button_invite');
+          const invVisible = Boolean(invBtn && (!invBtn.classList || !invBtn.classList.contains('hidden')));
+          const isOffline = Boolean(row.classList && row.classList.contains('offline'));
+          const isBadStatus = /\b(not a friend|blocked|outgoing request|incoming request)\b/i.test(statusTxt);
+          const isMutualVerified = Boolean(uname && !isOffline && !isBadStatus && (invVisible || mutualSet.has(uname)));
+          const eligible = Boolean(isMutualVerified && foxBadge.hasFoxer(uname));
+
+          if (!eligible) {
+            if (existingBtn && existingBtn.parentNode) {
+              existingBtn.parentNode.removeChild(existingBtn);
+            }
+            continue;
+          }
+
+          if (!existingBtn) {
+            existingBtn = createEl('button', {
+              className: 'twfox-social-invite-btn',
+              type: 'button',
+              text: 'INVITE FOX',
+              attrs: { 'data-fox-invite-user': uname }
+            });
+            existingBtn.addEventListener('click', function (ev) {
+              if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+              if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+              sendInviteToFriend(uname);
+            });
+            row.appendChild(existingBtn);
+          } else if (existingBtn.getAttribute && existingBtn.getAttribute('data-fox-invite-user') !== uname && existingBtn.setAttribute) {
+            existingBtn.setAttribute('data-fox-invite-user', uname);
+          }
+
+          if (applyInviteBtnState(existingBtn, uname, players, Boolean(roomCode), 'twfox-social-invite-btn', 'INVITE FOX')) {
+            ensureInviteTicker();
+          }
+        }
+      }
+
+      let isRefreshingMutualUi = false;
+      refreshMutualInviteUi = function () {
+        if (isRefreshingMutualUi) return;
+        isRefreshingMutualUi = true;
+        try {
+          const snap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
+          syncSocialInviteButtons(snap);
+          if (!multiDom || !multiDom.mutualInviteList) return;
+
+          const foxBadge = getFoxPawBadge();
+          if (foxBadge && typeof foxBadge.refreshMutualFriends === 'function') {
+            foxBadge.refreshMutualFriends(document);
+          }
+          const friends =
+            foxInviteLogic && foxBadge && typeof foxBadge.listOnlineMutualFoxers === 'function'
+              ? foxBadge.listOnlineMutualFoxers()
+              : [];
+
+          const players = (snap && snap.players) || [];
+          const roomCode = (snap && snap.room && snap.room.roomCode) || '';
+          multiDom.mutualInviteList.innerHTML = '';
+
+          if (!friends || friends.length === 0) {
+            if (multiDom.mutualInviteEmpty) {
+              setClass(multiDom.mutualInviteEmpty, 'hidden', false);
+            }
+            return;
+          }
+
+          if (multiDom.mutualInviteEmpty) {
+            setClass(multiDom.mutualInviteEmpty, 'hidden', true);
+          }
+
+          let needsTicker = false;
+          for (const friend of friends) {
+            const uname = friend.username;
+            const invBtn = createEl('button', {
+              className: 'twfox-btn is-sm twfox-friend-invite-btn',
+              type: 'button',
+              text: 'INVITE',
+              attrs: { 'data-fox-invite-user': uname }
+            });
+            invBtn.addEventListener('click', function () {
+              sendInviteToFriend(uname);
+            });
+            if (applyInviteBtnState(invBtn, uname, players, Boolean(roomCode), 'twfox-btn is-sm twfox-friend-invite-btn', 'INVITE')) {
+              needsTicker = true;
+            }
+            multiDom.mutualInviteList.appendChild(
+              createEl('div', { className: 'twfox-mutual-row' }, [
+                createEl('div', { className: 'twfox-mutual-meta' }, [
+                  createEl('span', {
+                    className: 'twfox-mutual-name twfox-paw-target',
+                    text: uname.toUpperCase(),
+                    attrs: { 'data-username': uname }
+                  }),
+                  createEl('span', {
+                    className: 'twfox-mutual-sub',
+                    text: friend.statusText || 'FOXMOD Mutual Friend'
+                  })
+                ]),
+                invBtn
+              ])
+            );
+          }
+
+          if (needsTicker) {
+            ensureInviteTicker();
+          }
+          if (foxBadge && typeof foxBadge.rescan === 'function') {
+            foxBadge.rescan();
+          }
+        } finally {
+          isRefreshingMutualUi = false;
+        }
+      };
+
+      joinRoomByInviteCode = async function (rawRoomCode) {
+        if (!p2pRoom || !foxInviteLogic) return;
+        const cleanCode = foxInviteLogic.normalizeRoomCode(rawRoomCode);
+        if (!cleanCode) return;
+
+        const socialEl = document.getElementById('social');
+        const socialBg = document.getElementById('social_bg');
+        if (socialEl && socialEl.classList && socialEl.classList.contains('open') && socialBg && typeof socialBg.click === 'function') {
+          socialBg.click();
+        }
+
+        closeMultiRequest();
+        if (peerSession) {
+          teardownPeerSession();
+        }
+        const playerName = resolveLocalUsername(runtimeApi, 'PLAYER');
+        const client = p2pRoom.createClientPeer({ playerName });
+        bindPeerSession(client);
+        multiDom.setCenterTab('invite');
+        showMultiSubMode('lobby');
+        navigateMenu('foxmod_multi');
+        if (multiDom.hostInviteStatus) {
+          multiDom.hostInviteStatus.textContent = `Accepting FOXMOD invite — joining #${cleanCode}...`;
+        }
+        try {
+          const res = await client.joinByCode(cleanCode);
+          if (multiDom.hostInviteStatus) {
+            multiDom.hostInviteStatus.textContent = `Joined room #${(res && res.roomCode) || cleanCode}!`;
+          }
+        } catch (err) {
+          if (multiDom.hostInviteStatus) {
+            multiDom.hostInviteStatus.textContent = 'Error joining room: ' + (err && err.message ? err.message : err);
+          }
+        }
+      };
+
+      function removeInviteToast(toastKey) {
+        const rec = activeInviteToasts.get(toastKey);
+        if (!rec) return;
+        activeInviteToasts.delete(toastKey);
+        if (rec.timer && typeof root.clearTimeout === 'function') {
+          root.clearTimeout(rec.timer);
+        }
+        if (rec.el && rec.el.parentNode) {
+          rec.el.parentNode.removeChild(rec.el);
+        }
+      }
+
+      function resolveNotificationsHost() {
+        const nativeHost = document.getElementById('notifications');
+        if (nativeHost) return nativeHost;
+        let fallback = document.getElementById('twfoxtetrio-notif-fallback');
+        if (!fallback && document.body) {
+          fallback = createEl('div', { id: 'twfoxtetrio-notif-fallback', className: 'twfox-notif-fallback' });
+          document.body.appendChild(fallback);
+        }
+        return fallback;
+      }
+
+      showOrangeInviteNotification = function (invite) {
+        if (!invite || !invite.roomCode || !invite.from) return;
+        const currentSnap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
+        if (currentSnap && currentSnap.room && currentSnap.room.roomCode === invite.roomCode) {
+          return;
+        }
+        const host = resolveNotificationsHost();
+        if (!host) return;
+
+        const toastKey = `${invite.from}:${invite.roomCode}`;
+        removeInviteToast(toastKey);
+
+        const modeStr = invite.gameMode === 'blitz' ? 'BLITZ' : 'VS';
+        const setStr = invite.pieceSet === 'pentomino' ? 'PENTOMINOS' : invite.pieceSet === 'chaos' ? 'CAOS MIX' : 'NORMAL';
+
+        const ignoreBtn = createEl('div', {
+          className: 'notification_button flex-item',
+          text: 'IGNORE',
+          attrs: { role: 'button', tabindex: '0' }
+        });
+        const acceptBtn = createEl('div', {
+          className: 'notification_button flex-item pri',
+          text: 'ACCEPT',
+          attrs: { role: 'button', tabindex: '0' }
+        });
+
+        const toastEl = createEl(
+          'div',
+          {
+            className: 'notification ns snotify modalnotify twfox-invite-notif',
+            style: '--pri:#FF7B1C;--sec:#FF7B1C;border-color:#FF7B1C;',
+            attrs: {
+              'data-fox-invite-id': invite.id || toastKey,
+              'data-room-code': invite.roomCode
+            }
+          },
+          [
+            createEl('div', { className: 'notification_icon', html: ICONS.fox }, [
+              createEl('div', { className: 'notification_icon_sub' })
+            ]),
+            createEl('div', { className: 'notification_body' }, [
+              createEl('h1', { text: 'FOXMOD INVITE' }),
+              createEl('p', {
+                text: `${invite.from.toUpperCase()} invited you to #${invite.roomCode} (${setStr} ${modeStr})`
+              })
+            ]),
+            createEl('div', { className: 'notification_timeoutbar', style: '--time: 24s; background: #FF7B1C;' }),
+            createEl('div', { className: 'notification_button_holder flex-row ns' }, [ignoreBtn, acceptBtn])
+          ]
+        );
+
+        ignoreBtn.addEventListener('click', function () {
+          removeInviteToast(toastKey);
+        });
+        acceptBtn.addEventListener('click', function () {
+          removeInviteToast(toastKey);
+          if (typeof joinRoomByInviteCode === 'function') {
+            joinRoomByInviteCode(invite.roomCode);
+          }
+        });
+
+        host.appendChild(toastEl);
+
+        let dismissTimer = null;
+        if (typeof root.setTimeout === 'function') {
+          dismissTimer = root.setTimeout(function () {
+            removeInviteToast(toastKey);
+          }, 24000);
+          if (dismissTimer && typeof dismissTimer.unref === 'function') {
+            dismissTimer.unref();
+          }
+        }
+        activeInviteToasts.set(toastKey, { el: toastEl, timer: dismissTimer });
+      };
+
+      if (typeof refreshMutualInviteUi === 'function') {
+        refreshMutualInviteUi();
+      }
 
       joinCopyBtn.addEventListener('click', function () {
         if (joinAnswerOutput.value) {
@@ -5295,8 +6037,45 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
       true
     );
 
+    function wireInviteSystems() {
+      const foxBadge = getFoxPawBadge();
+      if (foxBadge) {
+        if (!badgeInviteUnsub && typeof foxBadge.onInvite === 'function') {
+          badgeInviteUnsub = foxBadge.onInvite(function (invite) {
+            if (typeof showOrangeInviteNotification === 'function') {
+              showOrangeInviteNotification(invite);
+            }
+          });
+        }
+        if (!badgePresenceUnsub && typeof foxBadge.onPresenceUpdate === 'function') {
+          badgePresenceUnsub = foxBadge.onPresenceUpdate(function () {
+            if (typeof refreshMutualInviteUi === 'function') {
+              refreshMutualInviteUi();
+            }
+          });
+        }
+      }
+
+      if (!socialObserver && typeof root.MutationObserver === 'function') {
+        const socialRels = document.getElementById('social_relationships');
+        if (socialRels) {
+          socialObserver = new root.MutationObserver(function () {
+            if (typeof refreshMutualInviteUi === 'function') {
+              refreshMutualInviteUi();
+            }
+          });
+          socialObserver.observe(socialRels, { childList: true, subtree: true });
+        }
+      }
+    }
+
     ensureHomeButton();
     ensureNativeScrollers();
+    wireInviteSystems();
+    if (typeof root.setTimeout === 'function') {
+      const deferWire = root.setTimeout(wireInviteSystems, 0);
+      if (deferWire && typeof deferWire.unref === 'function') deferWire.unref();
+    }
 
     const menusEl = document.getElementById('menus');
     if (menusEl && typeof root.MutationObserver === 'function') {
@@ -5333,6 +6112,7 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
     runtimeApi.subscribe(function (state, cfg) {
       ensureHomeButton();
       ensureNativeScrollers();
+      wireInviteSystems();
       if (state && state.inGame && state.mode && state.mode !== 'Custom Solo') {
         pendingPracticeReturn = false;
         practiceRunEntered = false;
@@ -5345,6 +6125,8 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
         syncConfigControls(cfg);
       } else if (activeFoxView === 'foxmod_solo_lobby' && typeof refreshSoloLobbyUi === 'function') {
         refreshSoloLobbyUi();
+      } else if (activeFoxView === 'foxmod_multi' && typeof refreshMutualInviteUi === 'function') {
+        refreshMutualInviteUi();
       }
     });
   }

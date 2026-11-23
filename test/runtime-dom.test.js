@@ -106,6 +106,19 @@ function createFakeDomEnvironment(protocol, extraGlobals) {
       }
       return child;
     }
+    removeChild(child) {
+      const idx = this.children.indexOf(child);
+      if (idx !== -1) {
+        this.children.splice(idx, 1);
+      }
+      if (child && child.parentNode === this) {
+        child.parentNode = null;
+      }
+      if (child && child.id && elements.get(child.id) === child) {
+        elements.delete(child.id);
+      }
+      return child;
+    }
     addEventListener(type, fn) {
       if (!this.listeners.has(type)) this.listeners.set(type, []);
       this.listeners.get(type).push(fn);
@@ -277,6 +290,12 @@ function createFakeDomEnvironment(protocol, extraGlobals) {
     },
     getElementById(id) {
       return elements.get(id) || null;
+    },
+    querySelector(sel) {
+      return body.querySelector(sel);
+    },
+    querySelectorAll(sel) {
+      return body.querySelectorAll(sel);
     },
     addEventListener(type, fn) {
       if (!docListeners.has(type)) docListeners.set(type, []);
@@ -2155,6 +2174,443 @@ test('fox-paw-badge discovers FOXMOD users via MQTT retain, marks DOM without al
     assert.notEqual(restoredLbRows[1].getAttribute('data-twfox-paw'), '1');
     assert.equal(restoredLbRows[2].getAttribute('data-twfox-paw'), '1');
     doc.body.classList.remove('multiplexed');
+  } finally {
+    if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {
+      env.context.__TWFOX_INTERNAL__.foxPawBadge.destroy();
+    }
+  }
+});
+
+test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, and orange toast work end-to-end', async () => {
+  const sentFrames = [];
+  let badgeSocket = null;
+
+  class MockInviteMqttWs {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.binaryType = 'arraybuffer';
+      setTimeout(() => {
+        if (this.readyState !== 0) return;
+        this.readyState = 1;
+        if (this.onopen) this.onopen({});
+      }, 2);
+    }
+    send(bytes) {
+      const parsed = parseMqttClientFrame(bytes);
+      sentFrames.push(parsed);
+      if (parsed.type === 'CONNECT') {
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: buildMqttConnackFrame().buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'SUBSCRIBE' && parsed.topic === 'twfoxtetrio/v1/foxers/+') {
+        badgeSocket = this;
+        setTimeout(() => {
+          if (this.readyState !== 1 || !this.onmessage) return;
+          for (const uname of ['amigo_fox', 'alejandroweb', 'stranger_fox']) {
+            const pkt = buildMqttPublishFrame(
+              `twfoxtetrio/v1/foxers/${uname}`,
+              JSON.stringify({ u: uname, v: '0.5.0', ts: Date.now() }),
+              true
+            );
+            this.onmessage({ data: pkt.buffer });
+          }
+        }, 2);
+      }
+    }
+    close() {
+      this.readyState = 3;
+      if (this.onclose) this.onclose({});
+    }
+  }
+
+  const rtcEndpoints = new Map();
+  let rtcSeq = 1;
+  class MockRtcPeerConnection {
+    constructor() {
+      this._id = 'dom-rtc-' + rtcSeq++;
+      this.iceGatheringState = 'complete';
+      this.localDescription = null;
+      this.remoteDescription = null;
+      this.ondatachannel = null;
+      this._pendingChannel = null;
+      this._pendingOpen = null;
+      rtcEndpoints.set(this._id, this);
+    }
+    createDataChannel(label) {
+      const ch = { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null };
+      this._pendingChannel = ch;
+      return ch;
+    }
+    async createOffer() {
+      return { type: 'offer', sdp: 'v=0\r\nfrom=' + this._id };
+    }
+    async createAnswer() {
+      return { type: 'answer', sdp: 'v=0\r\nfrom=' + this._id };
+    }
+    async setLocalDescription(desc) {
+      this.localDescription = desc;
+    }
+    async setRemoteDescription(desc) {
+      this.remoteDescription = desc;
+      if (desc && desc.type === 'answer') {
+        const remoteId = String(desc.sdp || '').split('from=')[1];
+        const remotePc = rtcEndpoints.get(remoteId);
+        const a = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+        const b = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+        a.send = (data) => {
+          if (b.onmessage) queueMicrotask(() => b.onmessage({ data }));
+        };
+        b.send = (data) => {
+          if (a.onmessage) queueMicrotask(() => a.onmessage({ data }));
+        };
+        a.close = () => {
+          a.readyState = 'closed';
+          b.readyState = 'closed';
+          if (a.onclose) a.onclose();
+          if (b.onclose) b.onclose();
+        };
+        b.close = a.close;
+        if (this._pendingChannel) {
+          a.onopen = this._pendingChannel.onopen;
+          a.onmessage = this._pendingChannel.onmessage;
+          a.onclose = this._pendingChannel.onclose;
+          this._pendingChannel.send = a.send;
+          this._pendingChannel.close = a.close;
+          Object.defineProperty(this._pendingChannel, 'readyState', { get: () => a.readyState });
+        }
+        if (remotePc && remotePc.ondatachannel) remotePc.ondatachannel({ channel: b });
+        if (a.onopen) a.onopen();
+        if (b.onopen) b.onopen();
+      }
+    }
+    close() {}
+  }
+
+  const env = createFakeDomEnvironment('https:', {
+    WebSocket: MockInviteMqttWs,
+    RTCPeerConnection: MockRtcPeerConnection
+  });
+  const doc = env.context.document;
+  const FakeEl = env.elements.get('me_username').constructor;
+
+  env.elements.get('me_username').textContent = 'TWFoxcrack';
+
+  // Notifications & PEOPLE DOM scaffolding
+  const notifications = new FakeEl('div', 'notifications', '');
+  const social = new FakeEl('div', 'social', '');
+  const socialBg = new FakeEl('div', 'social_bg', '');
+  let socialClosedClicks = 0;
+  socialBg.addEventListener('click', () => {
+    socialClosedClicks += 1;
+    social.classList.remove('open');
+  });
+  const socialRels = new FakeEl('div', 'social_relationships', '');
+
+  function makeSocialRel(username, statusText, { offline = false, invitable = false } = {}) {
+    const row = new FakeEl('div', '', offline ? 'social_relationship offline' : 'social_relationship');
+    const h1 = new FakeEl('h1', '', '');
+    const sp = new FakeEl('span', '', '');
+    sp.textContent = username;
+    h1.appendChild(sp);
+    const p = new FakeEl('p', '', '');
+    p.textContent = statusText;
+    const invBtn = new FakeEl(
+      'div',
+      '',
+      invitable ? 'social_relationship_button_invite' : 'social_relationship_button_invite hidden'
+    );
+    row.appendChild(h1);
+    row.appendChild(p);
+    row.appendChild(invBtn);
+    return row;
+  }
+
+  const relAmigo = makeSocialRel('AMIGO_FOX', 'In Menus', { offline: false, invitable: true });
+  const relSinmod = makeSocialRel('SINMOD', 'In Menus', { offline: false, invitable: true });
+  const relAlejandro = makeSocialRel('ALEJANDROWEB', 'In Menus', { offline: false, invitable: true });
+  const relStranger = makeSocialRel('STRANGER_FOX', 'Not a friend', { offline: false, invitable: true });
+  const relOffline = makeSocialRel('DORMIDO_FOX', 'Offline', { offline: true, invitable: false });
+
+  socialRels.appendChild(relAmigo);
+  socialRels.appendChild(relSinmod);
+  socialRels.appendChild(relAlejandro);
+  socialRels.appendChild(relStranger);
+  socialRels.appendChild(relOffline);
+  doc.body.appendChild(notifications);
+  doc.body.appendChild(social);
+  doc.body.appendChild(socialBg);
+  doc.body.appendChild(socialRels);
+
+  env.triggerDOMContentLoaded();
+
+  try {
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+
+    // Subscribed to own invite MQTT topic on connect
+    assert.ok(sentFrames.some((f) => f.type === 'SUBSCRIBE' && f.topic === 'twfoxtetrio/v1/invites/twfoxcrack'));
+
+    // Open FOXMOD -> MULTI -> CREATE LOBBY
+    env.elements.get('twfoxtetrio-home-foxmod').click();
+    env.elements.get('twfoxtetrio-card-multi').click();
+    env.elements.get('twfoxtetrio-create-room-btn').click();
+    await new Promise((r) => setTimeout(r, 15));
+
+    assert.equal(doc.body.classList.contains('twfox-in-multi-room'), true);
+    const mutualList = env.elements.get('twfoxtetrio-mutual-invite-list');
+    assert.ok(mutualList, 'Mutual invite list should exist inside room INVITE tab');
+    const lobbyInviteBtns = mutualList.querySelectorAll('.twfox-friend-invite-btn');
+    const invitedUsers = lobbyInviteBtns.map((b) => b.getAttribute('data-fox-invite-user'));
+    assert.deepEqual(invitedUsers, ['alejandroweb', 'amigo_fox']);
+
+    // PEOPLE drawer inline orange buttons: only mutual online FOXMOD friends
+    assert.ok(relAmigo.querySelector('.twfox-social-invite-btn'));
+    assert.ok(relAlejandro.querySelector('.twfox-social-invite-btn'));
+    assert.equal(relSinmod.querySelector('.twfox-social-invite-btn'), null);
+    assert.equal(relStranger.querySelector('.twfox-social-invite-btn'), null);
+    assert.equal(relOffline.querySelector('.twfox-social-invite-btn'), null);
+
+    // Click INVITE for amigo_fox -> emits non-retained MQTT invite packet and starts 30s cooldown
+    const amigoBtn = lobbyInviteBtns.find((b) => b.getAttribute('data-fox-invite-user') === 'amigo_fox');
+    assert.equal(amigoBtn.disabled, false);
+    assert.equal(amigoBtn.textContent, 'INVITE');
+    amigoBtn.click();
+
+    const invPubs = sentFrames.filter((f) => f.type === 'PUBLISH' && f.topic === 'twfoxtetrio/v1/invites/amigo_fox');
+    assert.equal(invPubs.length, 1);
+    assert.equal(invPubs[0].retain, false);
+    const invBody = JSON.parse(invPubs[0].text);
+    assert.equal(invBody.from, 'twfoxcrack');
+    assert.match(invBody.roomCode, /^[2-9A-HJ-NP-Z]{4,8}$/);
+
+    // Immediately transitions to disabled WAIT 30S in BOTH lobby card & PEOPLE row
+    const amigoBtnAfter = mutualList.querySelectorAll('.twfox-friend-invite-btn').find(
+      (b) => b.getAttribute('data-fox-invite-user') === 'amigo_fox'
+    );
+    const socialAmigoBtn = relAmigo.querySelector('.twfox-social-invite-btn');
+    assert.equal(amigoBtnAfter.disabled, true);
+    assert.match(amigoBtnAfter.textContent, /^WAIT (29|30)S$/);
+    assert.equal(socialAmigoBtn.disabled, true);
+    assert.match(socialAmigoBtn.textContent, /^WAIT (29|30)S$/);
+
+    // Clicking during cooldown does not send another invite packet
+    socialAmigoBtn.click();
+    assert.equal(sentFrames.filter((f) => f.type === 'PUBLISH' && f.topic === 'twfoxtetrio/v1/invites/amigo_fox').length, 1);
+
+    // Simulate alejandroweb connecting to the room via loopback WebRTC offer/answer + verify IN ROOM block & 1v1 duel layout
+    const p2pApi = env.context.__TWFOX_INTERNAL__.p2pRoom;
+    const hostInviteCode = env.elements.get('twfoxtetrio-lobby-invite-code').textContent;
+    env.elements.get('twfoxtetrio-host-gen-invite').click();
+    await new Promise((r) => setTimeout(r, 15));
+    const foxOffer = env.elements.get('twfoxtetrio-host-offer-output').value;
+    assert.ok(foxOffer && foxOffer.startsWith('FOX'));
+
+    const clientPeer = p2pApi.createClientPeer({ playerName: 'AlejandroWeb', rtcFactory: () => new MockRtcPeerConnection() });
+    const answerCode = await clientPeer.joinFromInvite(foxOffer);
+    env.elements.get('twfoxtetrio-host-answer-input').value = answerCode;
+    env.elements.get('twfoxtetrio-host-accept-btn').click();
+    await new Promise((r) => setTimeout(r, 35));
+
+    // Now alejandroweb is inside snap.players -> INVITE button blocked as IN ROOM
+    const alejBtn = mutualList.querySelectorAll('.twfox-friend-invite-btn').find(
+      (b) => b.getAttribute('data-fox-invite-user') === 'alejandroweb'
+    );
+    const alejSocialBtn = relAlejandro.querySelector('.twfox-social-invite-btn');
+    assert.equal(alejBtn.disabled, true);
+    assert.equal(alejBtn.textContent, 'IN ROOM');
+    assert.equal(alejSocialBtn.disabled, true);
+    assert.equal(alejSocialBtn.textContent, 'IN ROOM');
+
+    // Start 1v1 match -> verify side-by-side is-duel layout with 220x440 opponent canvas + leaderboard
+    assert.ok(hostInviteCode);
+    env.elements.get('twfoxtetrio-host-start-btn').click();
+    await new Promise((r) => setTimeout(r, 15));
+
+    const multiArena = env.elements.get('twfoxtetrio-multi-game').querySelector('.twfox-multi-arena');
+    const oppGrid = env.elements.get('twfoxtetrio-multi-opponents');
+    assert.equal(multiArena.classList.contains('is-duel'), true);
+    assert.equal(oppGrid.classList.contains('is-duel'), true);
+    const oppCards = oppGrid.querySelectorAll('.twfox-opp-card');
+    assert.equal(oppCards.length, 1);
+    assert.equal(oppCards[0].classList.contains('is-duel'), true);
+    const oppCanvas = oppCards[0].querySelector('canvas');
+    assert.equal(oppCanvas.getAttribute('width'), '220');
+    assert.equal(oppCanvas.getAttribute('height'), '440');
+    assert.equal(env.elements.get('twfoxtetrio-multi-lb-count').textContent, '2');
+
+    // Close host room cleanly before testing incoming invite notification + accept
+    env.elements.get('twfoxtetrio-leave-room-btn').click();
+    clientPeer.close();
+    assert.equal(doc.body.classList.contains('twfox-in-multi-room'), false);
+    assert.equal(relAmigo.querySelector('.twfox-social-invite-btn'), null);
+
+    // Incoming orange notification over #notifications + IGNORE + ACCEPT
+    const incomingInv1 = buildMqttPublishFrame(
+      'twfoxtetrio/v1/invites/twfoxcrack',
+      JSON.stringify({
+        v: 1,
+        type: 'room_invite',
+        id: 'inv-orange-1',
+        from: 'amigo_fox',
+        roomCode: 'K7M4',
+        gameMode: 'vs',
+        pieceSet: 'pentomino',
+        ts: Date.now()
+      }),
+      false
+    );
+    badgeSocket.onmessage({ data: incomingInv1.buffer });
+    await new Promise((r) => setTimeout(r, 15));
+
+    const toast1 = notifications.querySelector('.twfox-invite-notif');
+    assert.ok(toast1, 'Orange FOXMOD notification should render inside #notifications');
+    assert.equal(toast1.getAttribute('data-room-code'), 'K7M4');
+    assert.match(toast1.getAttribute('style') || '', /#FF7B1C/i);
+    assert.equal(toast1.classList.contains('modalnotify'), true);
+    const toastBtns1 = toast1.querySelectorAll('.notification_button');
+    assert.equal(toastBtns1.length, 2);
+    assert.equal(toastBtns1[0].textContent, 'IGNORE');
+    assert.equal(toastBtns1[1].textContent, 'ACCEPT');
+
+    toastBtns1[0].click();
+    assert.equal(notifications.querySelector('.twfox-invite-notif'), null);
+
+    // Test ACCEPT with spy on createClientPeer.joinByCode
+    const joinCalls = [];
+    const origCreateClientPeer = p2pApi.createClientPeer;
+    p2pApi.createClientPeer = (opts) => {
+      const listeners = new Set();
+      return {
+        subscribe(fn) {
+          listeners.add(fn);
+          fn({
+            role: 'client',
+            selfId: 'p2',
+            connected: false,
+            spectator: false,
+            players: [],
+            chat: [],
+            room: { roomCode: '', status: 'lobby', round: 0, gameMode: 'vs', pieceSet: 'tetromino' }
+          });
+          return () => listeners.delete(fn);
+        },
+        getSnapshot() {
+          return { role: 'client', selfId: 'p2', connected: false, spectator: false, players: [], chat: [], room: { roomCode: '', status: 'lobby' } };
+        },
+        async joinByCode(code) {
+          joinCalls.push({ playerName: opts && opts.playerName, code });
+          return { mode: 'relay', roomCode: code };
+        },
+        close() {}
+      };
+    };
+
+    try {
+      social.classList.add('open');
+      const incomingInv2 = buildMqttPublishFrame(
+        'twfoxtetrio/v1/invites/twfoxcrack',
+        JSON.stringify({
+          v: 1,
+          type: 'room_invite',
+          id: 'inv-orange-2',
+          from: 'amigo_fox',
+          roomCode: 'M9P3',
+          gameMode: 'vs',
+          pieceSet: 'pentomino',
+          ts: Date.now()
+        }),
+        false
+      );
+      badgeSocket.onmessage({ data: incomingInv2.buffer });
+      await new Promise((r) => setTimeout(r, 15));
+
+      const toast2 = notifications.querySelector('.twfox-invite-notif');
+      assert.ok(toast2);
+      const acceptBtn = toast2.querySelectorAll('.notification_button')[1];
+      acceptBtn.click();
+      await new Promise((r) => setTimeout(r, 15));
+
+      assert.equal(notifications.querySelector('.twfox-invite-notif'), null);
+      assert.equal(socialClosedClicks, 1);
+      assert.equal(social.classList.contains('open'), false);
+      assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
+      assert.deepEqual(joinCalls, [{ playerName: 'TWFOXCRACK', code: 'M9P3' }]);
+    } finally {
+      p2pApi.createClientPeer = origCreateClientPeer;
+    }
+
+    // Verify updated canvas visuals: frameless HOLD/NEXT wing hairline, shadowed stats, and mini board gridlines
+    const strokeCalls = [];
+    let shadowUsed = false;
+    const mockCtx = {
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 1,
+      globalAlpha: 1,
+      shadowColor: '',
+      shadowBlur: 0,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      font: '',
+      textAlign: '',
+      save() {},
+      restore() {},
+      clearRect() {},
+      beginPath() {},
+      closePath() {},
+      moveTo() {},
+      lineTo() {},
+      fillRect() {},
+      fill() {},
+      strokeRect() {},
+      drawImage() {},
+      fillText() {
+        if (this.shadowBlur > 0) shadowUsed = true;
+      },
+      stroke() {
+        strokeCalls.push({ strokeStyle: this.strokeStyle, lineWidth: this.lineWidth });
+      }
+    };
+    const fakeCanvas = { width: 640, height: 620, getContext: () => mockCtx };
+    env.context.__TWFOX_INTERNAL__.foxmodCanvas.renderPlayfield(
+      fakeCanvas,
+      {
+        mode: 'vs',
+        width: 10,
+        visibleHeight: 20,
+        bufferHeight: 20,
+        board: Array.from({ length: 40 }, () => Array(10).fill(null)),
+        active: null,
+        holdKey: null,
+        canHold: true,
+        nextKeys: [],
+        incomingGarbage: 0,
+        score: 0,
+        pieces: 5,
+        pps: 1.5,
+        lines: 2,
+        attackSent: 4,
+        apm: 24,
+        elapsedMs: 10000
+      },
+      { boardOpacity: 0.85, gridOpacity: 0.1, shadowOpacity: 0.35 }
+    );
+    assert.ok(strokeCalls.some((s) => s.strokeStyle === 'rgba(255, 255, 255, 0.16)' && s.lineWidth === 1.25));
+    assert.equal(shadowUsed, true);
+
+    strokeCalls.length = 0;
+    const miniFake = { width: 220, height: 440, getContext: () => mockCtx };
+    env.context.__TWFOX_INTERNAL__.foxmodCanvas.renderMiniBoard(
+      miniFake,
+      Array.from({ length: 20 }, () => Array(10).fill(null)),
+      true,
+      null
+    );
+    assert.ok(strokeCalls.some((s) => s.strokeStyle === 'rgba(255, 255, 255, 0.06)'));
   } finally {
     if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {
       env.context.__TWFOX_INTERNAL__.foxPawBadge.destroy();
