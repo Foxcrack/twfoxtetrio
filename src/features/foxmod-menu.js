@@ -1,4 +1,4 @@
-(function (root) {
+  (function (root) {
   'use strict';
 
   const api = root.__TWFOX_TETRIO__;
@@ -1895,40 +1895,90 @@ body.twfox-spectating .twfox-footer-wing-wrap::before {
   opacity: 0.65;
   cursor: not-allowed;
 }
+.social_relationship .social_relationship_button.twfox-social-invite-btn,
 .twfox-social-invite-btn {
   display: none;
-  margin-left: auto;
-  margin-right: 6px;
-  padding: 3px 9px;
+  margin-left: .25em;
+  border: 1px solid #8a3d0a;
+  background-color: rgba(42, 18, 5, 0.72);
+  box-sizing: border-box;
+  height: 2.5em;
+  width: 2.5em;
   border-radius: 3px;
-  border: 1px solid #FF7B1C;
-  background: linear-gradient(180deg, rgba(255, 123, 28, 0.35), rgba(140, 52, 8, 0.52));
-  color: #ffe3cc;
-  font-family: HUN, sans-serif;
-  font-size: 0.78em;
-  font-weight: 900;
-  letter-spacing: 0.05em;
   cursor: pointer;
-  flex-shrink: 0;
-  z-index: 4;
+  position: relative;
+  vertical-align: top;
+  transition: .2s border-color, .2s background-color, .2s opacity;
 }
+body.twfox-in-multi-room .social_relationship .social_relationship_button.twfox-social-invite-btn,
 body.twfox-in-multi-room .twfox-social-invite-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
 }
-.twfox-social-invite-btn.is-cooldown,
-.twfox-social-invite-btn.is-in-room {
-  border-color: rgba(255, 123, 28, 0.38);
-  background: rgba(26, 14, 6, 0.82);
-  color: #ffa96c;
-  opacity: 0.75;
+.social_relationship .social_relationship_button.twfox-social-invite-btn:hover:not(.active):not(.is-in-room),
+.twfox-social-invite-btn:hover:not(.active):not(.is-in-room) {
+  border-color: #FF7B1C;
+  background-color: rgba(255, 123, 28, 0.26);
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn svg,
+.twfox-social-invite-btn svg {
+  position: absolute;
+  left: calc(.375em - 1px);
+  top: calc(.375em - 1px);
+  height: 1.75em;
+  width: 1.75em;
+  opacity: .78;
+  transition: .2s opacity, .2s transform;
+  pointer-events: none;
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn:hover svg,
+.twfox-social-invite-btn:hover svg {
+  opacity: 1;
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn.active,
+.twfox-social-invite-btn.active {
+  border-color: #FF7B1C;
+  background-color: rgba(255, 123, 28, 0.42);
   cursor: not-allowed;
 }
+.social_relationship .social_relationship_button.twfox-social-invite-btn.active svg,
+.twfox-social-invite-btn.active svg {
+  opacity: 0;
+  transition: .3s opacity;
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn.activated svg,
+.twfox-social-invite-btn.activated svg {
+  animation: .3s SocialRelationshipButtonInvite cubic-bezier(.16, -.55, .54, 1.3);
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn span,
+.twfox-social-invite-btn span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: .4em;
+  font-family: HUN, sans-serif;
+  font-size: 1.5em;
+  text-align: center;
+  color: #ffe3cc;
+  transform: scale(.5);
+  opacity: 0;
+  transition: .2s opacity, .2s transform;
+  pointer-events: none;
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn.active:not(.activated) span,
+.twfox-social-invite-btn.active:not(.activated) span {
+  transform: scale(1);
+  opacity: 1;
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn.is-in-room,
 .twfox-social-invite-btn.is-in-room {
   border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(15, 15, 22, 0.78);
-  color: #9ba5c4;
+  background-color: rgba(0, 0, 0, 0.55);
+  opacity: .38;
+  cursor: not-allowed;
+}
+.social_relationship .social_relationship_button.twfox-social-invite-btn.is-in-room svg,
+.twfox-social-invite-btn.is-in-room svg {
+  opacity: .42;
 }
 .notification.twfox-invite-notif {
   --pri: #FF7B1C;
@@ -2645,11 +2695,42 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
     let badgePresenceUnsub = null;
     let socialObserver = null;
 
+    const INVITE_PLANE_SVG =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" aria-hidden="true">' +
+      '<g transform="translate(0,-267)">' +
+      '<path style="fill:#ff7b1c;fill-opacity:0.55;" d="m 6.944345,285.10281 v 5.19917 l 4.448307,-3.4091 8.884236,-8.3552 z"/>' +
+      '<path style="fill:#ffb370;fill-opacity:1;" d="m 28.610701,273.69802 -27.221402,9.16734 5.554826,2.23749 11.289643,-5.09419 -8.016206,6.41069 -3.273217,3.88263 4.448307,-3.4091 4.402474,1.77223 z"/>' +
+      '</g></svg>';
+    let bodyClassObserver = null;
+
+    function isInActiveFoxRoom(snap) {
+      const currentSnap = snap || (peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null);
+      const hasCode = Boolean(currentSnap && currentSnap.room && currentSnap.room.roomCode);
+      if (!hasCode || activeFoxView !== 'foxmod_multi') return false;
+      if (document.body && document.body.classList && document.body.classList.contains('innormalmulti')) {
+        return false;
+      }
+      const menusEl = document.getElementById('menus');
+      const menuType = menusEl && typeof menusEl.getAttribute === 'function' ? menusEl.getAttribute('data-menu-type') : '';
+      if (menuType && menuType !== 'foxmod_multi') return false;
+      return true;
+    }
+
+    let isSyncingBodyRoom = false;
     function syncBodyRoomClass() {
-      if (!document.body || !document.body.classList) return;
-      const snap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
-      const inRoom = Boolean(snap && snap.room && snap.room.roomCode);
-      setClass(document.body, 'twfox-in-multi-room', inRoom);
+      if (isSyncingBodyRoom || !document.body || !document.body.classList) return;
+      isSyncingBodyRoom = true;
+      try {
+        const inRoom = isInActiveFoxRoom();
+        if (document.body.classList.contains('twfox-in-multi-room') !== inRoom) {
+          setClass(document.body, 'twfox-in-multi-room', inRoom);
+        }
+        if (!inRoom) {
+          clearSocialInviteButtons();
+        }
+      } finally {
+        isSyncingBodyRoom = false;
+      }
     }
 
     function syncIngameChromeClass() {
@@ -2718,6 +2799,9 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
     function hideFoxmodScrollersImmediately() {
       closeMultiRequest();
       clearFinishTransition();
+      if (peerSession && !pendingPracticeReturn) {
+        teardownPeerSession();
+      }
       activeFoxView = null;
       syncIngameChromeClass();
       stopPlayControllers();
@@ -2788,6 +2872,11 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         isNavigatingInternal = false;
       }
 
+      syncIngameChromeClass();
+      if (targetView === 'foxmod_multi' && typeof refreshMutualInviteUi === 'function') {
+        refreshMutualInviteUi();
+      }
+
       if (targetView === 'foxmod_config') {
         syncConfigControls(runtimeApi.getConfig());
         if (typeof refreshAssetsStudio === 'function') {
@@ -2808,6 +2897,9 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
 
     function goBack() {
       if (!activeFoxView) return;
+      if (activeFoxView === 'foxmod_multi' && peerSession) {
+        teardownPeerSession();
+      }
       const meta = VIEW_META[activeFoxView];
       navigateMenu(meta && meta.back ? meta.back : 'home');
     }
@@ -4585,7 +4677,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             for (let i = 0; i < sBtns.length; i++) {
               const btn = sBtns[i];
               const uname = btn.getAttribute ? btn.getAttribute('data-fox-invite-user') : '';
-              if (uname && applyInviteBtnState(btn, uname, players, hasRoomCode, 'twfox-social-invite-btn', 'INVITE FOX')) {
+              if (uname && applySocialInviteBtnState(btn, uname, players, hasRoomCode)) {
                 anyCooldown = true;
               }
             }
@@ -4663,6 +4755,22 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
 
         if (res && res.ok) {
           if (inviteTracker) inviteTracker.recordSent(targetNorm, now);
+          const qRoot = document.body || document.documentElement || document;
+          if (qRoot && typeof qRoot.querySelectorAll === 'function') {
+            const sBtns = qRoot.querySelectorAll('.twfox-social-invite-btn');
+            for (let i = 0; i < sBtns.length; i++) {
+              const sBtn = sBtns[i];
+              if (sBtn.getAttribute && sBtn.getAttribute('data-fox-invite-user') === targetNorm && sBtn.classList) {
+                sBtn.classList.add('activated');
+                if (typeof root.setTimeout === 'function') {
+                  const animTimer = root.setTimeout(function () {
+                    if (sBtn.classList) sBtn.classList.remove('activated');
+                  }, 300);
+                  if (animTimer && typeof animTimer.unref === 'function') animTimer.unref();
+                }
+              }
+            }
+          }
           if (multiDom && multiDom.hostInviteStatus) {
             multiDom.hostInviteStatus.textContent = `Sent orange FOXMOD invite to ${targetNorm.toUpperCase()}! (30s cooldown)`;
           }
@@ -4680,14 +4788,59 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         return false;
       };
 
+      function applySocialInviteBtnState(btn, username, players, hasRoomCode) {
+        const now = Date.now();
+        const inRoom = Boolean(foxInviteLogic && foxInviteLogic.isUserInRoom(username, players));
+        const cooldownSec = inviteTracker ? inviteTracker.getCooldownRemainingSec(username, now) : 0;
+        const countEl = btn.querySelector ? btn.querySelector('span') : null;
+        let nextDisabled = false;
+        let nextActive = false;
+        let nextInRoom = false;
+        let nextCount = '';
+        let nextTitle = 'Invite to your FOXMOD room';
+        let inCooldown = false;
+
+        if (!hasRoomCode) {
+          nextDisabled = true;
+          nextInRoom = true;
+          nextTitle = 'Join or create a FOXMOD room first';
+        } else if (inRoom) {
+          nextDisabled = true;
+          nextInRoom = true;
+          nextTitle = 'Already in your FOXMOD room';
+        } else if (cooldownSec > 0) {
+          nextDisabled = true;
+          nextActive = true;
+          nextCount = String(cooldownSec);
+          nextTitle = `Wait ${cooldownSec}s before inviting again`;
+          inCooldown = true;
+        }
+
+        if (btn.disabled !== nextDisabled) btn.disabled = nextDisabled;
+        if (btn.classList) {
+          setClass(btn, 'active', nextActive);
+          setClass(btn, 'is-in-room', nextInRoom);
+        }
+        if (countEl && countEl.textContent !== nextCount) {
+          countEl.textContent = nextCount;
+        }
+        if (btn.getAttribute && btn.setAttribute) {
+          if (btn.getAttribute('title') !== nextTitle) btn.setAttribute('title', nextTitle);
+          const nextAria = nextDisabled ? 'true' : 'false';
+          if (btn.getAttribute('aria-disabled') !== nextAria) btn.setAttribute('aria-disabled', nextAria);
+        }
+        return inCooldown;
+      }
+
       function syncSocialInviteButtons(snap) {
         const queryRoot = document.body || document.documentElement || document;
         if (!foxInviteLogic || !queryRoot || typeof queryRoot.querySelectorAll !== 'function') return;
-        const roomCode = snap && snap.room && snap.room.roomCode ? snap.room.roomCode : '';
-        if (!roomCode) {
+        if (!isInActiveFoxRoom(snap)) {
           clearSocialInviteButtons();
+          syncBodyRoomClass();
           return;
         }
+        const roomCode = snap && snap.room && snap.room.roomCode ? snap.room.roomCode : '';
         const foxBadge = getFoxPawBadge();
         if (!foxBadge || typeof foxBadge.hasFoxer !== 'function') return;
         if (typeof foxBadge.refreshMutualFriends === 'function') {
@@ -4722,24 +4875,38 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             continue;
           }
 
+          const holder = row.querySelector('.social_relationship_button_holder') || row;
           if (!existingBtn) {
-            existingBtn = createEl('button', {
-              className: 'twfox-social-invite-btn',
-              type: 'button',
-              text: 'INVITE FOX',
-              attrs: { 'data-fox-invite-user': uname }
-            });
+            existingBtn = createEl(
+              'div',
+              {
+                className: 'social_relationship_button twfox-social-invite-btn',
+                html: INVITE_PLANE_SVG,
+                attrs: {
+                  role: 'button',
+                  tabindex: '0',
+                  title: 'Invite to your FOXMOD room',
+                  'data-fox-invite-user': uname
+                }
+              },
+              [createEl('span', { className: 'twfox-social-invite-count', text: '' })]
+            );
             existingBtn.addEventListener('click', function (ev) {
               if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
               if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
               sendInviteToFriend(uname);
             });
-            row.appendChild(existingBtn);
-          } else if (existingBtn.getAttribute && existingBtn.getAttribute('data-fox-invite-user') !== uname && existingBtn.setAttribute) {
-            existingBtn.setAttribute('data-fox-invite-user', uname);
+            holder.appendChild(existingBtn);
+          } else {
+            if (existingBtn.parentNode !== holder) {
+              holder.appendChild(existingBtn);
+            }
+            if (existingBtn.getAttribute && existingBtn.getAttribute('data-fox-invite-user') !== uname && existingBtn.setAttribute) {
+              existingBtn.setAttribute('data-fox-invite-user', uname);
+            }
           }
 
-          if (applyInviteBtnState(existingBtn, uname, players, Boolean(roomCode), 'twfox-social-invite-btn', 'INVITE FOX')) {
+          if (applySocialInviteBtnState(existingBtn, uname, players, Boolean(roomCode))) {
             ensureInviteTicker();
           }
         }
@@ -6067,6 +6234,22 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           socialObserver.observe(socialRels, { childList: true, subtree: true });
         }
       }
+
+      if (!bodyClassObserver && document.body && typeof root.MutationObserver === 'function') {
+        bodyClassObserver = new root.MutationObserver(function () {
+          if (isSyncingBodyRoom) return;
+          const inOfficialMulti = Boolean(document.body && document.body.classList && document.body.classList.contains('innormalmulti'));
+          if (inOfficialMulti && peerSession) {
+            teardownPeerSession();
+          } else {
+            syncBodyRoomClass();
+          }
+        });
+        bodyClassObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class']
+        });
+      }
     }
 
     ensureHomeButton();
@@ -6117,10 +6300,25 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         pendingPracticeReturn = false;
         practiceRunEntered = false;
       }
-      if (state && (state.inGame || state.inMultiplayer) && activeFoxView) {
+      const inOfficialMulti = Boolean(
+        (state && state.inMultiplayer) ||
+        (document.body && document.body.classList && document.body.classList.contains('innormalmulti'))
+      );
+      if (inOfficialMulti) {
+        if (activeFoxView) {
+          hideFoxmodScrollersImmediately();
+        } else if (peerSession) {
+          teardownPeerSession();
+        } else {
+          syncBodyRoomClass();
+        }
+        return;
+      }
+      if (state && state.inGame && activeFoxView) {
         hideFoxmodScrollersImmediately();
         return;
       }
+      syncBodyRoomClass();
       if (activeFoxView === 'foxmod_config') {
         syncConfigControls(cfg);
       } else if (activeFoxView === 'foxmod_solo_lobby' && typeof refreshSoloLobbyUi === 'function') {

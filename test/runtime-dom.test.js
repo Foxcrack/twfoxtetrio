@@ -2317,14 +2317,16 @@ test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, an
     h1.appendChild(sp);
     const p = new FakeEl('p', '', '');
     p.textContent = statusText;
+    const holder = new FakeEl('div', '', 'social_relationship_button_holder');
     const invBtn = new FakeEl(
       'div',
       '',
-      invitable ? 'social_relationship_button_invite' : 'social_relationship_button_invite hidden'
+      invitable ? 'social_relationship_button social_relationship_button_invite' : 'social_relationship_button social_relationship_button_invite hidden'
     );
+    holder.appendChild(invBtn);
     row.appendChild(h1);
     row.appendChild(p);
-    row.appendChild(invBtn);
+    row.appendChild(holder);
     return row;
   }
 
@@ -2367,9 +2369,13 @@ test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, an
     const invitedUsers = lobbyInviteBtns.map((b) => b.getAttribute('data-fox-invite-user'));
     assert.deepEqual(invitedUsers, ['alejandroweb', 'amigo_fox']);
 
-    // PEOPLE drawer inline orange buttons: only mutual online FOXMOD friends
-    assert.ok(relAmigo.querySelector('.twfox-social-invite-btn'));
-    assert.ok(relAlejandro.querySelector('.twfox-social-invite-btn'));
+    // PEOPLE drawer inline orange paper-plane icon button: inside .social_relationship_button_holder, only for mutual online FOXMOD friends
+    const relAmigoHolder = relAmigo.querySelector('.social_relationship_button_holder');
+    const relAmigoFoxBtn = relAmigoHolder.querySelector('.twfox-social-invite-btn');
+    assert.ok(relAmigoFoxBtn);
+    assert.equal(relAmigoFoxBtn.classList.contains('social_relationship_button'), true);
+    assert.match(relAmigoFoxBtn.innerHTML || '', /<svg /i);
+    assert.ok(relAlejandro.querySelector('.social_relationship_button_holder').querySelector('.twfox-social-invite-btn'));
     assert.equal(relSinmod.querySelector('.twfox-social-invite-btn'), null);
     assert.equal(relStranger.querySelector('.twfox-social-invite-btn'), null);
     assert.equal(relOffline.querySelector('.twfox-social-invite-btn'), null);
@@ -2387,7 +2393,7 @@ test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, an
     assert.equal(invBody.from, 'twfoxcrack');
     assert.match(invBody.roomCode, /^[2-9A-HJ-NP-Z]{4,8}$/);
 
-    // Immediately transitions to disabled WAIT 30S in BOTH lobby card & PEOPLE row
+    // Immediately transitions to disabled WAIT 30S in lobby card and .active + 30/29 span on paper-plane arrow in PEOPLE
     const amigoBtnAfter = mutualList.querySelectorAll('.twfox-friend-invite-btn').find(
       (b) => b.getAttribute('data-fox-invite-user') === 'amigo_fox'
     );
@@ -2395,7 +2401,8 @@ test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, an
     assert.equal(amigoBtnAfter.disabled, true);
     assert.match(amigoBtnAfter.textContent, /^WAIT (29|30)S$/);
     assert.equal(socialAmigoBtn.disabled, true);
-    assert.match(socialAmigoBtn.textContent, /^WAIT (29|30)S$/);
+    assert.equal(socialAmigoBtn.classList.contains('active'), true);
+    assert.match(socialAmigoBtn.querySelector('span').textContent, /^(29|30)$/);
 
     // Clicking during cooldown does not send another invite packet
     socialAmigoBtn.click();
@@ -2423,7 +2430,8 @@ test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, an
     assert.equal(alejBtn.disabled, true);
     assert.equal(alejBtn.textContent, 'IN ROOM');
     assert.equal(alejSocialBtn.disabled, true);
-    assert.equal(alejSocialBtn.textContent, 'IN ROOM');
+    assert.equal(alejSocialBtn.classList.contains('is-in-room'), true);
+    assert.equal(alejSocialBtn.classList.contains('active'), false);
 
     // Start 1v1 match -> verify side-by-side is-duel layout with 220x440 opponent canvas + leaderboard
     assert.ok(hostInviteCode);
@@ -2442,8 +2450,16 @@ test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, an
     assert.equal(oppCanvas.getAttribute('height'), '440');
     assert.equal(env.elements.get('twfoxtetrio-multi-lb-count').textContent, '2');
 
-    // Close host room cleanly before testing incoming invite notification + accept
-    env.elements.get('twfoxtetrio-leave-room-btn').click();
+    // Entering an official TETR.IO custom room immediately removes FOXMOD PEOPLE invite arrows & tears down room state
+    doc.body.classList.add('innormalmulti');
+    env.menus.setAttribute('data-menu-type', 'custom');
+    assert.equal(doc.body.classList.contains('twfox-in-multi-room'), false);
+    assert.equal(relAmigo.querySelector('.twfox-social-invite-btn'), null);
+    assert.equal(relAlejandro.querySelector('.twfox-social-invite-btn'), null);
+    doc.body.classList.remove('innormalmulti');
+    env.menus.setAttribute('data-menu-type', 'home');
+
+    // Also close cleanly if peer stays active across official menu leave
     clientPeer.close();
     assert.equal(doc.body.classList.contains('twfox-in-multi-room'), false);
     assert.equal(relAmigo.querySelector('.twfox-social-invite-btn'), null);
