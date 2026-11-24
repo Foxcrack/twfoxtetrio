@@ -140,13 +140,14 @@ test('install.js parseArgs supports flags and positional paths (drag-and-drop)',
   );
 });
 
-test('injectModIntoMain adds allowlisted IPC + self-updater and stripMainMod removes it cleanly', () => {
+test('injectModIntoMain adds allowlisted fetch + custom assets IPC without self-updater and stripMainMod removes it cleanly', () => {
   const { injectModIntoMain, stripMainMod } = require('../scripts/install');
   const origMain = "const { app, ipcMain } = require('electron');\nipcMain.handle('get-systeminfo', () => ({}));\n";
   const patchedMain = injectModIntoMain(origMain);
   assert.ok(patchedMain.includes('twfoxtetrio-fetch'));
-  assert.ok(patchedMain.includes('twfoxtetrio-get-update-info'));
-  assert.ok(patchedMain.includes('twfoxtetrio-self-update-apply'));
+  assert.ok(patchedMain.includes('twfoxtetrio-assets-open-folder'));
+  assert.equal(patchedMain.includes('twfoxtetrio-get-update-info'), false);
+  assert.equal(patchedMain.includes('twfoxtetrio-self-update-apply'), false);
   assert.ok(patchedMain.includes("u.hostname === 'you.have.fail'"));
   assert.ok(patchedMain.includes('/Foxcrack/twfoxtetrio/'));
 
@@ -155,217 +156,55 @@ test('injectModIntoMain adds allowlisted IPC + self-updater and stripMainMod rem
   assert.equal(stripMainMod(patchedMain), origMain);
 });
 
-test('registerTwfoxMainIpc stages & applies synthetic ASAR self-updates and blocks disallowed domains', async () => {
+test('registerTwfoxMainIpc registers twfoxtetrio-fetch with domain allowlist and omits self-update IPC handlers', async () => {
   const { PassThrough } = require('node:stream');
-  const crypto = require('node:crypto');
-  const { registerTwfoxMainIpc, injectModIntoMain } = require('../scripts/install');
+  const { registerTwfoxMainIpc } = require('../scripts/install');
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'twfox-selfupd-'));
-  const asarPath = path.join(tmpDir, 'app.asar');
-  const seedPath = path.join(tmpDir, 'seed.asar');
-  try {
-    createSyntheticAsar(seedPath);
-    const baseMain = injectModIntoMain(readAsarFile(seedPath, 'main.js').toString('utf8'));
-    const basePreload =
-      readAsarFile(seedPath, 'preload.js').toString('utf8') +
-      "\n// === TWFOXTETRIO MOD START ===\nconsole.log('old');\n// === TWFOXTETRIO MOD END ===\n";
-    writePatchedAsar(
-      seedPath,
-      {
-        'preload.js': Buffer.from(basePreload, 'utf8'),
-        'main.js': Buffer.from(baseMain, 'utf8')
-      },
-      asarPath
-    );
-
-    const handlers = new Map();
-    const mockIpcMain = {
-      handle(ch, fn) {
-        handlers.set(ch, fn);
-      }
-    };
-    const remoteRoutes = {
-      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json': '{"name":"twfoxtetrio","version":"9.9.9"}',
-      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/scripts/build.js':
-        "const SOURCE_FILES = [\n  'src/core/runtime.js'\n];\n",
-      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/src/core/runtime.js':
-        "/* updated runtime 9.9.9 */ window.__TWFOX_UPDATED_999__ = true;\n"
-    };
-    const mockHttps = {
-      get(url, _opts, cb) {
-        const res = new PassThrough();
-        res.statusCode = Object.prototype.hasOwnProperty.call(remoteRoutes, url) ? 200 : 404;
-        res.headers = { 'content-type': 'text/plain' };
-        queueMicrotask(() => {
-          cb(res);
-          res.end(Buffer.from(remoteRoutes[url] || 'not found', 'utf8'));
-        });
-        return { on() {}, setTimeout() {} };
-      }
-    };
-
-    registerTwfoxMainIpc({
-      ipcMain: mockIpcMain,
-      app: { quit() {}, relaunch() {}, exit() {} },
-      https: mockHttps,
-      fs,
-      path,
-      crypto,
-      cp: null,
-      asarPath,
-      forceInPlaceSwap: true,
-      skipRelaunch: true,
-      skipSpawn: true,
-      processRef: { platform: 'linux', pid: process.pid, env: {}, resourcesPath: tmpDir, execPath: '/bin/tetrio' }
-    });
-
-    const info = await handlers.get('twfoxtetrio-get-update-info')();
-    assert.equal(info.ok, true);
-    assert.equal(info.writable, true);
-
-    await assert.rejects(
-      () => handlers.get('twfoxtetrio-fetch')(null, 'https://evil.example/data.json'),
-      /Disallowed domain/
-    );
-
-    const fetched = await handlers.get('twfoxtetrio-fetch')(
-      null,
-      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json'
-    );
-    assert.equal(fetched.ok, true);
-    assert.ok(Buffer.from(fetched.base64, 'base64').toString('utf8').includes('9.9.9'));
-
-    const applyRes = await handlers.get('twfoxtetrio-self-update-apply')();
-    assert.equal(applyRes.ok, true);
-    assert.equal(applyRes.version, '9.9.9');
-    assert.equal(verifyAsar(asarPath).ok, true);
-
-    const newPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
-    assert.ok(newPreload.includes('window.IS_ELECTRON = true;'));
-    assert.ok(newPreload.includes('// twfoxtetrio v9.9.9'));
-    assert.ok(newPreload.includes('window.__TWFOX_UPDATED_999__ = true;'));
-    assert.equal(newPreload.includes("console.log('old');"), false);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('registerTwfoxMainIpc win32 detached wscript.exe swapper waits for lock release, swaps app.asar, relaunches, and cleans up', async () => {
-  const { PassThrough } = require('node:stream');
-  const crypto = require('node:crypto');
-  const cp = require('node:child_process');
-  const { registerTwfoxMainIpc, injectModIntoMain } = require('../scripts/install');
-
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'twfox win swap '));
-  const asarPath = path.join(tmpDir, 'app.asar');
-  const seedPath = path.join(tmpDir, 'seed.asar');
-  try {
-    createSyntheticAsar(seedPath);
-    const baseMain = injectModIntoMain(readAsarFile(seedPath, 'main.js').toString('utf8'));
-    const basePreload =
-      readAsarFile(seedPath, 'preload.js').toString('utf8') +
-      "\n// === TWFOXTETRIO MOD START ===\nconsole.log('old');\n// === TWFOXTETRIO MOD END ===\n";
-    writePatchedAsar(
-      seedPath,
-      {
-        'preload.js': Buffer.from(basePreload, 'utf8'),
-        'main.js': Buffer.from(baseMain, 'utf8')
-      },
-      asarPath
-    );
-
-    const handlers = new Map();
-    const remoteRoutes = {
-      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json': '{"name":"twfoxtetrio","version":"9.9.9"}',
-      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/scripts/build.js':
-        "const SOURCE_FILES = [\n  'src/core/runtime.js'\n];\n",
-      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/src/core/runtime.js':
-        "/* updated runtime 9.9.9 */ window.__TWFOX_WIN_SWAP__ = true;\n"
-    };
-    const mockHttps = {
-      get(url, _opts, cb) {
-        const res = new PassThrough();
-        res.statusCode = Object.prototype.hasOwnProperty.call(remoteRoutes, url) ? 200 : 404;
-        res.headers = { 'content-type': 'text/plain' };
-        queueMicrotask(() => {
-          cb(res);
-          res.end(Buffer.from(remoteRoutes[url] || 'not found', 'utf8'));
-        });
-        return { on() {}, setTimeout() {} };
-      }
-    };
-
-    const markerFile = path.join(tmpDir, 'relaunched.txt');
-    const fakeExeCmd = path.join(tmpDir, 'fake tetrio.cmd');
-    fs.writeFileSync(fakeExeCmd, `@echo off\r\necho RELAUNCHED_OK > "${markerFile}"\r\nexit /b 0\r\n`);
-
-    let lockerChild = null;
-    if (process.platform === 'win32') {
-      // Hold an open handle on asarPath briefly so MoveFile sees sharing violation first, then releases on quit
-      lockerChild = cp.spawn(
-        process.execPath,
-        [
-          '-e',
-          `const fs = require('fs'); const fd = fs.openSync(${JSON.stringify(asarPath)}, 'r'); setTimeout(() => { fs.closeSync(fd); process.exit(0); }, 450);`
-        ],
-        { stdio: 'ignore' }
-      );
+  const handlers = new Map();
+  const mockIpcMain = {
+    handle(ch, fn) {
+      handlers.set(ch, fn);
     }
-
-    let quitCalled = false;
-    let exitCalled = false;
-    registerTwfoxMainIpc({
-      ipcMain: { handle: (ch, fn) => handlers.set(ch, fn) },
-      app: { quit() { quitCalled = true; }, exit() { exitCalled = true; } },
-      https: mockHttps,
-      fs,
-      path,
-      crypto,
-      cp: process.platform === 'win32' ? cp : null,
-      asarPath,
-      tempDir: tmpDir,
-      execPath: process.platform === 'win32' ? fakeExeCmd : '/bin/tetrio',
-      skipSpawn: process.platform !== 'win32',
-      processRef: { platform: 'win32', pid: process.pid, env: process.env, resourcesPath: tmpDir, execPath: process.execPath }
-    });
-
-    const applyRes = await handlers.get('twfoxtetrio-self-update-apply')();
-    assert.equal(applyRes.ok, true);
-    assert.equal(applyRes.version, '9.9.9');
-    assert.ok(applyRes.swapScriptPath && applyRes.swapScriptPath.endsWith('.js'));
-
-    if (process.platform === 'win32') {
-      // Wait for lockerChild exit + wscript loop swap + relaunch + self-delete (max 8s)
-      const deadline = Date.now() + 8000;
-      let swapped = false;
-      while (Date.now() < deadline) {
-        if (
-          !fs.existsSync(asarPath + '.update') &&
-          !fs.existsSync(applyRes.swapScriptPath) &&
-          fs.existsSync(markerFile)
-        ) {
-          swapped = true;
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      if (lockerChild && lockerChild.exitCode === null) {
-        try { lockerChild.kill(); } catch (_) {}
-      }
-      assert.equal(swapped, true, 'Detached wscript swapper should swap app.asar, launch exe, and self-delete .js');
-      assert.equal(verifyAsar(asarPath).ok, true);
-      const nextPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
-      assert.ok(nextPreload.includes('window.__TWFOX_WIN_SWAP__ = true;'));
-      assert.ok(fs.readFileSync(markerFile, 'utf8').includes('RELAUNCHED_OK'));
-      await new Promise((r) => setTimeout(r, 250));
-      assert.equal(quitCalled, true);
-      assert.equal(exitCalled, true);
-    } else {
-      assert.equal(fs.existsSync(asarPath + '.update'), true);
+  };
+  const remoteRoutes = {
+    'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json': '{"name":"twfoxtetrio","version":"9.9.9"}'
+  };
+  const mockHttps = {
+    get(url, _opts, cb) {
+      const res = new PassThrough();
+      res.statusCode = Object.prototype.hasOwnProperty.call(remoteRoutes, url) ? 200 : 404;
+      res.headers = { 'content-type': 'text/plain' };
+      queueMicrotask(() => {
+        cb(res);
+        res.end(Buffer.from(remoteRoutes[url] || 'not found', 'utf8'));
+      });
+      return { on() {}, setTimeout() {} };
     }
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+  };
+
+  registerTwfoxMainIpc({
+    ipcMain: mockIpcMain,
+    app: { getPath: () => os.tmpdir() },
+    https: mockHttps,
+    fs,
+    path
+  });
+
+  assert.equal(handlers.has('twfoxtetrio-fetch'), true);
+  assert.equal(handlers.has('twfoxtetrio-get-update-info'), false);
+  assert.equal(handlers.has('twfoxtetrio-self-update-apply'), false);
+
+  await assert.rejects(
+    () => handlers.get('twfoxtetrio-fetch')(null, 'https://evil.example/data.json'),
+    /Disallowed domain/
+  );
+
+  const fetched = await handlers.get('twfoxtetrio-fetch')(
+    null,
+    'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json'
+  );
+  assert.equal(fetched.ok, true);
+  assert.ok(Buffer.from(fetched.base64, 'base64').toString('utf8').includes('9.9.9'));
 });
 
 test('registerTwfoxMainIpc manages custom assets folder creation, openPath, save, scan, and safe deletion', async () => {

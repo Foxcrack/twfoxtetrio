@@ -2480,6 +2480,19 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
   background: rgba(66, 232, 138, 0.14);
   color: #a6ffd0;
 }
+.twfox-updater-repo-link {
+  display: block;
+  margin-top: 4px;
+  font-family: Consolas, monospace;
+  font-size: 0.85em;
+  color: #ffae70;
+  text-decoration: underline;
+  word-break: break-all;
+  cursor: pointer;
+}
+.twfox-updater-repo-link:hover {
+  color: #ffd9b8;
+}
 .twfox-updater-cmd-wrap {
   margin-top: 8px;
   padding: 8px 10px;
@@ -6434,6 +6447,17 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           className: 'twfox-badge twfox-updater-status',
           text: `Up to date (v${runtimeApi.version})`
         });
+        const repoLinkEl = createEl('a', {
+          id: 'twfoxtetrio-updater-repo-link',
+          className: 'twfox-updater-repo-link',
+          text: REPO_URL,
+          attrs: {
+            href: REPO_URL,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            'data-twfox-no-i18n': '1'
+          }
+        });
         const checkBtn = createEl('button', {
           id: 'twfoxtetrio-check-update-btn',
           className: 'twfox-btn is-sm',
@@ -6441,30 +6465,13 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           type: 'button',
           attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
         });
-        const applyBtn = createEl('button', {
-          id: 'twfoxtetrio-apply-update-btn',
-          className: 'twfox-btn is-sm is-pri hidden',
-          text: 'UPDATE & RESTART',
-          type: 'button',
-          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
-        });
-        const cmdCodeEl = createEl('code', {
-          id: 'twfoxtetrio-updater-cmd',
-          className: 'twfox-updater-cmd',
-          text: 'git pull && install.bat',
-          attrs: { 'data-twfox-no-i18n': '1' }
-        });
-        const copyCmdBtn = createEl('button', {
-          id: 'twfoxtetrio-updater-copy-btn',
+        const openRepoBtn = createEl('button', {
+          id: 'twfoxtetrio-open-repo-btn',
           className: 'twfox-btn is-sm',
-          text: 'COPY COMMAND',
+          text: 'OPEN REPO',
           type: 'button',
           attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
         });
-        const cmdWrap = createEl('div', { id: 'twfoxtetrio-updater-cmd-wrap', className: 'twfox-updater-cmd-wrap hidden' }, [
-          cmdCodeEl,
-          copyCmdBtn
-        ]);
 
         function getUpdater() {
           const bag = root.__TWFOX_INTERNAL__ || internals;
@@ -6474,33 +6481,31 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         function syncUpdaterUi(st) {
           if (!st) return;
           setClass(updStatusEl, 'is-avail', Boolean(st.updateAvailable));
-          setClass(updStatusEl, 'is-ok', st.status === 'up_to_date' || st.status === 'applied');
+          setClass(updStatusEl, 'is-ok', st.status === 'up_to_date');
           if (st.checking) {
             updStatusEl.textContent = 'Checking for updates...';
-          } else if (st.updating) {
-            updStatusEl.textContent = 'Downloading and installing update...';
           } else if (st.status === 'available' && st.remoteVersion) {
             updStatusEl.textContent = `Update available: v${st.remoteVersion} (installed v${st.installedVersion})`;
-          } else if (st.status === 'applied') {
-            updStatusEl.textContent = 'Update installed! Restarting TETR.IO...';
-          } else if (st.status === 'manual_required') {
-            updStatusEl.textContent = 'Manual update required';
           } else if (st.status === 'error' && st.error) {
             updStatusEl.textContent = String(st.error);
-          } else if (st.status === 'up_to_date') {
-            updStatusEl.textContent = `Up to date (v${st.installedVersion})`;
           } else {
             updStatusEl.textContent = `Up to date (v${st.installedVersion})`;
           }
 
-          checkBtn.disabled = Boolean(st.checking || st.updating);
-          const showApply = Boolean(st.updateAvailable || st.updating || st.status === 'applied');
-          setClass(applyBtn, 'hidden', !showApply);
-          applyBtn.disabled = Boolean(st.updating || st.status === 'applied');
-          applyBtn.textContent = st.updating ? 'UPDATING...' : st.status === 'applied' ? 'RESTARTING...' : 'UPDATE & RESTART';
+          checkBtn.disabled = Boolean(st.checking);
+          setClass(openRepoBtn, 'is-pri', Boolean(st.updateAvailable));
+        }
 
-          cmdCodeEl.textContent = st.manualCommand || 'git pull && install.bat';
-          setClass(cmdWrap, 'hidden', st.status !== 'manual_required');
+        function openRepoDownload(ev) {
+          const upd = getUpdater();
+          if (upd && typeof upd.openDownloadPage === 'function') {
+            upd.openDownloadPage();
+            if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+            return;
+          }
+          if (openExternalUrl(REPO_URL) && ev && typeof ev.preventDefault === 'function') {
+            ev.preventDefault();
+          }
         }
 
         checkBtn.addEventListener('click', function () {
@@ -6509,16 +6514,8 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             upd.checkForUpdates({ force: true, notify: true });
           }
         });
-        applyBtn.addEventListener('click', function () {
-          const upd = getUpdater();
-          if (upd && typeof upd.applyUpdate === 'function') {
-            upd.applyUpdate();
-          }
-        });
-        copyCmdBtn.addEventListener('click', function () {
-          copyToClipboard(cmdCodeEl.textContent || '');
-          if (statusEl) statusEl.textContent = 'SETTINGS SAVED';
-        });
+        openRepoBtn.addEventListener('click', openRepoDownload);
+        repoLinkEl.addEventListener('click', openRepoDownload);
 
         const updApi = getUpdater();
         if (updApi && typeof updApi.subscribe === 'function') {
@@ -6539,12 +6536,12 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           ]),
           createEl('div', { className: 'twfox-native-row' }, [
             createEl('div', {}, [
-              createEl('span', { className: 'twfox-native-label', text: 'FOXMOD Version & Auto-Updater' }),
-              updStatusEl
+              createEl('span', { className: 'twfox-native-label', text: 'FOXMOD Version & Updates' }),
+              updStatusEl,
+              repoLinkEl
             ]),
-            createEl('div', { className: 'twfox-updater-actions' }, [checkBtn, applyBtn])
-          ]),
-          cmdWrap
+            createEl('div', { className: 'twfox-updater-actions' }, [checkBtn, openRepoBtn])
+          ])
         ]);
       }
 

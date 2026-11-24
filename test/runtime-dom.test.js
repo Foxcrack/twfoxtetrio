@@ -2808,9 +2808,8 @@ test('foxmod_multi handles host_closed kick, host_migrate_self UI promotion, and
   }
 });
 
-test('auto-updater shows orange notification, triggers IPC update & manual fallback, and global i18n switches EN <-> ES cleanly', async () => {
+test('update notifier shows orange notification with repo download link and global i18n switches EN <-> ES cleanly', async () => {
   const ipcCalls = [];
-  let manualMode = false;
   const mockIpc = {
     async invoke(channel, arg) {
       ipcCalls.push({ channel, arg });
@@ -2824,26 +2823,6 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
           };
         }
         return { ok: false, status: 404, contentType: 'text/plain', base64: '' };
-      }
-      if (channel === 'twfoxtetrio-get-update-info') {
-        return {
-          ok: true,
-          platform: 'win32',
-          writable: !manualMode,
-          canAutoUpdate: !manualMode,
-          manualCommand: 'git pull && install.bat'
-        };
-      }
-      if (channel === 'twfoxtetrio-self-update-apply') {
-        if (manualMode) {
-          return {
-            ok: false,
-            needsManual: true,
-            command: 'git pull && install.bat',
-            error: 'Write permission denied'
-          };
-        }
-        return { ok: true, version: '9.8.0', restarting: true };
       }
       throw new Error('Unhandled IPC: ' + channel);
     }
@@ -2959,7 +2938,7 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
       toast = doc.getElementById('twfoxtetrio-update-toast');
     }
 
-    // Startup update check displays orange notification toast
+    // Startup update check displays orange notification toast with clickable repo download link
     assert.ok(
       toast,
       'Orange FOXMOD UPDATE AVAILABLE notification should appear when remote version is newer (state=' +
@@ -2969,13 +2948,17 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.equal(toast.classList.contains('twfox-invite-notif'), true);
     assert.ok(toast.querySelector('h1').textContent.includes('FOXMOD UPDATE AVAILABLE'));
     assert.ok(toast.querySelector('p').textContent.includes('v9.8.0'));
+    const toastRepoLink = doc.getElementById('twfoxtetrio-toast-repo-link');
+    assert.ok(toastRepoLink);
+    assert.equal(toastRepoLink.textContent, 'https://github.com/Foxcrack/twfoxtetrio');
+    assert.equal(doc.getElementById('twfoxtetrio-toast-update-btn').textContent, 'DOWNLOAD');
 
     // Open FOXMOD -> verify canonical English labels before switching to Spanish
     env.elements.get('twfoxtetrio-home-foxmod').click();
     assert.equal(doc.getElementById('twfoxtetrio-card-practice').querySelector('h1').textContent, 'PRACTICE');
     assert.equal(doc.getElementById('twfoxtetrio-card-multi').querySelector('h1').textContent, 'MULTIPLAYER');
 
-    // Open FOXMOD -> CONFIG and verify toggle count invariant + language & updater widgets
+    // Open FOXMOD -> CONFIG and verify toggle count invariant + language & repo link widgets
     env.elements.get('twfoxtetrio-card-config').click();
     const configPane = env.elements.get('twfoxtetrio-pane-config');
     assert.equal(configPane.querySelectorAll('.twfox-toggle-input').length, 11);
@@ -2983,10 +2966,14 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
 
     const enBtn = doc.getElementById('twfoxtetrio-lang-en-btn');
     const esBtn = doc.getElementById('twfoxtetrio-lang-es-btn');
-    const applyBtn = doc.getElementById('twfoxtetrio-apply-update-btn');
-    assert.ok(enBtn && esBtn && applyBtn);
+    const openRepoBtn = doc.getElementById('twfoxtetrio-open-repo-btn');
+    const updaterRepoLink = doc.getElementById('twfoxtetrio-updater-repo-link');
+    assert.ok(enBtn && esBtn && openRepoBtn && updaterRepoLink);
+    assert.equal(doc.getElementById('twfoxtetrio-apply-update-btn'), null);
+    assert.equal(doc.getElementById('twfoxtetrio-updater-cmd'), null);
     assert.equal(enBtn.classList.contains('is-active'), true);
-    assert.equal(applyBtn.classList.contains('hidden'), false);
+    assert.equal(openRepoBtn.classList.contains('is-pri'), true);
+    assert.equal(updaterRepoLink.textContent, 'https://github.com/Foxcrack/twfoxtetrio');
     assert.ok(doc.getElementById('twfoxtetrio-i18n-style'), 'Font-face unicode-range stylesheet should be injected');
 
     // Switch language globally to Español
@@ -3007,7 +2994,8 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.equal(configPane.querySelector('.twfox-native-label').textContent, 'Idioma del juego (global)');
     assert.equal(friendStatus.textContent, 'Jugando PARTIDA RÁPIDA');
     assert.equal(toast.querySelector('h1').textContent, 'ACTUALIZACIÓN FOXMOD DISPONIBLE');
-    assert.equal(doc.getElementById('twfoxtetrio-toast-update-btn').textContent, 'ACTUALIZAR AHORA');
+    assert.equal(doc.getElementById('twfoxtetrio-toast-update-btn').textContent, 'DESCARGAR');
+    assert.equal(openRepoBtn.textContent, 'ABRIR REPO');
 
     // Dynamic native text updates while in Spanish also get translated automatically
     env.headerText.textContent = '40 LINES';
@@ -3028,27 +3016,29 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.equal(mmQueueSpan.textContent, '19');
     assert.equal(mmPlaySpan.textContent, '184');
 
-    // Usernames and PB digits remain untouched
+    // Usernames, PB digits, and GitHub repo URL remain untouched
     assert.equal(env.meUsername.textContent, 'TWFOXCRACK');
     assert.equal(friendName.textContent, 'PLAYERONE');
     assert.equal(env.pbBlitz.textContent, '100,000');
-    assert.equal(doc.getElementById('twfoxtetrio-updater-cmd').textContent, 'git pull && install.bat');
+    assert.equal(toastRepoLink.textContent, 'https://github.com/Foxcrack/twfoxtetrio');
+    assert.equal(updaterRepoLink.textContent, 'https://github.com/Foxcrack/twfoxtetrio');
 
-    // Manual permission-denied fallback reveals command panel instead of crashing
-    manualMode = true;
-    applyBtn.click();
-    await new Promise((r) => setTimeout(r, 20));
-    assert.equal(modUpdater.getState().status, 'manual_required');
-    assert.equal(doc.getElementById('twfoxtetrio-updater-cmd-wrap').classList.contains('hidden'), false);
+    // Clicking download button, repo link, or CONFIG Open Repo opens the GitHub repo externally without any self-update IPC
+    const extCountBefore = env.openedExternalUrls.length;
+    doc.getElementById('twfoxtetrio-toast-update-btn').click();
+    toastRepoLink.click();
+    openRepoBtn.click();
+    assert.deepEqual(env.openedExternalUrls.slice(extCountBefore), [
+      'https://github.com/Foxcrack/twfoxtetrio',
+      'https://github.com/Foxcrack/twfoxtetrio',
+      'https://github.com/Foxcrack/twfoxtetrio'
+    ]);
+    assert.equal(ipcCalls.some((c) => c.channel === 'twfoxtetrio-self-update-apply'), false);
+    assert.equal(ipcCalls.some((c) => c.channel === 'twfoxtetrio-get-update-info'), false);
 
-    // Full writable mode invokes twfoxtetrio-self-update-apply and enters applied/restarting state
-    manualMode = false;
-    await modUpdater.checkForUpdates({ force: true, notify: false });
-    assert.equal(applyBtn.classList.contains('hidden'), false);
-    applyBtn.click();
-    await new Promise((r) => setTimeout(r, 20));
-    assert.equal(modUpdater.getState().status, 'applied');
-    assert.ok(ipcCalls.some((c) => c.channel === 'twfoxtetrio-self-update-apply'));
+    // Dismissing toast removes notification
+    doc.getElementById('twfoxtetrio-toast-later-btn').click();
+    assert.equal(doc.getElementById('twfoxtetrio-update-toast'), null);
 
     // Switching back to English restores original TETR.IO (including <span class="cheeky">) & FOXMOD strings verbatim
     enBtn.click();

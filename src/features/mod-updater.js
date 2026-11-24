@@ -8,6 +8,9 @@
   const logic = internals.modUpdaterLogic || root.TWFOX_MOD_UPDATER_LOGIC;
   if (!logic) return;
 
+  const REPO_URL =
+    'https://github.com/' + (logic.GITHUB_OWNER || 'Foxcrack') + '/' + (logic.GITHUB_REPO || 'twfoxtetrio');
+
   function getI18nLogic() {
     const bag = root.__TWFOX_INTERNAL__ || internals;
     return (bag && bag.i18nLogic) || root.TWFOX_I18N_LOGIC || null;
@@ -33,6 +36,20 @@
     return i18n && typeof i18n.translateText === 'function'
       ? i18n.translateText(enText, getLocale())
       : enText;
+  }
+
+  function openExternalUrl(url) {
+    try {
+      if (typeof root.OPEN_EXTERNAL === 'function') {
+        root.OPEN_EXTERNAL(url);
+        return true;
+      }
+      if (typeof root.open === 'function') {
+        root.open(url, '_blank', 'noopener');
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   function base64ToUtf8(b64) {
@@ -101,16 +118,9 @@
     return '';
   }
 
-  const installedVersion = String(api.version || '0.6.9')
+  const installedVersion = String(api.version || '0.6.10')
     .trim()
     .replace(/^v/i, '');
-
-  const detectedPlatform =
-    typeof navigator !== 'undefined' && /linux/i.test(String(navigator.platform || navigator.userAgent || ''))
-      ? 'linux'
-      : typeof navigator !== 'undefined' && /mac/i.test(String(navigator.platform || navigator.userAgent || ''))
-        ? 'darwin'
-        : 'win32';
 
   const FOX_BADGE_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 17 7" shape-rendering="crispEdges" aria-hidden="true">' +
@@ -136,23 +146,16 @@
     remoteVersion: null,
     updateAvailable: false,
     checking: false,
-    updating: false,
-    status: 'idle', // 'idle' | 'checking' | 'up_to_date' | 'available' | 'updating' | 'applied' | 'manual_required' | 'error'
+    status: 'idle', // 'idle' | 'checking' | 'up_to_date' | 'available' | 'error'
     message: '',
     error: null,
     lastCheckedAt: 0,
     dismissedVersion: null,
-    canAutoUpdate: null,
-    platform: detectedPlatform,
-    asarPath: null,
-    manualCommand: logic.buildManualUpdateCommand(detectedPlatform),
-    releasesUrl: logic.RELEASES_URL,
-    zipUrl: logic.ZIP_DOWNLOAD_URL
+    repoUrl: REPO_URL
   };
 
   const listeners = new Set();
   let inFlightCheck = null;
-  let inFlightApply = null;
   let startupTimer = null;
   let pendingToastAfterGame = false;
   let unsubRuntime = null;
@@ -180,6 +183,10 @@
     return function () {
       listeners.delete(fn);
     };
+  }
+
+  function openDownloadPage() {
+    return openExternalUrl(REPO_URL);
   }
 
   function resolveToastHost() {
@@ -211,25 +218,15 @@
     if (!doc || !toastEl) return;
     const titleEl = toastEl.querySelector('h1');
     const bodyEl = toastEl.querySelector('p');
+    const linkEl = doc.getElementById('twfoxtetrio-toast-repo-link');
     const laterBtn = toastEl.querySelector('.twfox-upd-later-btn');
-    const updateBtn = doc.getElementById('twfoxtetrio-toast-update-btn');
+    const downloadBtn = doc.getElementById('twfoxtetrio-toast-update-btn');
 
     if (titleEl) {
-      titleEl.textContent =
-        state.status === 'manual_required'
-          ? tr('MANUAL UPDATE REQUIRED')
-          : tr('FOXMOD UPDATE AVAILABLE');
+      titleEl.textContent = tr('FOXMOD UPDATE AVAILABLE');
     }
     if (bodyEl) {
-      if (state.status === 'updating') {
-        bodyEl.textContent = tr('Downloading and installing update...');
-      } else if (state.status === 'applied') {
-        bodyEl.textContent = tr('Update installed! Restarting TETR.IO...');
-      } else if (state.status === 'manual_required') {
-        bodyEl.textContent =
-          (getLocale() === 'es' ? 'Permiso bloqueado. Ejecuta: ' : 'Auto-write blocked. Run: ') +
-          state.manualCommand;
-      } else if (state.status === 'error' && state.error) {
+      if (state.status === 'error' && state.error) {
         bodyEl.textContent = state.error;
       } else if (state.remoteVersion) {
         bodyEl.textContent = tr(
@@ -237,19 +234,15 @@
         );
       }
     }
-    if (laterBtn) {
-      laterBtn.textContent = tr(state.status === 'manual_required' || state.status === 'error' ? 'CLOSE' : 'LATER');
+    if (linkEl) {
+      linkEl.setAttribute('href', REPO_URL);
+      linkEl.textContent = REPO_URL;
     }
-    if (updateBtn) {
-      if (state.updating) {
-        updateBtn.textContent = tr('UPDATING...');
-      } else if (state.status === 'applied') {
-        updateBtn.textContent = tr('RESTARTING...');
-      } else if (state.status === 'manual_required') {
-        updateBtn.textContent = tr('COPY COMMAND');
-      } else {
-        updateBtn.textContent = tr('UPDATE NOW');
-      }
+    if (laterBtn) {
+      laterBtn.textContent = tr(state.status === 'error' ? 'CLOSE' : 'LATER');
+    }
+    if (downloadBtn) {
+      downloadBtn.textContent = tr('DOWNLOAD');
     }
   }
 
@@ -304,8 +297,27 @@
     bodyWrap.className = 'notification_body';
     const h1El = doc.createElement('h1');
     const pEl = doc.createElement('p');
+    const repoLink = doc.createElement('a');
+    repoLink.id = 'twfoxtetrio-toast-repo-link';
+    repoLink.className = 'twfox-updater-repo-link';
+    repoLink.setAttribute('href', REPO_URL);
+    repoLink.setAttribute('target', '_blank');
+    repoLink.setAttribute('rel', 'noopener noreferrer');
+    repoLink.setAttribute('data-twfox-no-i18n', '1');
+    repoLink.setAttribute(
+      'style',
+      'display:inline-block;margin-top:4px;font-family:Consolas,monospace;font-size:0.86em;color:#ffae70;text-decoration:underline;word-break:break-all;cursor:pointer;'
+    );
+    repoLink.textContent = REPO_URL;
+    repoLink.addEventListener('click', function (ev) {
+      if (openDownloadPage() && ev && typeof ev.preventDefault === 'function') {
+        ev.preventDefault();
+      }
+    });
+
     bodyWrap.appendChild(h1El);
     bodyWrap.appendChild(pEl);
+    bodyWrap.appendChild(repoLink);
 
     const barEl = doc.createElement('div');
     barEl.className = 'notification_timeoutbar';
@@ -320,14 +332,14 @@
     laterBtn.setAttribute('role', 'button');
     laterBtn.setAttribute('tabindex', '0');
 
-    const updateBtn = doc.createElement('div');
-    updateBtn.id = 'twfoxtetrio-toast-update-btn';
-    updateBtn.className = 'notification_button flex-item pri';
-    updateBtn.setAttribute('role', 'button');
-    updateBtn.setAttribute('tabindex', '0');
+    const downloadBtn = doc.createElement('div');
+    downloadBtn.id = 'twfoxtetrio-toast-update-btn';
+    downloadBtn.className = 'notification_button flex-item pri';
+    downloadBtn.setAttribute('role', 'button');
+    downloadBtn.setAttribute('tabindex', '0');
 
     btnHolder.appendChild(laterBtn);
-    btnHolder.appendChild(updateBtn);
+    btnHolder.appendChild(downloadBtn);
 
     toastEl.appendChild(iconEl);
     toastEl.appendChild(bodyWrap);
@@ -338,17 +350,8 @@
       dismissUpdateToast();
     });
 
-    updateBtn.addEventListener('click', function () {
-      if (state.updating || state.status === 'applied') return;
-      if (state.status === 'manual_required') {
-        if (root.navigator && root.navigator.clipboard && typeof root.navigator.clipboard.writeText === 'function') {
-          try {
-            root.navigator.clipboard.writeText(state.manualCommand);
-          } catch (_) {}
-        }
-        return;
-      }
-      applyUpdate();
+    downloadBtn.addEventListener('click', function () {
+      openDownloadPage();
     });
 
     renderToastContent(toastEl);
@@ -356,48 +359,11 @@
     return true;
   }
 
-  async function probeCapability() {
-    if (!root.IPC || typeof root.IPC.invoke !== 'function') {
-      state.canAutoUpdate = false;
-      state.manualCommand = logic.buildManualUpdateCommand(state.platform);
-      return getState();
-    }
-    try {
-      const info = await root.IPC.invoke('twfoxtetrio-get-update-info');
-      if (info && typeof info === 'object') {
-        if (typeof info.platform === 'string' && info.platform) {
-          state.platform = info.platform;
-        }
-        if (typeof info.asarPath === 'string' && info.asarPath) {
-          state.asarPath = info.asarPath;
-        }
-        if (typeof info.writable === 'boolean') {
-          state.canAutoUpdate = info.writable;
-        } else if (typeof info.canAutoUpdate === 'boolean') {
-          state.canAutoUpdate = info.canAutoUpdate;
-        }
-        state.manualCommand = logic.buildManualUpdateCommand(state.platform);
-      }
-    } catch (_) {
-      // Main process from older install might not have twfoxtetrio-get-update-info yet
-      state.canAutoUpdate = false;
-      state.manualCommand = logic.buildManualUpdateCommand(state.platform);
-    }
-    return getState();
-  }
-
   async function checkForUpdates(opts) {
-    const o = opts && typeof opts === 'object' ? opts : {};
-    const force = Boolean(o.force);
-    const notify = Boolean(o.notify);
-
     if (inFlightCheck) return inFlightCheck;
-    if (!force && state.lastCheckedAt && Date.now() - state.lastCheckedAt < 15000) {
-      if (notify && state.updateAvailable) {
-        maybeShowUpdateToast();
-      }
-      return getState();
-    }
+    const options = opts && typeof opts === 'object' ? opts : {};
+    const notify = options.notify !== false;
+    const force = Boolean(options.force);
 
     inFlightCheck = (async function () {
       state.checking = true;
@@ -407,16 +373,14 @@
       emit();
 
       try {
-        await probeCapability();
         const rawPkg = await fetchRemoteText(logic.REMOTE_PKG_URL);
-        const parsedPkg = JSON.parse(String(rawPkg || '{}'));
-        const remoteVerRaw = parsedPkg && typeof parsedPkg.version === 'string' ? parsedPkg.version : '';
-        if (!logic.parseSemver(remoteVerRaw)) {
-          throw new Error('Invalid remote version metadata');
+        const pkg = JSON.parse(rawPkg);
+        const remoteVer = String((pkg && pkg.version) || '').trim().replace(/^v/i, '');
+        if (!logic.parseSemver(remoteVer)) {
+          throw new Error('Invalid remote version in package.json');
         }
-        const remoteVer = remoteVerRaw.trim().replace(/^v/i, '');
-        const newer = logic.compareSemver(remoteVer, state.installedVersion) > 0;
 
+        const newer = logic.compareSemver(remoteVer, state.installedVersion) > 0;
         state.remoteVersion = remoteVer;
         state.updateAvailable = newer;
         state.lastCheckedAt = Date.now();
@@ -445,77 +409,6 @@
     })();
 
     return inFlightCheck;
-  }
-
-  async function applyUpdate() {
-    if (inFlightApply) return inFlightApply;
-
-    inFlightApply = (async function () {
-      state.updating = true;
-      state.status = 'updating';
-      state.error = null;
-      state.message = 'Downloading and installing update...';
-      emit();
-
-      try {
-        if (!root.IPC || typeof root.IPC.invoke !== 'function') {
-          state.status = 'manual_required';
-          state.canAutoUpdate = false;
-          state.error = 'Electron IPC unavailable in browser mode';
-          state.message = 'Run manual update command';
-          return getState();
-        }
-
-        const res = await root.IPC.invoke('twfoxtetrio-self-update-apply', {
-          targetVersion: state.remoteVersion || undefined
-        });
-
-        if (res && res.ok) {
-          state.status = 'applied';
-          state.updateAvailable = false;
-          if (res.version) state.remoteVersion = String(res.version).replace(/^v/i, '');
-          state.message = res.restarting
-            ? 'Update installed! Restarting TETR.IO...'
-            : 'Update installed! Please restart TETR.IO.';
-          return getState();
-        }
-
-        if (res && res.needsManual) {
-          state.status = 'manual_required';
-          state.canAutoUpdate = false;
-          state.manualCommand = res.command || logic.buildManualUpdateCommand(state.platform);
-          state.error = res.error || 'Write permission denied on installation folder';
-          state.message = state.error;
-          maybeShowUpdateToast();
-          return getState();
-        }
-
-        state.status = 'error';
-        state.error = (res && res.error) || 'Failed to apply update';
-        state.message = state.error;
-        return getState();
-      } catch (err) {
-        const msg = err && err.message ? err.message : String(err);
-        // Older pre-0.6.0 main process does not register twfoxtetrio-self-update-apply
-        if (/no handler registered|invalid channel|not registered/i.test(msg)) {
-          state.status = 'manual_required';
-          state.canAutoUpdate = false;
-          state.error = 'Pre-0.6.0 install requires one manual reinstall to enable 1-click updates.';
-          state.message = state.error;
-        } else {
-          state.status = 'error';
-          state.error = msg;
-          state.message = msg;
-        }
-        return getState();
-      } finally {
-        state.updating = false;
-        inFlightApply = null;
-        emit();
-      }
-    })();
-
-    return inFlightApply;
   }
 
   function initFeature() {
@@ -560,14 +453,10 @@
   internals.modUpdater = {
     getState,
     subscribe,
-    probeCapability,
     checkForUpdates,
-    applyUpdate,
+    openDownloadPage,
     dismissUpdateToast,
     maybeShowUpdateToast,
-    getManualCommand: function () {
-      return state.manualCommand;
-    },
     destroy
   };
 

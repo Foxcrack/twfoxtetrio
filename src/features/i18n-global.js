@@ -81,6 +81,8 @@ body[data-twfox-lang='es'] .twfox-invite-notif {
     'zenith_result',
     'zenith_pb_result',
     'twfoxtetrio-updater-cmd',
+    'twfoxtetrio-toast-repo-link',
+    'twfoxtetrio-updater-repo-link',
     'twfoxtetrio-race-room-code',
     'twfoxtetrio-race-spectate-target',
     'twfoxtetrio-race-winner-name'
