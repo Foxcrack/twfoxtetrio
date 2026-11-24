@@ -1,6 +1,6 @@
 {
   "name": "twfoxtetrio",
-  "version": "0.6.14",
+  "version": "0.6.15",
   "description": "Community HUD & QoL mod for TETR.IO Desktop (Blitz, 40 Lines, and Multiplayer VS Leaderboard)",
   "main": "scripts/install.js",
   "scripts": {

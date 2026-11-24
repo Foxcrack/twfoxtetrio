@@ -896,15 +896,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     const avatarCacheByUser = new Map();
     const avatarFetchInFlight = new Set();
     let hasSeenZenithVisibleForSession = false;
-    let inviteJoinGraceUntil = 0;
-    let inviteNavTimer = null;
-
-    function clearInviteNavTimer() {
-      if (inviteNavTimer) {
-        clearInterval(inviteNavTimer);
-        inviteNavTimer = null;
-      }
-    }
 
     function normalizeNameKey(raw) {
       return foxInviteLogic
@@ -1021,28 +1012,16 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const zMenu = document.getElementById('zenithmenu');
       if (!zMenu) return false;
       if (zMenu.classList && zMenu.classList.contains('hidden')) return false;
+      const inZenithBody = Boolean(document.body && document.body.classList && document.body.classList.contains('inzenith'));
+      if (inZenithBody) return true;
       const menusEl = document.getElementById('menus');
       const menuType = menusEl && typeof menusEl.getAttribute === 'function' ? menusEl.getAttribute('data-menu-type') : '';
       if (menuType && menuType !== 'zenith') return false;
-      const inZenithBody = Boolean(document.body && document.body.classList && document.body.classList.contains('inzenith'));
-      return Boolean(inZenithBody || menuType === 'zenith' || document.getElementById('zenith_deck_cards'));
-    }
-
-    function findQuickPlayNavTarget() {
-      const direct = document.getElementById('multi_quickplay') || document.getElementById('sig_quickplay');
-      if (direct) return direct;
-      try {
-        if (typeof document.querySelector === 'function') {
-          return document.querySelector('[data-menu="zenith"]');
-        }
-      } catch (_) {}
-      return null;
+      return Boolean(menuType === 'zenith' || document.getElementById('zenith_deck_cards'));
     }
 
     function triggerLeaveQuickPlayCleanup() {
-      clearInviteNavTimer();
       hasSeenZenithVisibleForSession = false;
-      inviteJoinGraceUntil = 0;
       clearCardSpin();
       cardSelected = false;
       if (session) {
@@ -1057,76 +1036,8 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (leaveZp && !leaveZp.__twfoxRaceLeaveBound && typeof leaveZp.addEventListener === 'function') {
         leaveZp.__twfoxRaceLeaveBound = true;
         leaveZp.addEventListener('click', () => {
-          if (Date.now() < inviteJoinGraceUntil) return;
           triggerLeaveQuickPlayCleanup();
         });
-      }
-    }
-
-    function escapeToQuickPlayStep(attempt) {
-      const helpers = internals.foxMenuHelpers;
-      if (helpers && typeof helpers.hideFoxmodScrollersImmediately === 'function') {
-        helpers.hideFoxmodScrollersImmediately();
-      }
-      if (helpers && typeof helpers.closeMultiSession === 'function') {
-        helpers.closeMultiSession();
-      }
-
-      const socialEl = document.getElementById('social');
-      const socialBg = document.getElementById('social_bg');
-      if (socialEl && socialEl.classList && socialEl.classList.contains('open') && socialBg && typeof socialBg.click === 'function') {
-        socialBg.click();
-      }
-
-      const exitReplay = document.getElementById('exit_replay');
-      if (exitReplay && (!exitReplay.classList || !exitReplay.classList.contains('hidden')) && typeof exitReplay.click === 'function') {
-        exitReplay.click();
-      }
-      const exitSpectate = document.getElementById('exit_spectate');
-      if (exitSpectate && (!exitSpectate.classList || !exitSpectate.classList.contains('hidden')) && typeof exitSpectate.click === 'function') {
-        exitSpectate.click();
-      }
-      if (document.body && document.body.classList && document.body.classList.contains('matchmaking')) {
-        const mmBtn = document.getElementById('enter_matchmaking');
-        if (mmBtn && typeof mmBtn.click === 'function') {
-          mmBtn.click();
-        }
-      }
-
-      const rState = api.getState ? api.getState() : null;
-      const inGameNow = Boolean(
-        (rState && rState.inGame) ||
-        (document.body && document.body.classList && document.body.classList.contains('ingame'))
-      );
-      if (inGameNow && typeof api.abortActiveGameForInvite === 'function') {
-        api.abortActiveGameForInvite();
-      }
-
-      const inOfficialMulti = Boolean(
-        (rState && rState.inMultiplayer) ||
-        (document.body && document.body.classList && document.body.classList.contains('innormalmulti'))
-      );
-      const leaveRoomBtn = document.getElementById('leaveroom');
-      const canClickLeaveRoom = Boolean(
-        leaveRoomBtn &&
-        typeof leaveRoomBtn.click === 'function' &&
-        (!leaveRoomBtn.classList || !leaveRoomBtn.classList.contains('hidden')) &&
-        (inOfficialMulti || !isInQuickPlayLobbyUi())
-      );
-      if (canClickLeaveRoom) {
-        leaveRoomBtn.click();
-      }
-
-      if (!isInQuickPlayLobbyUi()) {
-        const qpTarget = findQuickPlayNavTarget();
-        if (qpTarget && typeof qpTarget.click === 'function') {
-          qpTarget.click();
-        } else if (attempt >= 2) {
-          const backBtn = document.getElementById('back');
-          if (backBtn && (!backBtn.classList || !backBtn.classList.contains('hidden')) && typeof backBtn.click === 'function') {
-            backBtn.click();
-          }
-        }
       }
     }
 
@@ -1304,9 +1215,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
     function ensureHostSessionCreated() {
       if (session || !p2pRoom) return session;
-      clearInviteNavTimer();
       hasSeenZenithVisibleForSession = isInQuickPlayLobbyUi();
-      inviteJoinGraceUntil = 0;
       const hostName = getSelfUsername() || 'HOST';
       session = p2pRoom.createHostServer({
         hostName,
@@ -2154,12 +2063,43 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         return;
       }
 
-      clearInviteNavTimer();
-      escapeToQuickPlayStep(0);
+      const rState = api.getState ? api.getState() : null;
+      const zMenu = document.getElementById('zenithmenu');
+      const inZenithBody = Boolean(document.body && document.body.classList && document.body.classList.contains('inzenith'));
+      const inOfficialCustomOrTl = Boolean(
+        document.body && document.body.classList && document.body.classList.contains('innormalmulti')
+      ) || Boolean(rState && rState.inMultiplayer && !(rState && rState.inZenith) && !inZenithBody);
+      const inGameNow = Boolean(
+        (rState && rState.inGame) ||
+        (document.body && document.body.classList && (document.body.classList.contains('ingame') || document.body.classList.contains('ingame_phys')))
+      );
+      const inQuickPlayMatch = Boolean(
+        zMenu && zMenu.classList && zMenu.classList.contains('rolledup') && !zMenu.classList.contains('inresults')
+      );
+
+      if (!isInQuickPlayLobbyUi() || inOfficialCustomOrTl || inGameNow || inQuickPlayMatch) {
+        const helpers = internals.foxMenuHelpers;
+        if (helpers && typeof helpers.showOrangeNoticeNotification === 'function') {
+          helpers.showOrangeNoticeNotification(
+            'ENTER QUICK PLAY FIRST',
+            `Go to Quick Play (Zenith Tower) in TETR.IO first, then accept the Race invite (#${clean}).`
+          );
+        }
+        return;
+      }
+
+      const helpers = internals.foxMenuHelpers;
+      if (helpers && typeof helpers.hideFoxmodScrollersImmediately === 'function') {
+        helpers.hideFoxmodScrollersImmediately();
+      }
+      const socialEl = document.getElementById('social');
+      const socialBg = document.getElementById('social_bg');
+      if (socialEl && socialEl.classList && socialEl.classList.contains('open') && socialBg && typeof socialBg.click === 'function') {
+        socialBg.click();
+      }
 
       deactivateDuoCardIfActive();
       teardownRaceSession(true);
-      inviteJoinGraceUntil = Date.now() + 5000;
       hasSeenZenithVisibleForSession = isInQuickPlayLobbyUi();
       cardSelected = true;
       triggerCardSpin();
@@ -2172,26 +2112,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       });
       sessionUnsub = session.subscribe(handleSessionEvent);
       syncVisualState();
-
-      if (!isInQuickPlayLobbyUi()) {
-        let attempts = 0;
-        inviteNavTimer = setInterval(() => {
-          attempts += 1;
-          if (!cardSelected || !session || isInQuickPlayLobbyUi() || attempts >= 16) {
-            clearInviteNavTimer();
-            if (isInQuickPlayLobbyUi()) {
-              hasSeenZenithVisibleForSession = true;
-              ensureZenithDomMounted();
-              renderParty();
-            }
-            return;
-          }
-          escapeToQuickPlayStep(attempts);
-        }, 180);
-        if (inviteNavTimer && typeof inviteNavTimer.unref === 'function') {
-          inviteNavTimer.unref();
-        }
-      }
 
       try {
         await session.joinByCode(clean);
@@ -2592,12 +2512,11 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         (document.body && document.body.classList && document.body.classList.contains('ingame'))
       );
       if (!session) {
-        clearInviteNavTimer();
         hasSeenZenithVisibleForSession = false;
       } else if (!inGameNow && (racePhase === 'idle' || racePhase === 'countdown')) {
         if (isInQuickPlayLobbyUi()) {
           hasSeenZenithVisibleForSession = true;
-        } else if (hasSeenZenithVisibleForSession && Date.now() >= inviteJoinGraceUntil) {
+        } else if (hasSeenZenithVisibleForSession) {
           triggerLeaveQuickPlayCleanup();
         }
       }
@@ -2610,7 +2529,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
     if (typeof document.addEventListener === 'function') {
       document.addEventListener('click', (ev) => {
-        if (Date.now() < inviteJoinGraceUntil || !session) return;
+        if (!session) return;
         const tgt = ev && ev.target;
         if (!tgt) return;
         const leaveBtn = document.getElementById('leavezenith');

@@ -3851,7 +3851,7 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
   }
 });
 
-test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on QP exit, and auto-exits other modes on invite accept', async () => {
+test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on QP exit, and requires Quick Play open on invite accept', async () => {
   const fetchCalls = [];
   const publishedMqtt = [];
 
@@ -4111,27 +4111,30 @@ test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on Q
   assert.equal(zenRace.getState().session, null);
   assert.equal(zenRace.getState().cardSelected, false);
 
-  // Accepting a THE RACE invite while inside other modes (custom room + matchmaking + replay + spectate)
-  // automatically exits them and enters Quick Play -> THE RACE without showing a blocker notice
+  // Accepting a THE RACE invite while NOT in Quick Play (e.g. inside custom room / outside Zenith)
+  // must NOT auto-leave/navigate in a loop and must prompt user to enter Quick Play first
   env.body.classList.add('innormalmulti');
-  env.body.classList.add('matchmaking');
   env.menus.setAttribute('data-menu-type', 'custom');
   leaveRoomBtn.classList.remove('hidden');
-  exitReplayBtn.classList.remove('hidden');
-  exitSpectateBtn.classList.remove('hidden');
+
+  await zenRace.joinByInviteCode('ABCD');
+  assert.equal(leaveRoomClicked, false, 'Must NOT force-click #leaveroom when accepting Race invite');
+  assert.equal(multiQpClicked, false, 'Must NOT auto-click #multi_quickplay');
+  assert.equal(zMenu.classList.contains('hidden'), true, 'Quick Play menu stays untouched when rejected');
+  assert.equal(zenRace.getState().session, null);
+
+  const notices = env.body.querySelectorAll('.twfox-invite-notif');
+  assert.equal(notices.some((n) => n.getAttribute('data-fox-notice') === 'ENTER QUICK PLAY FIRST'), true);
+
+  // Once the user is inside Quick Play, accepting a THE RACE invite connects cleanly
+  env.body.classList.remove('innormalmulti');
+  zMenu.classList.remove('hidden');
+  env.body.classList.add('inzenith');
+  env.menus.setAttribute('data-menu-type', 'zenith');
 
   const joinPromise = zenRace.joinByInviteCode('ABCD');
-  assert.equal(leaveRoomClicked, true, 'Should click #leaveroom when accepting Race invite from official lobby');
-  assert.equal(exitReplayClicked, true, 'Should click #exit_replay when accepting Race invite');
-  assert.equal(exitSpectateClicked, true, 'Should click #exit_spectate when accepting Race invite');
-  assert.equal(mmClicked, true, 'Should cancel matchmaking queue via #enter_matchmaking');
-  assert.equal(multiQpClicked, true, 'Should navigate into Quick Play via #multi_quickplay');
-  assert.equal(zMenu.classList.contains('hidden'), false, 'Quick Play menu should now be open');
   assert.equal(zenRace.getState().cardSelected, true);
   assert.equal(zenRace.getState().session.role, 'client');
-
-  const notices = env.body.querySelectorAll('.twfox-orange-notice');
-  assert.equal(notices.some((n) => n.getAttribute('data-fox-notice') === 'EXIT CURRENT GAME FIRST'), false);
 
   if (zenRace.getState().session) {
     leaveZenithBtn.click();

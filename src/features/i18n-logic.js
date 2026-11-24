@@ -515,6 +515,7 @@
     'sent orange foxmod invite to': 'invitación naranja enviada',
     'leave official room first': 'sal de la sala oficial primero',
     'exit current game first': 'sal de la partida actual primero',
+    'enter quick play first': 'entra a partida rápida primero',
     'the race': 'la carrera',
     'the race (4p)': 'la carrera (4j)',
     '4-player visual tower race — climb side-by-side at your own pace': 'carrera visual hasta 4 jugadores — escalen juntos a su ritmo',
