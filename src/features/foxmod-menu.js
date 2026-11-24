@@ -146,7 +146,7 @@
       view: 'foxmod_practice',
       cardId: 'twfoxtetrio-card-practice',
       icon: ICONS.practice,
-      title: 'PRACTICA',
+      title: 'PRACTICE',
       subtitle: '4-wide, pentominoes, marathon & custom solo modes',
       bg: '#382a18',
       top: '#705226',
@@ -159,7 +159,7 @@
       view: 'foxmod_multi',
       cardId: 'twfoxtetrio-card-multi',
       icon: ICONS.multi,
-      title: 'MULTIJUGADOR',
+      title: 'MULTIPLAYER',
       subtitle: 'create P2P custom rooms (you are the server) or join friends',
       bg: '#3b1c23',
       top: '#752d3c',
@@ -321,7 +321,7 @@
   const VIEW_META = {
     home: { header: 'HOME', footer: 'WELCOME TO TETR.IO!', back: null },
     foxmod: { header: 'FOXMOD', footer: 'pick a foxmod section', back: 'home' },
-    foxmod_practice: { header: 'PRACTICA', footer: 'pick a practice mode', back: 'foxmod' },
+    foxmod_practice: { header: 'PRACTICE', footer: 'pick a practice mode', back: 'foxmod' },
     foxmod_solo_lobby: {
       header: '4WIDE',
       footer: 'press start to begin playing',
@@ -333,7 +333,7 @@
       back: 'foxmod_solo_lobby'
     },
     foxmod_multi: {
-      header: 'MULTIJUGADOR',
+      header: 'MULTIPLAYER',
       footer: 'custom P2P rooms — host acts as server',
       back: 'foxmod'
     },
@@ -438,13 +438,13 @@
     },
     {
       key: 'foxPawBadge',
-      title: 'PATITA FOXMOD (IDENTIFICADOR DE MOD)',
+      title: 'FOXMOD PAW BADGE (MOD IDENTIFIER)',
       accent: '#ff8b38',
       toggles: [
         {
           field: 'enabled',
-          label: 'Mostrar Patita de Zorro FOXMOD',
-          description: 'Muestra una patita de zorro delante de tu nombre y del nombre de otros jugadores que tengan FOXMOD instalado.'
+          label: 'Show FOXMOD Fox Paw Badge',
+          description: 'Display a fox paw icon next to your name and other players running FOXMOD.'
         }
       ]
     }
@@ -3138,10 +3138,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       const pentPieceSelect = createEl('select', { id: 'twfoxtetrio-solo-piece-select', className: 'twfox-select' }, [
         createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
         createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
-        createEl('option', { text: 'CAOS MIX (19)', attrs: { value: 'chaos' } })
+        createEl('option', { text: 'CHAOS MIX (19)', attrs: { value: 'chaos' } })
       ]);
       const pentModeSelect = createEl('select', { id: 'twfoxtetrio-solo-submode-select', className: 'twfox-select' }, [
-        createEl('option', { text: 'ZEN / PRACTICA', attrs: { value: 'zen' } }),
+        createEl('option', { text: 'ZEN / PRACTICE', attrs: { value: 'zen' } }),
         createEl('option', { text: '40 LINES', attrs: { value: '40l' } }),
         createEl('option', { text: 'BLITZ 2:00', attrs: { value: 'blitz' } })
       ]);
@@ -3354,12 +3354,12 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       const pieceSelect = createEl('select', { id: 'twfoxtetrio-practice-pieces', className: 'twfox-select' }, [
         createEl('option', { text: 'PENTOMINOS (12)', attrs: { value: 'pentomino' } }),
         createEl('option', { text: 'TETROMINOS (7)', attrs: { value: 'tetromino' } }),
-        createEl('option', { text: 'CAOS MIX (19)', attrs: { value: 'chaos' } })
+        createEl('option', { text: 'CHAOS MIX (19)', attrs: { value: 'chaos' } })
       ]);
       pieceSelect.value = 'pentomino';
 
       const modeSelect = createEl('select', { id: 'twfoxtetrio-practice-mode', className: 'twfox-select' }, [
-        createEl('option', { text: 'ZEN / PRACTICA', attrs: { value: 'zen' } }),
+        createEl('option', { text: 'ZEN / PRACTICE', attrs: { value: 'zen' } }),
         createEl('option', { text: '40 LINES', attrs: { value: '40l' } }),
         createEl('option', { text: 'BLITZ 2:00', attrs: { value: 'blitz' } })
       ]);
@@ -3559,14 +3559,14 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       const mode = (detail && detail.gameMode) || roomInfo.gameMode || 'vs';
       const roundNum = (detail && detail.round) || roomInfo.round || 1;
       const winnerName = (detail && detail.winner) || roomInfo.winner || (standings[0] && standings[0].name) || 'DRAW';
-      const activeSet = roomInfo.pieceSet === 'chaos' ? 'CAOS MIX' : roomInfo.pieceSet === 'pentomino' ? 'PENTOMINOS' : 'NORMAL';
+      const activeSet = roomInfo.pieceSet === 'chaos' ? 'CHAOS MIX' : roomInfo.pieceSet === 'pentomino' ? 'PENTOMINOS' : 'NORMAL';
       const modeText = mode === 'blitz' ? 'BLITZ 2:00' : 'VERSUS KO';
 
       if (multiDom.resultsHeroTag) {
-        multiDom.resultsHeroTag.textContent = `RONDA #${roundNum} · ${activeSet} ${modeText}`;
+        multiDom.resultsHeroTag.textContent = `ROUND #${roundNum} · ${activeSet} ${modeText}`;
       }
       if (multiDom.resultsHeroName) {
-        multiDom.resultsHeroName.textContent = winnerName === 'DRAW' ? 'EMPATE / DRAW' : `Nº1 ${winnerName}`;
+        multiDom.resultsHeroName.textContent = winnerName === 'DRAW' ? 'DRAW' : `Nº1 ${winnerName}`;
       }
       if (multiDom.resultsHeroMeta) {
         const top = standings[0];
@@ -3721,7 +3721,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             setClass(multiDom.finishCard, 'is-defeat', !isVictory);
           }
           if (multiDom.finishKicker) {
-            multiDom.finishKicker.textContent = `RONDA #${detail.round || snap.room.round || 1} COMPLETE`;
+            multiDom.finishKicker.textContent = `ROUND #${detail.round || snap.room.round || 1} COMPLETE`;
           }
           if (multiDom.finishTitle) {
             multiDom.finishTitle.textContent = winnerName === 'DRAW'
@@ -3943,7 +3943,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       multiDom.winnerBanner.textContent = evType === 'start_blocked'
         ? 'NEED AT LEAST 2 PLAYERS TO START'
         : hasWinner
-          ? `WINNER RONDA #${snap.room.round}: ${snap.room.winner}`
+          ? `ROUND #${snap.room.round} WINNER: ${snap.room.winner}`
           : isHost
             ? (snap.signalingStatus === 'offline'
                 ? 'RELAY OFFLINE · USE MANUAL FALLBACK'
@@ -4431,7 +4431,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       ]);
 
       // Post-match podium & standings view (Nº1 survivor down to NºN)
-      const resultsHeroTag = createEl('div', { className: 'twfox-res-hero-tag', text: 'RONDA #1 · VERSUS KO' });
+      const resultsHeroTag = createEl('div', { className: 'twfox-res-hero-tag', text: 'ROUND #1 · VERSUS KO' });
       const resultsHeroName = createEl('div', { id: 'twfoxtetrio-results-winner-name', className: 'twfox-res-hero-name', text: 'Nº1 WINNER' });
       const resultsHeroMeta = createEl('div', { className: 'twfox-res-hero-meta', text: 'SURVIVOR' });
       const resultsList = createEl('div', { id: 'twfoxtetrio-results-list', className: 'twfox-res-list' });
@@ -5546,7 +5546,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const reloadBtn = createEl('button', {
           id: 'twfoxtetrio-assets-reload-btn',
           className: 'twfox-btn is-sm is-pri hidden',
-          text: 'RECARGAR TETR.IO (APLICAR SFX/SKIN)',
+          text: 'RELOAD TETR.IO (APPLY SFX/SKIN)',
           type: 'button',
           attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
         });
@@ -5559,19 +5559,19 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const tabExploreBtn = createEl('button', {
           id: 'twfoxtetrio-assets-tab-explore',
           className: 'twfox-btn is-sm twfox-assets-tab is-active',
-          text: 'EXPLORAR (TETR.IO+)',
+          text: 'EXPLORE (TETR.IO+)',
           type: 'button'
         });
         const tabInstalledBtn = createEl('button', {
           id: 'twfoxtetrio-assets-tab-installed',
           className: 'twfox-btn is-sm twfox-assets-tab',
-          text: 'DESCARGADOS (0)',
+          text: 'DOWNLOADED (0)',
           type: 'button'
         });
         const tabBgBtn = createEl('button', {
           id: 'twfoxtetrio-assets-tab-bg',
           className: 'twfox-btn is-sm twfox-assets-tab',
-          text: 'FONDO / LOCAL',
+          text: 'BACKGROUND / LOCAL',
           type: 'button'
         });
 
@@ -5580,22 +5580,22 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           id: 'twfoxtetrio-assets-search',
           className: 'twfox-input',
           type: 'text',
-          attrs: { placeholder: 'Buscar skin, tablero, sfx o autor en TETR.IO+...' }
+          attrs: { placeholder: 'Search skin, board, sfx or author in TETR.IO+...' }
         });
         const sortSelect = createEl('select', { id: 'twfoxtetrio-assets-sort', className: 'twfox-select' }, [
-          createEl('option', { text: 'Mas votados', attrs: { value: 'votes' } }),
-          createEl('option', { text: 'Recientes', attrs: { value: 'recent' } }),
-          createEl('option', { text: 'Nombre A-Z', attrs: { value: 'name' } }),
-          createEl('option', { text: 'Autor', attrs: { value: 'author' } })
+          createEl('option', { text: 'Most voted', attrs: { value: 'votes' } }),
+          createEl('option', { text: 'Recent', attrs: { value: 'recent' } }),
+          createEl('option', { text: 'Name A-Z', attrs: { value: 'name' } }),
+          createEl('option', { text: 'Author', attrs: { value: 'author' } })
         ]);
         const refreshCatalogBtn = createEl('button', {
           id: 'twfoxtetrio-assets-refresh',
           className: 'twfox-btn is-sm',
-          text: 'ACTUALIZAR',
+          text: 'REFRESH',
           type: 'button'
         });
         const catDefs = [
-          ['all', 'Todos'],
+          ['all', 'All'],
           ['skins', 'Skins'],
           ['sfx', 'SFX']
         ];
@@ -5623,12 +5623,12 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const exploreStatusEl = createEl('div', {
           id: 'twfoxtetrio-assets-catalog-status',
           className: 'twfox-assets-status',
-          text: 'Listo para conectar con https://you.have.fail/tetrioplus/'
+          text: 'Ready to connect with https://you.have.fail/tetrioplus/'
         });
         const exploreListEl = createEl('div', { id: 'twfoxtetrio-assets-explore-list', className: 'twfox-assets-list' });
-        const pageInfoEl = createEl('span', { id: 'twfoxtetrio-assets-page-info', className: 'twfox-assets-status', text: 'Pagina 1' });
-        const prevPageBtn = createEl('button', { id: 'twfoxtetrio-assets-prev-page', className: 'twfox-btn is-sm', text: 'ANTERIOR', type: 'button' });
-        const nextPageBtn = createEl('button', { id: 'twfoxtetrio-assets-next-page', className: 'twfox-btn is-sm', text: 'SIGUIENTE', type: 'button' });
+        const pageInfoEl = createEl('span', { id: 'twfoxtetrio-assets-page-info', className: 'twfox-assets-status', text: 'Page 1' });
+        const prevPageBtn = createEl('button', { id: 'twfoxtetrio-assets-prev-page', className: 'twfox-btn is-sm', text: 'PREV', type: 'button' });
+        const nextPageBtn = createEl('button', { id: 'twfoxtetrio-assets-next-page', className: 'twfox-btn is-sm', text: 'NEXT', type: 'button' });
         const explorePanel = createEl('div', { id: 'twfoxtetrio-assets-panel-explore' }, [
           createEl('div', { className: 'twfox-assets-toolbar' }, [searchInput, sortSelect, refreshCatalogBtn]),
           catWrap,
@@ -5674,18 +5674,18 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           id: 'twfoxtetrio-assets-bg-url',
           className: 'twfox-input',
           type: 'text',
-          attrs: { placeholder: 'URL imagen, GIF o video (.mp4 / .webm)...' }
+          attrs: { placeholder: 'Image, GIF or video URL (.mp4 / .webm)...' }
         });
         const bgUrlApplyBtn = createEl('button', {
           id: 'twfoxtetrio-assets-bg-url-apply',
           className: 'twfox-btn is-sm is-pri',
-          text: 'APLICAR URL',
+          text: 'APPLY URL',
           type: 'button'
         });
         const bgClearBtn = createEl('button', {
           id: 'twfoxtetrio-assets-bg-clear',
           className: 'twfox-btn is-sm is-danger',
-          text: 'QUITAR FONDO',
+          text: 'CLEAR BACKGROUND',
           type: 'button'
         });
         bgUrlApplyBtn.addEventListener('click', function () {
@@ -5738,7 +5738,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const bgFileBtn = createEl('button', {
           id: 'twfoxtetrio-assets-bg-file-btn',
           className: 'twfox-btn is-sm is-pri',
-          text: 'SUBIR FONDO (PNG/GIF/MP4/WEBM)',
+          text: 'UPLOAD BACKGROUND (PNG/GIF/MP4/WEBM)',
           type: 'button'
         });
         bgFileBtn.addEventListener('click', function () {
@@ -5754,7 +5754,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const assetFileBtn = createEl('button', {
           id: 'twfoxtetrio-assets-import-btn',
           className: 'twfox-btn is-sm',
-          text: 'IMPORTAR LOCAL (.TPSE / .ZIP / .PNG)',
+          text: 'IMPORT LOCAL (.TPSE / .ZIP / .PNG)',
           type: 'button'
         });
         assetFileBtn.addEventListener('click', function () {
@@ -5765,7 +5765,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
 
         async function handleFileSelection(fileObj, forcedCategory) {
           if (!fileObj || !assetsApi) return;
-          localStatusEl.textContent = `Importando ${fileObj.name}...`;
+          localStatusEl.textContent = `Importing ${fileObj.name}...`;
           try {
             const buf = await fileObj.arrayBuffer();
             const rec = await assetsApi.importLocalAsset({
@@ -5775,9 +5775,9 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
               category: forcedCategory,
               autoApply: true
             });
-            localStatusEl.textContent = `Instalado y activado: ${rec.name}`;
+            localStatusEl.textContent = `Imported & activated: ${rec.name}`;
           } catch (err) {
-            localStatusEl.textContent = 'Error importando archivo: ' + (err && err.message ? err.message : String(err));
+            localStatusEl.textContent = 'Error importing file: ' + (err && err.message ? err.message : String(err));
           }
         }
         bgFileInput.addEventListener('change', function () {
@@ -5794,18 +5794,18 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const bgPanel = createEl('div', { id: 'twfoxtetrio-assets-panel-bg', className: 'hidden' }, [
           createEl('div', { className: 'twfox-native-row' }, [
             createEl('div', {}, [
-              createEl('span', { className: 'twfox-native-label', text: 'Fondos Animados Integrados' }),
-              createEl('span', { className: 'twfox-native-desc', text: 'Se muestran detras de los menus y tableros sin descargas externas.' })
+              createEl('span', { className: 'twfox-native-label', text: 'Built-in Animated Backgrounds' }),
+              createEl('span', { className: 'twfox-native-desc', text: 'Displayed behind menus and boards with no external downloads.' })
             ])
           ]),
           presetWrap,
           createEl('div', { className: 'twfox-assets-toolbar' }, [bgUrlInput, bgUrlApplyBtn, bgClearBtn]),
           createEl('div', { className: 'twfox-native-row' }, [
-            createEl('span', { className: 'twfox-native-label', text: 'Opacidad del Fondo' }),
+            createEl('span', { className: 'twfox-native-label', text: 'Background Opacity' }),
             createEl('div', { className: 'twfox-range-wrap' }, [bgOpacityInput, bgOpacityVal])
           ]),
           createEl('div', { className: 'twfox-native-row' }, [
-            createEl('span', { className: 'twfox-native-label', text: 'Desenfoque (Blur)' }),
+            createEl('span', { className: 'twfox-native-label', text: 'Blur' }),
             createEl('div', { className: 'twfox-range-wrap' }, [bgBlurInput, bgBlurVal])
           ]),
           createEl('div', { className: 'twfox-assets-toolbar' }, [bgFileInput, bgFileBtn, assetFileInput, assetFileBtn]),
@@ -5836,10 +5836,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         }
 
         function categoryLabel(cat) {
-          if (cat === 'board') return 'TABLERO';
+          if (cat === 'board') return 'BOARD';
           if (cat === 'sfx') return 'SFX';
-          if (cat === 'background') return 'FONDO';
-          return 'PIEZAS';
+          if (cat === 'background') return 'BACKGROUND';
+          return 'MINOS';
         }
 
         function renderActiveSlots(state) {
@@ -5857,16 +5857,16 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             const pr = presets.find((p) => p.id === a.bgPresetId);
             bgName = pr ? pr.name : a.bgPresetId;
           } else if (a.bgMode === 'asset' && a.bgAssetId) {
-            bgName = findName(a.bgAssetId) || 'Fondo personalizado';
+            bgName = findName(a.bgAssetId) || 'Custom background';
           } else if (a.bgMode === 'url' && a.bgUrl) {
-            bgName = 'URL personalizada';
+            bgName = 'Custom URL';
           }
 
           const slotDefs = [
-            { slot: 'skin', title: 'PIEZAS / MINOS', value: findName(a.skinId), extra: a.skinFormat ? `(${a.skinFormat})` : '' },
-            { slot: 'board', title: 'TABLERO / QUEUE', value: findName(a.boardId) },
-            { slot: 'sfx', title: 'SONIDOS (SFX)', value: findName(a.sfxId), hasPreview: Boolean(a.sfxId) },
-            { slot: 'background', title: 'FONDO / ANIMADO', value: bgName }
+            { slot: 'skin', title: 'BLOCKS / MINOS', value: findName(a.skinId), extra: a.skinFormat ? `(${a.skinFormat})` : '' },
+            { slot: 'board', title: 'BOARD / QUEUE', value: findName(a.boardId) },
+            { slot: 'sfx', title: 'SOUNDS (SFX)', value: findName(a.sfxId), hasPreview: Boolean(a.sfxId) },
+            { slot: 'background', title: 'BACKGROUND / ANIMATED', value: bgName }
           ];
 
           for (const s of slotDefs) {
@@ -5875,7 +5875,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             if (s.hasPreview && assetsApi) {
               const pBtn = createEl('button', {
                 className: 'twfox-btn is-sm',
-                text: 'PROBAR',
+                text: 'TEST',
                 type: 'button'
               });
               pBtn.addEventListener('click', () => assetsApi.previewSfxPack(a.sfxId));
@@ -5885,7 +5885,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
               const cBtn = createEl('button', {
                 id: `twfoxtetrio-assets-clear-${s.slot}`,
                 className: 'twfox-btn is-sm is-danger',
-                text: 'QUITAR',
+                text: 'REMOVE',
                 type: 'button'
               });
               cBtn.addEventListener('click', () => assetsApi.deactivateSlot(s.slot));
@@ -5906,7 +5906,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         function renderExploreList() {
           exploreListEl.innerHTML = '';
           if (!assetsApi) {
-            exploreStatusEl.textContent = 'Modulo de assets no inicializado.';
+            exploreStatusEl.textContent = 'Assets module not initialized.';
             return;
           }
           if (typeof assetsApi.resetPreviewQueue === 'function') {
@@ -5926,14 +5926,14 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           const start = currentPage * PAGE_SIZE;
           const pageItems = matched.slice(start, start + PAGE_SIZE);
 
-          exploreStatusEl.textContent = `Mostrando ${pageItems.length} de ${matched.length} resultados (${state.catalogCount} en TETR.IO+)`;
-          pageInfoEl.textContent = `Pagina ${currentPage + 1} / ${totalPages}`;
+          exploreStatusEl.textContent = `Showing ${pageItems.length} of ${matched.length} results (${state.catalogCount} on TETR.IO+)`;
+          pageInfoEl.textContent = `Page ${currentPage + 1} / ${totalPages}`;
           prevPageBtn.disabled = currentPage <= 0;
           nextPageBtn.disabled = currentPage + 1 >= totalPages;
 
           if (pageItems.length === 0) {
             exploreListEl.appendChild(
-              createEl('div', { className: 'twfox-assets-status', text: 'No se encontraron assets con ese filtro.' })
+              createEl('div', { className: 'twfox-assets-status', text: 'No assets matched that filter.' })
             );
             return;
           }
@@ -5944,21 +5944,21 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             const busy = downloadingIds.has(item.id);
             const tags = [categoryLabel(item.category)];
             if (item.format) tags.push(item.format.toUpperCase());
-            if (item.animated) tags.push('ANIMADO');
+            if (item.animated) tags.push('ANIMATED');
             if (item.votes > 0) tags.push(`★ ${item.votes}`);
 
             const actionBtns = [];
             if (busy) {
-              const b = createEl('button', { className: 'twfox-btn is-sm', text: 'DESCARGANDO...', type: 'button' });
+              const b = createEl('button', { className: 'twfox-btn is-sm', text: 'DOWNLOADING...', type: 'button' });
               b.disabled = true;
               actionBtns.push(b);
             } else if (downloaded) {
               if (active) {
-                actionBtns.push(createEl('span', { className: 'twfox-badge', text: 'ACTIVO ✓' }));
+                actionBtns.push(createEl('span', { className: 'twfox-badge', text: 'ACTIVE ✓' }));
               } else {
                 const actBtn = createEl('button', {
                   className: 'twfox-btn is-sm is-ok',
-                  text: 'ACTIVAR',
+                  text: 'ACTIVATE',
                   type: 'button',
                   attrs: { 'data-asset-id': item.id, 'data-asset-action': 'activate' }
                 });
@@ -5967,7 +5967,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
               }
               const rmBtn = createEl('button', {
                 className: 'twfox-btn is-sm is-danger',
-                text: 'DESINSTALAR',
+                text: 'UNINSTALL',
                 type: 'button',
                 attrs: { 'data-asset-id': item.id, 'data-asset-action': 'uninstall' }
               });
@@ -5976,7 +5976,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             } else {
               const dlBtn = createEl('button', {
                 className: 'twfox-btn is-sm is-pri',
-                text: 'DESCARGAR E INSTALAR',
+                text: 'DOWNLOAD & INSTALL',
                 type: 'button',
                 attrs: { 'data-asset-id': item.id, 'data-asset-action': 'download' }
               });
@@ -5986,7 +5986,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
                 try {
                   await assetsApi.downloadAndInstallCatalogItem(item, { autoApply: true });
                 } catch (err) {
-                  exploreStatusEl.textContent = 'Error descargando ' + item.name + ': ' + (err && err.message ? err.message : String(err));
+                  exploreStatusEl.textContent = 'Error downloading ' + item.name + ': ' + (err && err.message ? err.message : String(err));
                 } finally {
                   downloadingIds.delete(item.id);
                   renderExploreList();
@@ -6024,7 +6024,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
               });
               const loadMsg = createEl('span', {
                 className: 'twfox-asset-preview-loading',
-                text: 'Cargando vista previa de bloques...'
+                text: 'Loading block preview...'
               });
               previewEl = createEl('div', { className: 'twfox-asset-preview-wrap' }, [pImg, loadMsg]);
               assetsApi.requestCatalogItemPreview(item).then((resolvedUrl) => {
@@ -6042,7 +6042,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
               createEl('div', { className: 'twfox-asset-card' + (active ? ' is-active' : '') }, [
                 createEl('div', { className: 'twfox-asset-info' }, [
                   createEl('div', { className: 'twfox-asset-title', text: item.name }),
-                  createEl('div', { className: 'twfox-asset-meta', text: `por ${item.author} · ${tags.join(' · ')}` }),
+                  createEl('div', { className: 'twfox-asset-meta', text: `by ${item.author} · ${tags.join(' · ')}` }),
                   item.description ? createEl('div', { className: 'twfox-asset-desc', text: item.description }) : null,
                   previewEl
                 ]),
@@ -6057,19 +6057,19 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           if (!assetsApi) return;
           const state = assetsApi.getState();
           const list = state.installed || [];
-          tabInstalledBtn.textContent = `DESCARGADOS (${list.length})`;
+          tabInstalledBtn.textContent = `DOWNLOADED (${list.length})`;
           installedStatusEl.textContent = list.length > 0
-            ? `${list.length} assets guardados localmente en tu equipo.`
-            : 'Aun no tienes assets descargados. Ve a EXPLORAR (TETR.IO+) o FONDO / LOCAL.';
+            ? `${list.length} assets saved locally on your device.`
+            : 'No downloaded assets yet. Visit EXPLORE (TETR.IO+) or BACKGROUND / LOCAL.';
 
           for (const rec of list) {
             const active = assetsApi.isActive(rec.id);
             const caps = rec.capabilities || {};
             const capTags = [];
-            if (caps.skin) capTags.push('PIEZAS' + (rec.skinFormat ? ` (${rec.skinFormat})` : ''));
-            if (caps.board || caps.queue || caps.grid) capTags.push('TABLERO');
+            if (caps.skin) capTags.push('MINOS' + (rec.skinFormat ? ` (${rec.skinFormat})` : ''));
+            if (caps.board || caps.queue || caps.grid) capTags.push('BOARD');
             if (caps.sfx) capTags.push('SFX');
-            if (caps.background) capTags.push(`FONDO x${rec.backgroundCount || 1}`);
+            if (caps.background) capTags.push(`BACKGROUND x${rec.backgroundCount || 1}`);
             capTags.push(formatBytesLabel(rec.bytesEstimate));
 
             const previewNode = rec.previewSkin
@@ -6085,11 +6085,11 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
 
             const btns = [];
             if (active) {
-              btns.push(createEl('span', { className: 'twfox-badge', text: 'ACTIVO ✓' }));
+              btns.push(createEl('span', { className: 'twfox-badge', text: 'ACTIVE ✓' }));
             } else {
               const useBtn = createEl('button', {
                 className: 'twfox-btn is-sm is-ok',
-                text: 'ACTIVAR',
+                text: 'ACTIVATE',
                 type: 'button',
                 attrs: { 'data-installed-id': rec.id, 'data-installed-action': 'activate' }
               });
@@ -6099,7 +6099,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             if (caps.sfx) {
               const testBtn = createEl('button', {
                 className: 'twfox-btn is-sm',
-                text: 'PROBAR SFX',
+                text: 'TEST SFX',
                 type: 'button'
               });
               testBtn.addEventListener('click', () => assetsApi.previewSfxPack(rec.id));
@@ -6108,7 +6108,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             if (caps.background && rec.backgroundCount > 1 && state.active.bgMode === 'asset' && state.active.bgAssetId === rec.id) {
               const nextBgBtn = createEl('button', {
                 className: 'twfox-btn is-sm',
-                text: `FONDO ${(state.active.bgIndex || 0) + 1}/${rec.backgroundCount}`,
+                text: `BACKGROUND ${(state.active.bgIndex || 0) + 1}/${rec.backgroundCount}`,
                 type: 'button'
               });
               nextBgBtn.addEventListener('click', () => {
@@ -6118,7 +6118,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             }
             const delBtn = createEl('button', {
               className: 'twfox-btn is-sm is-danger',
-              text: 'DESINSTALAR',
+              text: 'UNINSTALL',
               type: 'button',
               attrs: { 'data-installed-id': rec.id, 'data-installed-action': 'uninstall' }
             });
@@ -6163,12 +6163,12 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             return;
           }
           catalogRequested = true;
-          exploreStatusEl.textContent = 'Conectando con https://you.have.fail/tetrioplus/ ...';
+          exploreStatusEl.textContent = 'Connecting to https://you.have.fail/tetrioplus/ ...';
           try {
             await assetsApi.fetchCatalog(Boolean(force));
             renderExploreList();
           } catch (err) {
-            exploreStatusEl.textContent = 'No se pudo conectar con TETR.IO+ (' + (err && err.message ? err.message : String(err)) + ')';
+            exploreStatusEl.textContent = 'Could not connect to TETR.IO+ (' + (err && err.message ? err.message : String(err)) + ')';
           }
         }
 
@@ -6224,8 +6224,8 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         return createEl('div', { id: 'twfoxtetrio-assets-block', className: 'scroller_block twfox-assets-block' }, [
           createEl('div', { className: 'twfox-assets-top' }, [
             createEl('div', {}, [
-              createEl('h1', { text: 'SKINS, TABLERO, SFX Y FONDOS (TETR.IO+)' }),
-              createEl('p', { text: 'Descarga directa desde https://you.have.fail/tetrioplus/ · piezas, tablero, sonidos y fondos animados.' })
+              createEl('h1', { text: 'SKINS, BOARD, SFX & BACKGROUNDS (TETR.IO+)' }),
+              createEl('p', { text: 'Direct download from https://you.have.fail/tetrioplus/ · blocks, board, sounds & animated backgrounds.' })
             ]),
             reloadBtn
           ]),
@@ -6512,7 +6512,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         [
           createEl('div', { className: 'twfox-menu-svg', html: ICONS.fox }),
           createEl('h1', { text: 'FOXMOD' }),
-          createEl('p', { text: 'practica, salas P2P, config & credits' })
+          createEl('p', { text: 'practice, P2P rooms, config & credits' })
         ]
       );
       btn.addEventListener('click', function () {

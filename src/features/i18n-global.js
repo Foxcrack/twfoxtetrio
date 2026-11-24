@@ -8,6 +8,48 @@
   const logic = internals.i18nLogic || root.TWFOX_I18N_LOGIC;
   if (!logic) return;
 
+  const STYLE_ID = 'twfoxtetrio-i18n-style';
+  const I18N_CSS = `
+@font-face {
+  font-family: 'HUN';
+  src: url('/res/font/cr.ttf') format('truetype'), local('Segoe UI'), local('Arial');
+  unicode-range: U+00A1, U+00AB, U+00B7, U+00BB, U+00BF, U+00C0-00D6, U+00D8-00F6, U+00F8-00FF;
+}
+@font-face {
+  font-family: 'HUN-CHEEKY';
+  src: url('/res/font/cr.ttf') format('truetype'), local('Segoe UI'), local('Arial');
+  unicode-range: U+00A1, U+00AB, U+00B7, U+00BB, U+00BF, U+00C0-00D6, U+00D8-00F6, U+00F8-00FF;
+}
+html[data-twfox-lang='es'] #twfoxtetrio-pane-config,
+html[data-twfox-lang='es'] #twfoxtetrio-pane-config h1,
+html[data-twfox-lang='es'] #twfoxtetrio-pane-config p,
+html[data-twfox-lang='es'] #twfoxtetrio-pane-config span,
+html[data-twfox-lang='es'] #twfoxtetrio-pane-config button,
+html[data-twfox-lang='es'] #twfoxtetrio-pane-config select,
+html[data-twfox-lang='es'] #twfoxtetrio-pane-config input,
+html[data-twfox-lang='es'] .twfox-native-scroller,
+html[data-twfox-lang='es'] .twfox-native-scroller h1,
+html[data-twfox-lang='es'] .twfox-native-scroller p,
+html[data-twfox-lang='es'] .twfox-native-label,
+html[data-twfox-lang='es'] .twfox-native-desc,
+html[data-twfox-lang='es'] .twfox-btn,
+html[data-twfox-lang='es'] .twfox-badge,
+html[data-twfox-lang='es'] #menus #header_text,
+html[data-twfox-lang='es'] #menus #footer_text,
+html[data-twfox-lang='es'] .scroller_item > p,
+html[data-twfox-lang='es'] .scroller_block > h1,
+html[data-twfox-lang='es'] .notification_body,
+html[data-twfox-lang='es'] .notification_button,
+html[data-twfox-lang='es'] .scroller_item h1,
+html[data-twfox-lang='es'] .config_item,
+html[data-twfox-lang='es'] .social_relationship p,
+html[data-twfox-lang='es'] .social_notification p,
+body[data-twfox-lang='es'] #twfoxtetrio-update-toast,
+body[data-twfox-lang='es'] .twfox-invite-notif {
+  font-family: 'C', 'PFW', 'Segoe UI', sans-serif !important;
+}
+`;
+
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'SVG', 'CANVAS', 'CODE', 'PRE', 'TEXTAREA']);
   const SKIP_IDS = new Set([
     'me_username',
@@ -29,6 +71,7 @@
     'record_owner',
     'leagueplayer_name',
     'room_config_spinner',
+    'footer_button',
     'twfox-player-name',
     'twfox-paw-target',
     'twfox-lb-name',
@@ -41,8 +84,13 @@
     'twfox-asset-card-author'
   ];
 
+  const INLINE_CONTAINER_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'LABEL', 'BUTTON', 'A', 'SPAN']);
+  const ALLOWED_INLINE_CHILDREN = new Set(['SPAN', 'B', 'I', 'EM', 'STRONG', 'BR']);
+
   const origNodeText = new WeakMap();
   const appliedNodeText = new WeakMap();
+  const origHtmlMap = new WeakMap();
+  const appliedHtmlText = new WeakMap();
   const origAttrMap = new WeakMap();
   const appliedAttrMap = new WeakMap();
 
@@ -50,6 +98,17 @@
   let applyingDepth = 0;
   let observer = null;
   let unsubRuntime = null;
+
+  function ensureStyle() {
+    const doc = root.document;
+    if (!doc || doc.getElementById(STYLE_ID)) return;
+    const head = doc.head || doc.documentElement;
+    if (!head || typeof doc.createElement !== 'function') return;
+    const st = doc.createElement('style');
+    st.id = STYLE_ID;
+    st.textContent = I18N_CSS;
+    head.appendChild(st);
+  }
 
   function readConfiguredLocale() {
     try {
@@ -87,7 +146,6 @@
     }
     if (hasSkipClass(el)) return true;
 
-    // Preserve friend names inside social relationship cards (status <p> still translates)
     if (tag === 'H1' && el.parentNode && el.parentNode.classList) {
       if (
         el.parentNode.classList.contains('social_relationship') ||
@@ -110,6 +168,86 @@
     return false;
   }
 
+  function normalizeWhitespace(raw) {
+    return String(raw || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function areOnlySafeInlineDescendants(el, depth) {
+    if (!el || depth > 3) return false;
+    const kids = Array.isArray(el.children) ? el.children : el.children ? Array.from(el.children) : [];
+    if (kids.length > 5) return false;
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i];
+      const tag = String(k.tagName || '').toUpperCase();
+      if (!ALLOWED_INLINE_CHILDREN.has(tag)) return false;
+      if (isSkippedElement(k)) return false;
+      if (typeof k.getAttribute === 'function' && k.getAttribute('role') === 'button') return false;
+      const subKids = Array.isArray(k.children) ? k.children : k.children ? Array.from(k.children) : [];
+      if (subKids.length > 0 && !areOnlySafeInlineDescendants(k, depth + 1)) return false;
+    }
+    return true;
+  }
+
+  function tryHandleInlineContainer(el) {
+    if (!el || !el.tagName) return false;
+    const tag = String(el.tagName).toUpperCase();
+    const isFooterOrHeader = el.id === 'footer_text' || el.id === 'header_text';
+    if (!isFooterOrHeader && !INLINE_CONTAINER_TAGS.has(tag)) return false;
+
+    const childEls = Array.isArray(el.children) ? el.children : el.children ? Array.from(el.children) : [];
+    if (childEls.length === 0 && !origHtmlMap.has(el)) return false;
+
+    const currentNorm = normalizeWhitespace(el.textContent);
+    const appliedNorm = appliedHtmlText.get(el);
+
+    if (currentLocale === 'en') {
+      if (appliedNorm !== undefined) {
+        if (currentNorm === appliedNorm && origHtmlMap.has(el)) {
+          const origHtml = origHtmlMap.get(el);
+          appliedHtmlText.delete(el);
+          origHtmlMap.delete(el);
+          applyingDepth += 1;
+          try {
+            el.innerHTML = origHtml;
+          } finally {
+            applyingDepth -= 1;
+          }
+          return true;
+        }
+        appliedHtmlText.delete(el);
+        origHtmlMap.delete(el);
+      }
+      return false;
+    }
+
+    if (appliedNorm !== undefined && currentNorm === appliedNorm) {
+      return true;
+    }
+
+    if (childEls.length === 0) return false;
+    if (!areOnlySafeInlineDescendants(el, 0)) return false;
+    if (!currentNorm) return false;
+
+    const translated = logic.translateText(currentNorm, currentLocale);
+    if (!translated || translated === currentNorm) return false;
+
+    if (typeof el.innerHTML === 'string') {
+      origHtmlMap.set(el, el.innerHTML);
+    }
+    const translatedNorm = normalizeWhitespace(translated);
+    appliedHtmlText.set(el, translatedNorm);
+    applyingDepth += 1;
+    try {
+      el.textContent = translated;
+    } finally {
+      applyingDepth -= 1;
+    }
+    return true;
+  }
+
   function syncTextSlot(target, readValue, writeValue) {
     if (!target) return;
     const current = readValue();
@@ -130,7 +268,6 @@
             }
           }
         } else {
-          // Underlying app already replaced the text while in EN or transitioning
           origNodeText.set(target, current);
           appliedNodeText.delete(target);
         }
@@ -138,12 +275,10 @@
       return;
     }
 
-    // Target language === 'es'
     if (applied !== undefined && current === applied) {
       return;
     }
 
-    // Fresh source text from app or UI update
     origNodeText.set(target, current);
     const translated = logic.translateText(current, currentLocale);
     if (translated && translated !== current) {
@@ -242,6 +377,10 @@
 
     syncElementAttributes(node);
 
+    if (tryHandleInlineContainer(node)) {
+      return;
+    }
+
     const hasChildNodes = node.childNodes && node.childNodes.length > 0;
     if (hasChildNodes) {
       for (let i = 0; i < node.childNodes.length; i++) {
@@ -258,7 +397,6 @@
       return;
     }
 
-    // Leaf element (covers FakeElement in test harness and textContent-only nodes)
     if (typeof node.textContent === 'string' && node.textContent) {
       syncTextSlot(
         node,
@@ -316,6 +454,7 @@
   }
 
   function refresh() {
+    ensureStyle();
     syncDomAttributeFlag();
     const roots = getObserveRoots();
     for (let i = 0; i < roots.length; i++) {
@@ -331,18 +470,25 @@
       if (rec.addedNodes && rec.addedNodes.length > 0) {
         for (let j = 0; j < rec.addedNodes.length; j++) {
           const added = rec.addedNodes[j];
-          if (!shouldSkipAncestor(added.nodeType === 3 ? added.parentNode : added)) {
-            visitNode(added, 0);
+          const holder = added.nodeType === 3 ? added.parentNode : added;
+          if (!shouldSkipAncestor(holder)) {
+            visitNode(holder && origHtmlMap.has(holder) ? holder : added, 0);
           }
         }
       }
       if (rec.target) {
         const tgt = rec.target;
-        if (!shouldSkipAncestor(tgt.nodeType === 3 ? tgt.parentNode : tgt)) {
-          visitNode(tgt, 0);
+        const holder = tgt.nodeType === 3 ? tgt.parentNode : tgt;
+        if (!shouldSkipAncestor(holder)) {
+          visitNode(holder && isInlinePhrasingContainerParent(holder) ? holder : tgt, 0);
         }
       }
     }
+  }
+
+  function isInlinePhrasingContainerParent(el) {
+    if (!el || !el.tagName) return false;
+    return el.id === 'footer_text' || el.id === 'header_text' || origHtmlMap.has(el) || appliedHtmlText.has(el);
   }
 
   function setLocale(nextLocale) {
@@ -375,6 +521,7 @@
   }
 
   function initFeature() {
+    ensureStyle();
     currentLocale = readConfiguredLocale();
     attachObserver();
     refresh();

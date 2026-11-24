@@ -729,10 +729,10 @@ test('Home menu injects FOXMOD natively into #menus with Practice submenu (4Wide
   assert.equal(env.homeMenu.classList.contains('hidden'), true);
   assert.equal(foxView.classList.contains('hidden'), false);
 
-  // Enter PRACTICA submenu -> shows 4WIDE, PENTOMINOS, MARATHON, ZEN
+  // Enter PRACTICE submenu -> shows 4WIDE, PENTOMINOS, MARATHON, ZEN
   env.elements.get('twfoxtetrio-card-practice').click();
   assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_practice');
-  assert.equal(env.headerText.textContent, 'PRACTICA');
+  assert.equal(env.headerText.textContent, 'PRACTICE');
   assert.equal(practiceMenuPane.classList.contains('hidden'), false);
   assert.equal(foxView.classList.contains('hidden'), true);
   assert.ok(env.elements.get('twfoxtetrio-prac-4wide'));
@@ -2874,7 +2874,35 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
 
   const configTitle = new FakeEl('h1', '', '');
   configTitle.textContent = 'CONFIG';
+  const configDesc = new FakeEl('p', '', '');
+  const configCheeky = new FakeEl('span', '', 'cheeky');
+  configCheeky.textContent = 'TETRIO';
+  configDesc.appendChild(configCheeky);
+  // Real TETR.IO HTML wraps <span class="cheeky">TETRIO</span> inside <p>; emulate collapsed phrasing check
+  Object.defineProperty(configDesc, 'textContent', {
+    get() {
+      return this._customText !== undefined && this._customText !== ''
+        ? this._customText
+        : 'tweak your ' + configCheeky.textContent + ' experience';
+    },
+    set(v) {
+      this._customText = String(v);
+      this.children = [];
+    }
+  });
+  Object.defineProperty(configDesc, 'innerHTML', {
+    get() {
+      return this._customText
+        ? this._customText
+        : 'tweak your <span class="cheeky">TETRIO</span> experience';
+    },
+    set() {
+      this._customText = '';
+      this.children = [configCheeky];
+    }
+  });
   env.sigConfig.appendChild(configTitle);
+  env.sigConfig.appendChild(configDesc);
 
   env.homeMenu.appendChild(multiCard);
   env.homeMenu.appendChild(soloCard);
@@ -2914,11 +2942,16 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.ok(toast.querySelector('h1').textContent.includes('FOXMOD UPDATE AVAILABLE'));
     assert.ok(toast.querySelector('p').textContent.includes('v9.8.0'));
 
-    // Open FOXMOD -> CONFIG and verify toggle count invariant + language & updater widgets
+    // Open FOXMOD -> verify canonical English labels before switching to Spanish
     env.elements.get('twfoxtetrio-home-foxmod').click();
+    assert.equal(doc.getElementById('twfoxtetrio-card-practice').querySelector('h1').textContent, 'PRACTICE');
+    assert.equal(doc.getElementById('twfoxtetrio-card-multi').querySelector('h1').textContent, 'MULTIPLAYER');
+
+    // Open FOXMOD -> CONFIG and verify toggle count invariant + language & updater widgets
     env.elements.get('twfoxtetrio-card-config').click();
     const configPane = env.elements.get('twfoxtetrio-pane-config');
     assert.equal(configPane.querySelectorAll('.twfox-toggle-input').length, 11);
+    assert.equal(doc.getElementById('twfoxtetrio-assets-tab-explore').textContent, 'EXPLORE (TETR.IO+)');
 
     const enBtn = doc.getElementById('twfoxtetrio-lang-en-btn');
     const esBtn = doc.getElementById('twfoxtetrio-lang-es-btn');
@@ -2926,6 +2959,7 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.ok(enBtn && esBtn && applyBtn);
     assert.equal(enBtn.classList.contains('is-active'), true);
     assert.equal(applyBtn.classList.contains('hidden'), false);
+    assert.ok(doc.getElementById('twfoxtetrio-i18n-style'), 'Font-face unicode-range stylesheet should be injected');
 
     // Switch language globally to Español
     esBtn.click();
@@ -2934,11 +2968,15 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.equal(enBtn.classList.contains('is-active'), false);
     assert.equal(doc.body.getAttribute('data-twfox-lang'), 'es');
 
-    // Both native TETR.IO UI and FOXMOD UI (including active update toast) are translated
+    // Both native TETR.IO UI (including inline <span class="cheeky">) and FOXMOD UI + CONFIG_SECTIONS + Assets Studio translate cleanly
     assert.equal(multiTitle.textContent, 'MULTIJUGADOR');
     assert.equal(multiDesc.textContent, 'juega en línea con amigos y rivales');
     assert.equal(soloTitle.textContent, 'SOLITARIO');
     assert.equal(configTitle.textContent, 'AJUSTES');
+    assert.equal(configDesc.textContent, 'personaliza tu experiencia en TETR.IO');
+    assert.equal(doc.getElementById('twfoxtetrio-card-practice').querySelector('h1').textContent, 'PRÁCTICA');
+    assert.equal(doc.getElementById('twfoxtetrio-assets-tab-explore').textContent, 'EXPLORAR (TETR.IO+)');
+    assert.equal(configPane.querySelector('.twfox-native-label').textContent, 'Idioma del juego (global)');
     assert.equal(friendStatus.textContent, 'Jugando PARTIDA RÁPIDA');
     assert.equal(toast.querySelector('h1').textContent, 'ACTUALIZACIÓN FOXMOD DISPONIBLE');
     assert.equal(doc.getElementById('twfoxtetrio-toast-update-btn').textContent, 'ACTUALIZAR AHORA');
@@ -2969,13 +3007,16 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.equal(modUpdater.getState().status, 'applied');
     assert.ok(ipcCalls.some((c) => c.channel === 'twfoxtetrio-self-update-apply'));
 
-    // Switching back to English restores original TETR.IO & FOXMOD strings verbatim
+    // Switching back to English restores original TETR.IO (including <span class="cheeky">) & FOXMOD strings verbatim
     enBtn.click();
     assert.equal(env.context.__TWFOX_TETRIO__.getConfig().language.locale, 'en');
     assert.equal(multiTitle.textContent, 'MULTIPLAYER');
     assert.equal(multiDesc.textContent, 'play online with friends and foes');
     assert.equal(soloTitle.textContent, 'SOLO');
     assert.equal(configTitle.textContent, 'CONFIG');
+    assert.equal(configDesc.innerHTML, 'tweak your <span class="cheeky">TETRIO</span> experience');
+    assert.equal(doc.getElementById('twfoxtetrio-card-practice').querySelector('h1').textContent, 'PRACTICE');
+    assert.equal(doc.getElementById('twfoxtetrio-assets-tab-explore').textContent, 'EXPLORE (TETR.IO+)');
     assert.equal(friendStatus.textContent, 'Playing QUICK PLAY');
     assert.equal(env.headerText.textContent, '40 LINES');
   } finally {

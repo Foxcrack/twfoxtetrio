@@ -12,22 +12,22 @@
     {
       id: 'none',
       name: 'Original TETR.IO',
-      description: 'Usa el fondo nativo de TETR.IO Desktop sin capa extra.'
+      description: 'Use the native TETR.IO Desktop background without extra overlay.'
     },
     {
       id: 'starfield',
       name: 'Hyper Starfield',
-      description: 'Campo de estrellas animado en 3D con estelas neon.'
+      description: '3D animated starfield with neon trails.'
     },
     {
       id: 'synth_grid',
       name: 'Synthwave Horizon',
-      description: 'Grilla retro synthwave animada en perspectiva continua.'
+      description: 'Animated retro synthwave grid in endless perspective.'
     },
     {
       id: 'cyber_wave',
       name: 'Cyber Aurora',
-      description: 'Ondas luminosas suaves con gradiente animada en tiempo real.'
+      description: 'Soft luminous real-time gradient waves.'
     }
   ];
 
