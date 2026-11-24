@@ -713,3 +713,162 @@ test('host_closed fires on manual P2P host exit and auto-signaling rooms elect n
   c3Rejoined.close();
   hostB.close();
 });
+
+test('client seamlessly joins via WS relay fallback when WebRTC UDP is blocked or brokers connect out-of-order', async () => {
+  // Stalled WebRTC factory: completes SDP exchange, never opens DataChannel (simulates strict Symmetric NAT/firewall).
+  function blockedRtcFactory() {
+    return {
+      iceGatheringState: 'complete',
+      localDescription: null,
+      remoteDescription: null,
+      connectionState: 'connecting',
+      iceConnectionState: 'checking',
+      ondatachannel: null,
+      onicecandidate: null,
+      oniceconnectionstatechange: null,
+      onconnectionstatechange: null,
+      createDataChannel(label) {
+        return { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null, send() {}, close() {} };
+      },
+      async createOffer() {
+        return { type: 'offer', sdp: 'v=0\r\nstalled-offer' };
+      },
+      async createAnswer() {
+        return { type: 'answer', sdp: 'v=0\r\nstalled-answer' };
+      },
+      async setLocalDescription(d) {
+        this.localDescription = d;
+      },
+      async setRemoteDescription(d) {
+        this.remoteDescription = d;
+      },
+      close() {}
+    };
+  }
+
+  const subscriptions = new Map();
+  function encodeVarLen(len) {
+    const out = [];
+    let v = len;
+    do {
+      let b = v % 128;
+      v = Math.floor(v / 128);
+      if (v > 0) b |= 128;
+      out.push(b);
+    } while (v > 0);
+    return Uint8Array.from(out);
+  }
+
+  // Broker 1 is fast (5ms); Broker 2 connects slower (60ms) so staggered multi-broker delivery is also exercised.
+  function staggeredWsFactory(url) {
+    if (!subscriptions.has(url)) subscriptions.set(url, new Set());
+    const peers = subscriptions.get(url);
+    let entry = null;
+    const delay = url.includes('broker2') ? 60 : 5;
+
+    const ws = {
+      readyState: 0,
+      binaryType: 'arraybuffer',
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+      send(data) {
+        const u = new Uint8Array(data);
+        const type = u[0] & 0xf0;
+        if (type === 0x10) {
+          queueMicrotask(() => ws.onmessage && ws.onmessage({ data: Uint8Array.from([0x20, 0x02, 0x00, 0x00]).buffer }));
+        } else if (type === 0x80) {
+          let idx = 4;
+          const tLen = (u[idx] << 8) | u[idx + 1];
+          idx += 2;
+          const topic = Buffer.from(u.slice(idx, idx + tLen)).toString('utf8');
+          entry = { topic, ws };
+          peers.add(entry);
+          queueMicrotask(() => ws.onmessage && ws.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer }));
+        } else if (type === 0x30) {
+          let idx = 1;
+          while ((u[idx] & 0x80) !== 0) idx++;
+          idx++;
+          const tLen = (u[idx] << 8) | u[idx + 1];
+          const topic = Buffer.from(u.slice(idx + 2, idx + 2 + tLen)).toString('utf8');
+          const payloadBytes = u.slice(idx + 2 + tLen);
+          const tb = Buffer.from(topic, 'utf8');
+          const body = Buffer.concat([Buffer.from([(tb.length >> 8) & 255, tb.length & 255]), tb, payloadBytes]);
+          const frame = Buffer.concat([Buffer.from([0x30]), Buffer.from(encodeVarLen(body.length)), body]);
+          for (const sub of peers) {
+            if (sub.topic === topic && sub.ws.onmessage && sub.ws.readyState === 1) {
+              queueMicrotask(() => sub.ws.onmessage({ data: Uint8Array.from(frame).buffer }));
+            }
+          }
+        }
+      },
+      close() {
+        ws.readyState = 3;
+        if (entry) peers.delete(entry);
+        if (ws.onclose) ws.onclose();
+      }
+    };
+
+    setTimeout(() => {
+      if (ws.readyState !== 0) return;
+      ws.readyState = 1;
+      if (ws.onopen) ws.onopen();
+    }, delay);
+    return ws;
+  }
+
+  // Host connected ONLY on slow broker2; Client connects on fast broker1 + slow broker2
+  const host = p2p.createHostServer({
+    hostName: 'TWFoxcrack',
+    rtcFactory: blockedRtcFactory,
+    wsFactory: staggeredWsFactory,
+    brokers: ['wss://broker2/mqtt']
+  });
+  const roomCode = host.getSnapshot().room.roomCode;
+
+  const clientEvents = [];
+  const client = p2p.createClientPeer({
+    playerName: 'StrictNatFriend',
+    rtcFactory: blockedRtcFactory,
+    wsFactory: staggeredWsFactory,
+    brokers: ['wss://broker1/mqtt', 'wss://broker2/mqtt'],
+    relayFallbackDelayMs: 220,
+    joinTimeoutMs: 5000
+  });
+  client.subscribe((_s, ev) => clientEvents.push(ev));
+
+  const res = await client.joinByCode(roomCode);
+  assert.equal(res.roomCode, roomCode);
+
+  const deadline = Date.now() + 2500;
+  while (Date.now() < deadline && !client.getSnapshot().connected) {
+    await new Promise((r) => setTimeout(r, 25));
+  }
+
+  assert.equal(client.getSnapshot().connected, true, 'Client should seamlessly connect over WS relay fallback');
+  assert.ok(clientEvents.includes('relay_fallback'));
+  await new Promise((r) => setTimeout(r, 35));
+  assert.deepEqual(
+    host.getSnapshot().players.map((p) => p.name),
+    ['TWFoxcrack', 'StrictNatFriend']
+  );
+
+  // Chat, match start, garbage routing, and KO work identically over WS relay with zero duplicate delivery across brokers
+  client.sendChat('hola desde nat');
+  await new Promise((r) => setTimeout(r, 35));
+  const chats = host.getSnapshot().chat.filter((c) => !c.system && c.text === 'hola desde nat');
+  assert.equal(chats.length, 1);
+
+  host.startMatch();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(client.getSnapshot().room.status, 'playing');
+
+  client.reportSelfKo({ vs: 18, attackSent: 2, lines: 5 });
+  await new Promise((r) => setTimeout(r, 35));
+  assert.equal(host.getSnapshot().room.status, 'results');
+  assert.equal(host.getSnapshot().room.winner, 'TWFoxcrack');
+
+  client.close();
+  host.close();
+});

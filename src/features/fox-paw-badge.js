@@ -9,7 +9,7 @@
   }
 
   const STYLE_ID = 'twfoxtetrio-fox-paw-style';
-  const CONNECT_TIMEOUT_MS = 4500;
+  const CONNECT_TIMEOUT_MS = 9000;
   const KEEPALIVE_MS = 40000;
   const HEARTBEAT_PUBLISH_MS = 20 * 60 * 1000;
   const RECONNECT_MIN_MS = 2000;

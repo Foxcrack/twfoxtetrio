@@ -3286,3 +3286,181 @@ test('DOWNLOADED tab filters saved skins and SFX via All / Skins / SFX pills cle
   assert.equal(listEl.children.length, 2);
   assert.equal(statusEl.textContent, '2 assets saved locally on your device.');
 });
+
+test('Accepting orange FOXMOD invite unhides #menus, connects via relay fallback if NAT blocks P2P, and guards active official rooms', async () => {
+  let inviteSocket = null;
+  const roomPeers = new Set();
+
+  class MockInviteAndRelayWs {
+    constructor() {
+      this.readyState = 0;
+      this.binaryType = 'arraybuffer';
+      this._topics = new Set();
+      setTimeout(() => {
+        if (this.readyState !== 0) return;
+        this.readyState = 1;
+        if (this.onopen) this.onopen({});
+      }, 3);
+    }
+    send(bytes) {
+      const parsed = parseMqttClientFrame(bytes);
+      if (parsed.type === 'CONNECT') {
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: buildMqttConnackFrame().buffer });
+          }
+        }, 3);
+      } else if (parsed.type === 'SUBSCRIBE') {
+        this._topics.add(parsed.topic);
+        roomPeers.add(this);
+        if (parsed.topic === 'twfoxtetrio/v1/invites/friendfox') {
+          inviteSocket = this;
+        }
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'PUBLISH') {
+        const frame = buildMqttPublishFrame(parsed.topic, parsed.text, parsed.retain);
+        for (const sub of roomPeers) {
+          if (sub._topics && sub._topics.has(parsed.topic) && sub.readyState === 1 && sub.onmessage) {
+            queueMicrotask(() => sub.onmessage({ data: frame.buffer }));
+          }
+        }
+      }
+    }
+    close() {
+      this.readyState = 3;
+      roomPeers.delete(this);
+      if (this.onclose) this.onclose({});
+    }
+  }
+
+  // Simulated friend-side WebRTC that never connects directly (forcing automatic relay fallback)
+  class BlockedNatRtc {
+    constructor() {
+      this.iceGatheringState = 'complete';
+      this.localDescription = null;
+      this.remoteDescription = null;
+      this.connectionState = 'connecting';
+      this.iceConnectionState = 'checking';
+      this.ondatachannel = null;
+    }
+    createDataChannel(label) {
+      return { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null, send() {}, close() {} };
+    }
+    async createOffer() { return { type: 'offer', sdp: 'v=0\r\nnat-blocked' }; }
+    async createAnswer() { return { type: 'answer', sdp: 'v=0\r\nnat-blocked' }; }
+    async setLocalDescription(d) { this.localDescription = d; }
+    async setRemoteDescription(d) { this.remoteDescription = d; }
+    close() {}
+  }
+
+  const env = createFakeDomEnvironment('https:', {
+    WebSocket: MockInviteAndRelayWs,
+    RTCPeerConnection: BlockedNatRtc
+  });
+  const doc = env.context.document;
+  const FakeEl = env.elements.get('me_username').constructor;
+  env.elements.get('me_username').textContent = 'FriendFox';
+  const notifications = new FakeEl('div', 'notifications', '');
+  doc.body.appendChild(notifications);
+
+  env.triggerDOMContentLoaded();
+  try {
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.ok(inviteSocket, 'Friend should be subscribed to invite topic');
+
+    const p2pApi = env.context.__TWFOX_INTERNAL__.p2pRoom;
+    const origCreateClient = p2pApi.createClientPeer;
+    p2pApi.createClientPeer = (o) => origCreateClient({ ...(o || {}), relayFallbackDelayMs: 220, joinTimeoutMs: 4000 });
+
+    try {
+      const host = p2pApi.createHostServer({
+        hostName: 'TWFoxcrack',
+        roomCode: 'Z7P9',
+        rtcFactory: () => new BlockedNatRtc(),
+        wsFactory: (url) => new MockInviteAndRelayWs(url),
+        brokers: ['wss://mock-relay/mqtt']
+      });
+      await new Promise((r) => setTimeout(r, 25));
+
+      const invPkt = buildMqttPublishFrame(
+        'twfoxtetrio/v1/invites/friendfox',
+        JSON.stringify({
+          v: 1,
+          type: 'room_invite',
+          id: 'inv-nat-1',
+          from: 'twfoxcrack',
+          roomCode: 'Z7P9',
+          gameMode: 'vs',
+          pieceSet: 'pentomino',
+          ts: Date.now()
+        }),
+        false
+      );
+
+      // 1. Guard when user is inside an official TETR.IO custom room (innormalmulti) -> clear orange notice instead of silent cancel
+      doc.body.classList.add('innormalmulti');
+      inviteSocket.onmessage({ data: invPkt.buffer });
+      await new Promise((r) => setTimeout(r, 15));
+      const toastBlocked = notifications.querySelector('.twfox-invite-notif');
+      assert.ok(toastBlocked);
+      toastBlocked.querySelectorAll('.notification_button')[1].click();
+      await new Promise((r) => setTimeout(r, 15));
+      const warnNotice = notifications.querySelectorAll('.twfox-invite-notif').find(
+        (n) => n.getAttribute('data-fox-notice') === 'LEAVE OFFICIAL ROOM FIRST'
+      );
+      assert.ok(warnNotice, 'Should warn cleanly if user is still inside an official TETR.IO room');
+      warnNotice.querySelector('.notification_button').click();
+      doc.body.classList.remove('innormalmulti');
+
+      // 2. Accept invite while #menus starts hidden -> unhides #menus and connects over WS relay automatically
+      env.menus.classList.add('hidden');
+      const invPkt2 = buildMqttPublishFrame(
+        'twfoxtetrio/v1/invites/friendfox',
+        JSON.stringify({
+          v: 1,
+          type: 'room_invite',
+          id: 'inv-nat-2',
+          from: 'twfoxcrack',
+          roomCode: 'Z7P9',
+          gameMode: 'vs',
+          pieceSet: 'pentomino',
+          ts: Date.now()
+        }),
+        false
+      );
+      inviteSocket.onmessage({ data: invPkt2.buffer });
+      await new Promise((r) => setTimeout(r, 15));
+      const toastOk = notifications.querySelectorAll('.twfox-invite-notif').find((n) => n.getAttribute('data-room-code') === 'Z7P9');
+      assert.ok(toastOk);
+      toastOk.querySelectorAll('.notification_button')[1].click();
+
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline && host.getSnapshot().players.length < 2) {
+        await new Promise((r) => setTimeout(r, 30));
+      }
+
+      assert.equal(env.menus.classList.contains('hidden'), false, 'Accepting invite must unhide #menus cleanly');
+      assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
+      assert.equal(
+        host.getSnapshot().players.map((p) => p.name).join(','),
+        'TWFoxcrack,FRIENDFOX'
+      );
+      assert.equal(env.elements.get('twfoxtetrio-multi-winner').textContent, 'CONNECTED TO HOST SERVER');
+
+      host.close();
+      await new Promise((r) => setTimeout(r, 30));
+    } finally {
+      p2pApi.createClientPeer = origCreateClient;
+    }
+  } finally {
+    if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {
+      env.context.__TWFOX_INTERNAL__.foxPawBadge.destroy();
+    }
+  }
+});

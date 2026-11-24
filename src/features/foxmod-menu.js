@@ -2898,6 +2898,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       }
       isNavigatingInternal = true;
       try {
+        if (isFoxTarget) {
+          menusEl.classList.remove('hidden');
+          menusEl.classList.remove('thidden');
+        }
         for (const el of collectMenuViews(menusEl)) {
           const viewName = el.getAttribute('data-menuview');
           if (viewName === targetView) {
@@ -3966,7 +3970,9 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
                     : 'HOST SERVER ACTIVE')
             : snap.connected
               ? 'CONNECTED TO HOST SERVER'
-              : 'ENTER #CODE TO JOIN';
+              : roomCode
+                ? `CONNECTING TO #${roomCode}...`
+                : 'ENTER #CODE TO JOIN';
 
       if (isHost && multiDom.hostInviteStatus) {
         if (evType === 'signaling_ready') {
@@ -3976,11 +3982,19 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         }
       }
 
-      if (!isHost && multiDom.joinStatus) {
-        if (evType === 'exchanging_sdp') {
-          multiDom.joinStatus.textContent = `Room #${roomCode} found! Opening WebRTC tunnel...`;
+      if (!isHost) {
+        if (evType === 'connected' && multiDom.hostInviteStatus) {
+          multiDom.hostInviteStatus.textContent = `Connected to room #${roomCode}!`;
+        } else if (evType === 'exchanging_sdp') {
+          if (multiDom.joinStatus) multiDom.joinStatus.textContent = `Room #${roomCode} found! Opening WebRTC tunnel...`;
+          if (multiDom.hostInviteStatus) multiDom.hostInviteStatus.textContent = `Room #${roomCode} found! Opening WebRTC tunnel...`;
+        } else if (evType === 'relay_fallback') {
+          const relayTxt = 'Direct P2P blocked — connecting via FOXMOD relay...';
+          if (multiDom.joinStatus) multiDom.joinStatus.textContent = relayTxt;
+          if (multiDom.hostInviteStatus) multiDom.hostInviteStatus.textContent = relayTxt;
         } else if (evType === 'webrtc_failed' && detail && detail.reason) {
-          multiDom.joinStatus.textContent = `Error: ${detail.reason}`;
+          if (multiDom.joinStatus) multiDom.joinStatus.textContent = `Error: ${detail.reason}`;
+          if (multiDom.hostInviteStatus) multiDom.hostInviteStatus.textContent = `Error: ${detail.reason}`;
         }
       }
 
@@ -4768,7 +4782,12 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             setClass(joinManualReplyBox, 'hidden', false);
             joinStatus.textContent = 'Manual reply copied! Send it to the Host to finish connecting.';
           } else {
-            joinStatus.textContent = `Room #${res.roomCode} answered! Opening P2P tunnel...`;
+            const snapNow = client.getSnapshot ? client.getSnapshot() : null;
+            if ((res && res.mode === 'relay') || (snapNow && snapNow.connected)) {
+              joinStatus.textContent = `Connected to room #${res.roomCode}!`;
+            } else {
+              joinStatus.textContent = `Room #${res.roomCode} answered! Connecting P2P (auto-relay if needed)...`;
+            }
             if (typeof root.setTimeout === 'function') {
               const natHintTimer = root.setTimeout(function () {
                 if (peerSession === client && multiRequestOpen && !client.getSnapshot().connected) {
@@ -5163,6 +5182,30 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const cleanCode = foxInviteLogic.normalizeRoomCode(rawRoomCode);
         if (!cleanCode) return;
 
+        const rState = runtimeApi && typeof runtimeApi.getState === 'function' ? runtimeApi.getState() : null;
+        const inOfficialMulti = Boolean(
+          (rState && rState.inMultiplayer) ||
+          (document.body && document.body.classList && document.body.classList.contains('innormalmulti'))
+        );
+        if (inOfficialMulti) {
+          if (typeof showOrangeNoticeNotification === 'function') {
+            showOrangeNoticeNotification(
+              'LEAVE OFFICIAL ROOM FIRST',
+              `Exit your official TETR.IO match/room, then join #${cleanCode} from FOXMOD -> MULTI.`
+            );
+          }
+          return;
+        }
+        if (rState && rState.inGame) {
+          if (typeof showOrangeNoticeNotification === 'function') {
+            showOrangeNoticeNotification(
+              'EXIT CURRENT GAME FIRST',
+              `Return to menus, then join #${cleanCode} from FOXMOD -> MULTI.`
+            );
+          }
+          return;
+        }
+
         const socialEl = document.getElementById('social');
         const socialBg = document.getElementById('social_bg');
         if (socialEl && socialEl.classList && socialEl.classList.contains('open') && socialBg && typeof socialBg.click === 'function') {
@@ -5184,8 +5227,13 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         }
         try {
           const res = await client.joinByCode(cleanCode);
+          const snapNow = client.getSnapshot ? client.getSnapshot() : null;
           if (multiDom.hostInviteStatus) {
-            multiDom.hostInviteStatus.textContent = `Joined room #${(res && res.roomCode) || cleanCode}!`;
+            if ((res && res.mode === 'relay') || (snapNow && snapNow.connected)) {
+              multiDom.hostInviteStatus.textContent = `Connected to room #${(res && res.roomCode) || cleanCode}!`;
+            } else {
+              multiDom.hostInviteStatus.textContent = `Room #${(res && res.roomCode) || cleanCode} answered! Connecting P2P (auto-relay if needed)...`;
+            }
           }
         } catch (err) {
           if (multiDom.hostInviteStatus) {

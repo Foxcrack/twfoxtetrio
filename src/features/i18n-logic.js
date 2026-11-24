@@ -510,7 +510,10 @@
     'foxmod paw badge': 'patita foxmod (mqtt)',
     'shows fox paw icon next to players who run foxmod': 'muestra la patita de zorro junto a jugadores que usan foxmod',
     'no online mutual foxmod friends detected yet. open people once to sync mutual friends.': 'aún no se detectaron amigos mutuos online con FOXMOD. abre AMIGOS una vez para sincronizarlos.',
-    'create or join a room before inviting friends.': 'crea o únete a una sala antes de invitar amigos.'
+    'create or join a room before inviting friends.': 'crea o únete a una sala antes de invitar amigos.',
+    'direct p2p blocked — connecting via foxmod relay...': 'p2p directo bloqueado — conectando vía relay FOXMOD...',
+    'leave official room first': 'sal de la sala oficial primero',
+    'exit current game first': 'sal de la partida actual primero'
   };
 
   function applyCasePattern(source, translated) {
@@ -549,6 +552,15 @@
     }
     if ((m = trimmed.match(/^CONNECTING RELAY · CODE #([A-Z0-9]+)$/i))) {
       return `CONECTANDO RELAY · CÓDIGO #${m[1]}`;
+    }
+    if ((m = trimmed.match(/^CONNECTING TO #([A-Z0-9]+)\.\.\.$/i))) {
+      return `CONECTANDO A #${m[1]}...`;
+    }
+    if ((m = trimmed.match(/^Connected to room #([A-Z0-9]+)!$/i))) {
+      return `¡Conectado a la sala #${m[1]}!`;
+    }
+    if ((m = trimmed.match(/^Room #([A-Z0-9]+) answered! Connecting P2P \(auto-relay if needed\)\.\.\.$/i))) {
+      return `¡Sala #${m[1]} respondió! Conectando P2P (relay automático si hace falta)...`;
     }
     if ((m = trimmed.match(/^(?:RONDA|ROUND) #(\d+) COMPLETE$/i))) {
       return `RONDA #${m[1]} COMPLETADA`;

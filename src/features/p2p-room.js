@@ -171,7 +171,12 @@
       let chunk;
       if (rawData instanceof Uint8Array) {
         chunk = rawData;
-      } else if (rawData instanceof ArrayBuffer) {
+      } else if (ArrayBuffer.isView(rawData)) {
+        chunk = new Uint8Array(rawData.buffer, rawData.byteOffset, rawData.byteLength);
+      } else if (
+        rawData instanceof ArrayBuffer ||
+        Object.prototype.toString.call(rawData) === '[object ArrayBuffer]'
+      ) {
         chunk = new Uint8Array(rawData);
       } else if (rawData && rawData.buffer) {
         chunk = new Uint8Array(rawData.buffer, rawData.byteOffset || 0, rawData.byteLength || rawData.length);
@@ -325,6 +330,7 @@
             readyFired = true;
             if (opts.onReady) opts.onReady();
           }
+          if (opts.onBrokerReady) opts.onBrokerReady(cli);
           resolveWaiters(true);
         },
         onMessage(payload) {
@@ -512,37 +518,127 @@
 
   function createDefaultPeerConnection(rtcFactory) {
     if (typeof rtcFactory === 'function') {
-      return rtcFactory({ iceServers: ICE_SERVERS });
+      return rtcFactory({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 2 });
     }
     if (typeof root.RTCPeerConnection !== 'function') {
       throw new Error('WebRTC RTCPeerConnection is unavailable in this browser.');
     }
-    return new root.RTCPeerConnection({ iceServers: ICE_SERVERS });
+    return new root.RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 2 });
   }
 
-  function waitForIceGathering(pc, timeoutMs) {
+  function isReflexiveOrRelayCandidate(candidate) {
+    if (!candidate) return false;
+    if (candidate.type === 'srflx' || candidate.type === 'relay') return true;
+    return /\btyp\s+(srflx|relay)\b/i.test(String(candidate.candidate || ''));
+  }
+
+  function waitForIceGathering(pc, timeoutMs, onTrickleCandidate) {
     return new Promise((resolve) => {
       if (pc.iceGatheringState === 'complete') {
         resolve();
         return;
       }
       let settled = false;
+      let srflxSettleTimer = null;
       const done = () => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        pc.onicegatheringstatechange = null;
-        pc.onicecandidate = null;
+        if (srflxSettleTimer) clearTimeout(srflxSettleTimer);
+        if (!onTrickleCandidate) {
+          pc.onicegatheringstatechange = null;
+          pc.onicecandidate = null;
+        }
         resolve();
       };
-      const timer = setTimeout(done, timeoutMs || 2200);
+      const timer = unrefIfPossible(setTimeout(done, timeoutMs || 3000));
       pc.onicegatheringstatechange = () => {
         if (pc.iceGatheringState === 'complete') done();
       };
       pc.onicecandidate = (ev) => {
-        if (!ev || !ev.candidate) done();
+        if (!ev || !ev.candidate) {
+          done();
+          return;
+        }
+        if (settled) {
+          if (onTrickleCandidate) onTrickleCandidate(ev.candidate);
+          return;
+        }
+        if (isReflexiveOrRelayCandidate(ev.candidate) && !srflxSettleTimer) {
+          // Once a public srflx/relay candidate arrives, wait briefly for peers/adapters then send SDP.
+          srflxSettleTimer = unrefIfPossible(setTimeout(done, 550));
+        }
       };
     });
+  }
+
+  function createRelayPacketDeduper(maxEntries) {
+    const limit = maxEntries || 400;
+    const seen = new Set();
+    return function isDuplicate(key) {
+      if (!key) return false;
+      if (seen.has(key)) return true;
+      seen.add(key);
+      if (seen.size > limit) {
+        let trim = Math.floor(limit / 2);
+        for (const oldKey of seen) {
+          seen.delete(oldKey);
+          if (--trim <= 0) break;
+        }
+      }
+      return false;
+    };
+  }
+
+  function safeSerializeCandidate(candidate) {
+    if (!candidate) return null;
+    if (typeof candidate.toJSON === 'function') return candidate.toJSON();
+    return {
+      candidate: candidate.candidate,
+      sdpMid: candidate.sdpMid,
+      sdpMLineIndex: candidate.sdpMLineIndex
+    };
+  }
+
+  function createVirtualRelayChannel(opts) {
+    let closed = false;
+    let txSeq = 0;
+    let lastBoardSentAt = 0;
+    const minBoardGapMs = opts.boardThrottleMs || 85;
+    const ch = {
+      label: 'foxmod-relay',
+      readyState: 'open',
+      onopen: null,
+      onmessage: null,
+      onclose: null,
+      send(rawStr) {
+        if (closed || ch.readyState !== 'open') return;
+        const text = typeof rawStr === 'string' ? rawStr : JSON.stringify(rawStr);
+        if (text.indexOf('"type":"peer_board"') !== -1 || text.indexOf('"type":"board_state"') !== -1) {
+          const now = Date.now();
+          if (now - lastBoardSentAt < minBoardGapMs) return;
+          lastBoardSentAt = now;
+        }
+        txSeq += 1;
+        opts.publishPacket({
+          kind: 'dc',
+          roomCode: opts.roomCode,
+          peerId: opts.peerId,
+          from: opts.from,
+          to: opts.to,
+          seq: txSeq,
+          data: text
+        });
+      },
+      close() {
+        if (closed) return;
+        closed = true;
+        ch.readyState = 'closed';
+        if (typeof opts.onLocalClose === 'function') opts.onLocalClose();
+        if (typeof ch.onclose === 'function') ch.onclose();
+      }
+    };
+    return ch;
   }
 
   function pickAttackTarget(players, senderId, rngSeed) {
@@ -645,6 +741,10 @@
 
     const connections = new Map();
     const pendingOffers = new Map();
+    const cachedOffersByClient = new Map();
+    const pendingIceByPeer = new Map();
+    const relayChannels = new Map();
+    const isDupRelay = createRelayPacketDeduper(500);
     const announcedPeers = new Set();
     const seenEventIds = new Set();
     const seenClientReqs = new Set();
@@ -1069,14 +1169,17 @@
       };
     }
 
-    async function createInvite(label) {
+    async function createInvite(label, trickleOpts) {
       const peerId = 'p' + nextPeerSeq++;
       const pc = createDefaultPeerConnection(rtcFactory);
       const channel = pc.createDataChannel('foxmod-room', { ordered: true });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await waitForIceGathering(pc, 2200);
-      pendingOffers.set(peerId, { pc, channel, label: label || peerId });
+      const onTrickle = trickleOpts && typeof trickleOpts.onTrickleCandidate === 'function'
+        ? (cand) => trickleOpts.onTrickleCandidate(peerId, cand)
+        : null;
+      await waitForIceGathering(pc, 3000, onTrickle);
+      pendingOffers.set(peerId, { pc, channel, label: label || peerId, clientId: trickleOpts && trickleOpts.clientId });
       notify('invite_created', { peerId });
       return {
         peerId,
@@ -1114,6 +1217,15 @@
       const initialName = decoded.name || (entry.label !== targetPeerId ? entry.label : '');
       attachPeerChannel(targetPeerId, entry.pc, entry.channel, initialName);
       await entry.pc.setRemoteDescription(decoded.sdp);
+      const queuedIce = pendingIceByPeer.get(targetPeerId);
+      if (queuedIce && queuedIce.length > 0 && typeof entry.pc.addIceCandidate === 'function') {
+        pendingIceByPeer.delete(targetPeerId);
+        for (const cand of queuedIce) {
+          try {
+            await entry.pc.addIceCandidate(cand);
+          } catch (_) {}
+        }
+      }
       notify('peer_accepted', { peerId: targetPeerId });
       return targetPeerId;
     }
@@ -1264,22 +1376,152 @@
       if (closed || !msg || typeof msg !== 'object') return;
       if (msg.roomCode && normalizeRoomCode(msg.roomCode) !== room.roomCode) return;
 
-      if (msg.kind === 'join_req' && msg.clientId && !seenClientReqs.has(msg.clientId)) {
+      if (msg.kind === 'join_req' && msg.clientId) {
+        if (cachedOffersByClient.has(msg.clientId)) {
+          const cached = cachedOffersByClient.get(msg.clientId);
+          const existingConn = cached && connections.get(cached.peerId);
+          if (cached && (!existingConn || !existingConn.openedAt)) {
+            await replyFn(cached);
+          }
+          return;
+        }
+        if (seenClientReqs.has(msg.clientId)) return;
         seenClientReqs.add(msg.clientId);
-        const invite = await createInvite(msg.name || 'PLAYER');
-        await replyFn({
-          kind: 'offer',
-          roomCode: room.roomCode,
-          to: msg.clientId,
-          peerId: invite.peerId,
-          roomName: room.roomName,
-          hostName,
-          offer: invite.code
-        });
+        try {
+          const invite = await createInvite(msg.name || 'PLAYER', {
+            clientId: msg.clientId,
+            onTrickleCandidate(pId, cand) {
+              if (closed || !cand) return;
+              const conn = connections.get(pId);
+              if (conn && conn.openedAt) return;
+              replyFn({
+                kind: 'ice',
+                roomCode: room.roomCode,
+                peerId: pId,
+                to: msg.clientId,
+                from: 'host',
+                candidate: safeSerializeCandidate(cand)
+              });
+            }
+          });
+          const envelope = {
+            kind: 'offer',
+            roomCode: room.roomCode,
+            to: msg.clientId,
+            peerId: invite.peerId,
+            roomName: room.roomName,
+            hostName,
+            offer: invite.code
+          };
+          cachedOffersByClient.set(msg.clientId, envelope);
+          await replyFn(envelope);
+        } catch (_) {
+          seenClientReqs.delete(msg.clientId);
+          await replyFn({
+            kind: 'offer_relay',
+            roomCode: room.roomCode,
+            to: msg.clientId,
+            peerId: 'p' + nextPeerSeq++,
+            roomName: room.roomName,
+            hostName
+          });
+        }
       } else if (msg.kind === 'answer' && msg.peerId && msg.answer && !seenAnswerPeerIds.has(msg.peerId)) {
         if (!pendingOffers.has(msg.peerId)) return;
         seenAnswerPeerIds.add(msg.peerId);
         await acceptAnswer(msg.peerId, msg.answer);
+      } else if (msg.kind === 'ice' && msg.from !== 'host' && msg.peerId && msg.candidate) {
+        const pend = pendingOffers.get(msg.peerId);
+        const conn = connections.get(msg.peerId);
+        const targetPc = (conn && conn.pc) || (pend && pend.pc);
+        if (targetPc && targetPc.remoteDescription && typeof targetPc.addIceCandidate === 'function') {
+          try {
+            await targetPc.addIceCandidate(msg.candidate);
+          } catch (_) {}
+        } else if (targetPc) {
+          if (!pendingIceByPeer.has(msg.peerId)) pendingIceByPeer.set(msg.peerId, []);
+          pendingIceByPeer.get(msg.peerId).push(msg.candidate);
+        }
+      } else if (msg.kind === 'relay_open' && msg.clientId) {
+        const targetPeerId = msg.peerId || ('p' + nextPeerSeq++);
+        const existingRelay = relayChannels.get(targetPeerId);
+        if (existingRelay && existingRelay.clientId === msg.clientId) {
+          await replyFn({
+            kind: 'relay_ack',
+            roomCode: room.roomCode,
+            peerId: targetPeerId,
+            to: msg.clientId
+          });
+          return;
+        }
+        // Detach stalled WebRTC resources silently before binding the relay channel.
+        const pend = pendingOffers.get(targetPeerId);
+        if (pend) {
+          pendingOffers.delete(targetPeerId);
+          try {
+            if (pend.pc) {
+              pend.pc.onicecandidate = null;
+              pend.pc.onicegatheringstatechange = null;
+              pend.pc.onconnectionstatechange = null;
+              pend.pc.oniceconnectionstatechange = null;
+              if (typeof pend.pc.close === 'function') pend.pc.close();
+            }
+          } catch (_) {}
+        }
+        const staleConn = connections.get(targetPeerId);
+        if (staleConn) {
+          connections.delete(targetPeerId);
+          try {
+            if (staleConn.channel) {
+              staleConn.channel.onclose = null;
+              staleConn.channel.onopen = null;
+              staleConn.channel.onmessage = null;
+              if (typeof staleConn.channel.close === 'function') staleConn.channel.close();
+            }
+            if (staleConn.pc) {
+              staleConn.pc.onicecandidate = null;
+              staleConn.pc.onconnectionstatechange = null;
+              staleConn.pc.oniceconnectionstatechange = null;
+              if (typeof staleConn.pc.close === 'function') staleConn.pc.close();
+            }
+          } catch (_) {}
+        }
+        pendingIceByPeer.delete(targetPeerId);
+        const rCh = createVirtualRelayChannel({
+          roomCode: room.roomCode,
+          peerId: targetPeerId,
+          from: 'host',
+          to: msg.clientId,
+          publishPacket: (pkt) => replyFn(pkt),
+          onLocalClose: () => {
+            relayChannels.delete(targetPeerId);
+            if (!closed) {
+              replyFn({ kind: 'relay_close', roomCode: room.roomCode, peerId: targetPeerId, from: 'host', to: msg.clientId });
+            }
+          }
+        });
+        relayChannels.set(targetPeerId, { ch: rCh, clientId: msg.clientId });
+        attachPeerChannel(targetPeerId, null, rCh, msg.name || 'PLAYER');
+        if (typeof rCh.onopen === 'function') rCh.onopen();
+        await replyFn({
+          kind: 'relay_ack',
+          roomCode: room.roomCode,
+          peerId: targetPeerId,
+          to: msg.clientId
+        });
+      } else if (msg.kind === 'dc' && msg.from !== 'host' && msg.peerId && typeof msg.data === 'string') {
+        const rEntry = relayChannels.get(msg.peerId);
+        if (!rEntry || (rEntry.clientId && msg.from && rEntry.clientId !== msg.from)) return;
+        if (isDupRelay(`${msg.peerId}:${msg.from}:${msg.seq}`)) return;
+        if (rEntry.ch && typeof rEntry.ch.onmessage === 'function') {
+          rEntry.ch.onmessage({ data: msg.data });
+        }
+      } else if (msg.kind === 'relay_close' && msg.from !== 'host' && msg.peerId) {
+        const rEntry = relayChannels.get(msg.peerId);
+        if (rEntry && (!rEntry.clientId || !msg.from || rEntry.clientId === msg.from)) {
+          relayChannels.delete(msg.peerId);
+          handlePeerDisconnect(msg.peerId, 'left the room');
+        }
       }
     }
 
@@ -1371,10 +1613,8 @@
       closed = true;
       clearBlitzTimer();
       stopHostHeartbeat();
-      if (signalBus) {
-        signalBus.close();
-        signalBus = null;
-      }
+      const busToClose = signalBus;
+      signalBus = null;
       if (pollTimer) {
         clearTimeout(pollTimer);
         pollTimer = null;
@@ -1385,6 +1625,9 @@
         } catch (_) {}
       }
       pendingOffers.clear();
+      cachedOffersByClient.clear();
+      pendingIceByPeer.clear();
+      relayChannels.clear();
       const connsToClose = Array.from(connections.values());
       connections.clear();
       listeners.clear();
@@ -1398,13 +1641,16 @@
                 conn.pc.onconnectionstatechange = null;
                 conn.pc.oniceconnectionstatechange = null;
               }
-              conn.channel.close();
-              conn.pc.close();
+              if (conn.channel && typeof conn.channel.close === 'function') conn.channel.close();
+              if (conn.pc && typeof conn.pc.close === 'function') conn.pc.close();
             } catch (_) {}
           }
+          if (busToClose) busToClose.close();
         };
-        // Allow queued host_closing frame to flush before tearing down SCTP/channels.
+        // Allow queued host_closing frame (WebRTC or WS relay) to flush before tearing down sockets.
         unrefIfPossible(setTimeout(closeSockets, 25));
+      } else if (busToClose) {
+        busToClose.close();
       }
     }
 
@@ -1455,6 +1701,10 @@
     const fetchFn = resolveFetch(opts);
     const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 650);
     const joinTimeoutMs = Math.max(500, Number(opts.joinTimeoutMs) || 15000);
+    const relayFallbackDelayMs = Number.isFinite(Number(opts.relayFallbackDelayMs))
+      ? Math.max(200, Number(opts.relayFallbackDelayMs))
+      : 3600;
+    const allowWsRelay = opts.wsRelay !== false;
     const heartbeatIntervalMs = Math.max(25, Number(opts.heartbeatIntervalMs) || 2500);
     const heartbeatTimeoutMs = Math.max(60, Number(opts.heartbeatTimeoutMs) || 8000);
     let roomAutoSignaling = Boolean(opts.autoSignaling !== false && (wsFactory || fetchFn));
@@ -1469,6 +1719,11 @@
     let closed = false;
     let hostLostHandled = false;
     let activeSignalBus = null;
+    let usingRelay = false;
+    let activeRelayPeerId = null;
+    let activeClientId = null;
+    let relayRetryTimer = null;
+    let relayFallbackTimer = null;
     let clientHeartbeatTimer = null;
     let lastHostSeenAt = 0;
     let room = {
@@ -1663,7 +1918,8 @@
       }
     }
 
-    async function joinFromInvite(inviteCode) {
+    async function joinFromInvite(inviteCode, inviteHooks) {
+      const hooks = inviteHooks && typeof inviteHooks === 'object' ? inviteHooks : {};
       const decoded = await decodeSignal(inviteCode);
       if (!decoded || !decoded.sdp || decoded.sdp.type !== 'offer') {
         throw new Error('Invalid invite code. Expected a host FOX1/FOX0 offer.');
@@ -1676,20 +1932,36 @@
       }
       pc = createDefaultPeerConnection(rtcFactory);
       pc.onconnectionstatechange = () => {
-        if (connected && pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) {
+        if (connected && !usingRelay && pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) {
           handleHostLost(null);
+        } else if (!connected && !usingRelay && pc && pc.connectionState === 'failed' && hooks.onWebRtcFailed) {
+          hooks.onWebRtcFailed('Connection failed');
         }
       };
       pc.oniceconnectionstatechange = () => {
-        if (!connected && pc && pc.iceConnectionState === 'failed') {
-          notify('webrtc_failed', { reason: 'ICE failed (strict NAT or firewall)' });
-        } else if (connected && pc && (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed')) {
+        if (!connected && !usingRelay && pc && pc.iceConnectionState === 'failed') {
+          if (hooks.onWebRtcFailed) {
+            hooks.onWebRtcFailed('ICE failed (strict NAT or firewall)');
+          } else {
+            notify('webrtc_failed', { reason: 'ICE failed (strict NAT or firewall)' });
+          }
+        } else if (connected && !usingRelay && pc && (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed')) {
           handleHostLost(null);
         }
       };
       pc.ondatachannel = (ev) => {
+        if (usingRelay || closed) return;
         channel = ev.channel;
         channel.onopen = () => {
+          if (usingRelay || closed) return;
+          if (relayFallbackTimer) {
+            clearTimeout(relayFallbackTimer);
+            relayFallbackTimer = null;
+          }
+          if (relayRetryTimer) {
+            clearInterval(relayRetryTimer);
+            relayRetryTimer = null;
+          }
           connected = true;
           lastHostSeenAt = Date.now();
           if (activeSignalBus) {
@@ -1710,7 +1982,7 @@
             if (
               !channel ||
               channel.readyState === 'closed' ||
-              (pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) ||
+              (!usingRelay && pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) ||
               Date.now() - lastHostSeenAt > heartbeatTimeoutMs
             ) {
               handleHostLost(null);
@@ -1723,9 +1995,21 @@
         };
       };
       await pc.setRemoteDescription(decoded.sdp);
+      if (Array.isArray(hooks.queuedIce) && typeof pc.addIceCandidate === 'function') {
+        while (hooks.queuedIce.length > 0) {
+          const cand = hooks.queuedIce.shift();
+          try {
+            await pc.addIceCandidate(cand);
+          } catch (_) {}
+        }
+      }
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await waitForIceGathering(pc, 2200);
+      await waitForIceGathering(
+        pc,
+        3000,
+        typeof hooks.onTrickleCandidate === 'function' ? hooks.onTrickleCandidate : null
+      );
       return await encodeSignal({
         role: 'answer',
         peerId: decoded.peerId || null,
@@ -1739,15 +2023,29 @@
         activeSignalBus.close();
         activeSignalBus = null;
       }
+      if (relayFallbackTimer) {
+        clearTimeout(relayFallbackTimer);
+        relayFallbackTimer = null;
+      }
+      if (relayRetryTimer) {
+        clearInterval(relayRetryTimer);
+        relayRetryTimer = null;
+      }
+      activeClientId = clientId;
       let offerResolve = null;
       let offerReject = null;
       let offerSettled = false;
+      let lastAnswerEnvelope = null;
+      let targetPeerId = null;
+      const queuedHostIce = [];
+      const isDupRelay = createRelayPacketDeduper(500);
+      const reqPayload = { kind: 'join_req', roomCode: code, clientId, name: playerName };
 
       const finishOffer = (fn, arg) => {
         if (offerSettled) return;
         offerSettled = true;
         clearTimeout(overallTimer);
-        clearTimeout(retryTimer);
+        if (retryTimer) clearInterval(retryTimer);
         fn(arg);
       };
 
@@ -1756,13 +2054,133 @@
         offerReject = reject;
       });
 
+      function activateRelayTransport(peerIdForRelay) {
+        if (closed || connected || usingRelay || !allowWsRelay) return;
+        if (relayFallbackTimer) {
+          clearTimeout(relayFallbackTimer);
+          relayFallbackTimer = null;
+        }
+        usingRelay = true;
+        activeRelayPeerId = peerIdForRelay || targetPeerId || null;
+
+        // Cleanly silence failed/pending WebRTC handlers before swapping channel.
+        if (channel) {
+          try {
+            channel.onopen = null;
+            channel.onmessage = null;
+            channel.onclose = null;
+            if (channel.readyState !== 'closed') channel.close();
+          } catch (_) {}
+        }
+        if (pc) {
+          try {
+            pc.onicecandidate = null;
+            pc.onicegatheringstatechange = null;
+            pc.onconnectionstatechange = null;
+            pc.oniceconnectionstatechange = null;
+            pc.ondatachannel = null;
+            if (typeof pc.close === 'function') pc.close();
+          } catch (_) {}
+        }
+
+        const rCh = createVirtualRelayChannel({
+          roomCode: code,
+          peerId: activeRelayPeerId || clientId,
+          from: clientId,
+          to: 'host',
+          publishPacket: (pkt) => {
+            if (activeSignalBus) {
+              pkt.peerId = activeRelayPeerId || pkt.peerId;
+              activeSignalBus.publish(pkt);
+            }
+          }
+        });
+        channel = rCh;
+        notify('relay_fallback', { roomCode: code });
+
+        const openReq = {
+          kind: 'relay_open',
+          roomCode: code,
+          peerId: activeRelayPeerId,
+          clientId,
+          name: playerName
+        };
+        if (activeSignalBus) activeSignalBus.publish(openReq);
+        let tries = 0;
+        relayRetryTimer = unrefIfPossible(setInterval(() => {
+          tries += 1;
+          if (closed || connected || tries > 8) {
+            clearInterval(relayRetryTimer);
+            relayRetryTimer = null;
+            return;
+          }
+          if (activeSignalBus) activeSignalBus.publish(openReq);
+        }, 1200));
+      }
+
       const bus = createMultiBrokerSignalBus({
         roomCode: code,
         brokers: opts.brokers,
         wsFactory,
+        onBrokerReady(cli) {
+          if (closed) return;
+          if (!offerSettled) {
+            cli.publish(reqPayload);
+          } else if (lastAnswerEnvelope && !connected && !usingRelay) {
+            cli.publish(lastAnswerEnvelope);
+          } else if (usingRelay && !connected) {
+            cli.publish({ kind: 'relay_open', roomCode: code, peerId: activeRelayPeerId, clientId, name: playerName });
+          }
+        },
         onMessage(msg) {
-          if (!msg || msg.kind !== 'offer' || msg.to !== clientId || !msg.offer) return;
-          finishOffer(offerResolve, msg);
+          if (!msg || typeof msg !== 'object') return;
+          if (msg.kind === 'offer' && msg.to === clientId && msg.offer) {
+            finishOffer(offerResolve, msg);
+          } else if (msg.kind === 'offer_relay' && msg.to === clientId) {
+            finishOffer(offerResolve, msg);
+          } else if (msg.kind === 'ice' && msg.from === 'host' && (!msg.to || msg.to === clientId) && msg.candidate) {
+            if (!usingRelay && pc && pc.remoteDescription && typeof pc.addIceCandidate === 'function') {
+              try {
+                pc.addIceCandidate(msg.candidate);
+              } catch (_) {}
+            } else {
+              queuedHostIce.push(msg.candidate);
+            }
+          } else if (msg.kind === 'relay_ack' && msg.to === clientId) {
+            if (!usingRelay || connected || closed) return;
+            if (msg.peerId) activeRelayPeerId = msg.peerId;
+            if (relayRetryTimer) {
+              clearInterval(relayRetryTimer);
+              relayRetryTimer = null;
+            }
+            connected = true;
+            lastHostSeenAt = Date.now();
+            send({ type: 'hello', name: playerName });
+            if (spectator) {
+              send({ type: 'spectator', spectator: true });
+            }
+            notify('connected');
+            stopClientHeartbeat();
+            clientHeartbeatTimer = unrefIfPossible(setInterval(() => {
+              if (closed || !connected) {
+                stopClientHeartbeat();
+                return;
+              }
+              if (!channel || channel.readyState === 'closed' || Date.now() - lastHostSeenAt > heartbeatTimeoutMs) {
+                handleHostLost(null);
+              }
+            }, heartbeatIntervalMs));
+          } else if (msg.kind === 'dc' && msg.from === 'host' && typeof msg.data === 'string') {
+            if (!usingRelay) return;
+            if (msg.to && msg.to !== clientId) return;
+            if (activeRelayPeerId && msg.peerId && msg.peerId !== activeRelayPeerId) return;
+            if (isDupRelay(`${msg.peerId}:host:${msg.seq}`)) return;
+            handleServerMessage(msg.data);
+          } else if (msg.kind === 'relay_close' && msg.from === 'host') {
+            if (!usingRelay) return;
+            if (msg.to && msg.to !== clientId) return;
+            handleHostLost(null);
+          }
         },
         onOffline() {
           finishOffer(offerReject, new Error('Signaling relay unavailable. Try MANUAL P2P FALLBACK.'));
@@ -1770,9 +2188,9 @@
       });
       activeSignalBus = bus;
 
-      const overallTimer = setTimeout(() => {
+      const overallTimer = unrefIfPossible(setTimeout(() => {
         finishOffer(offerReject, new Error(`Room #${code} did not respond. Verify the Host room is open or use MANUAL P2P FALLBACK.`));
-      }, joinTimeoutMs);
+      }, joinTimeoutMs));
 
       let retryTimer = null;
       const relayOk = await bus.waitUntilReady(6000);
@@ -1783,11 +2201,10 @@
       if (!relayOk) {
         finishOffer(offerReject, new Error('Could not connect to signaling relay. Use MANUAL P2P FALLBACK.'));
       } else {
-        const reqPayload = { kind: 'join_req', roomCode: code, clientId, name: playerName };
         bus.publish(reqPayload);
-        retryTimer = setTimeout(() => {
+        retryTimer = unrefIfPossible(setInterval(() => {
           if (!closed && !offerSettled) bus.publish(reqPayload);
-        }, 2500);
+        }, 2200));
       }
 
       let offerMsg;
@@ -1801,17 +2218,74 @@
         throw err;
       }
 
+      targetPeerId = offerMsg.peerId;
       if (offerMsg.roomName) room.roomName = offerMsg.roomName;
       notify('exchanging_sdp', { roomCode: code, roomName: room.roomName });
-      const answerCode = await joinFromInvite(offerMsg.offer);
-      bus.publish({
+
+      if (offerMsg.kind === 'offer_relay' || !offerMsg.offer) {
+        activateRelayTransport(offerMsg.peerId);
+        return {
+          mode: 'relay',
+          roomCode: code,
+          roomName: room.roomName,
+          peerId: offerMsg.peerId
+        };
+      }
+
+      let answerCode;
+      try {
+        answerCode = await joinFromInvite(offerMsg.offer, {
+          queuedIce: queuedHostIce,
+          onTrickleCandidate(cand) {
+            if (!closed && !usingRelay && activeSignalBus === bus) {
+              bus.publish({
+                kind: 'ice',
+                roomCode: code,
+                peerId: offerMsg.peerId,
+                from: clientId,
+                candidate: safeSerializeCandidate(cand)
+              });
+            }
+          },
+          onWebRtcFailed(reason) {
+            if (allowWsRelay) {
+              activateRelayTransport(offerMsg.peerId);
+            } else {
+              notify('webrtc_failed', { reason });
+            }
+          }
+        });
+      } catch (rtcErr) {
+        if (allowWsRelay) {
+          activateRelayTransport(offerMsg.peerId);
+          return {
+            mode: 'relay',
+            roomCode: code,
+            roomName: room.roomName,
+            peerId: offerMsg.peerId
+          };
+        }
+        throw rtcErr;
+      }
+
+      lastAnswerEnvelope = {
         kind: 'answer',
         roomCode: code,
         peerId: offerMsg.peerId,
         clientId,
         name: playerName,
         answer: answerCode
-      });
+      };
+      bus.publish(lastAnswerEnvelope);
+
+      if (allowWsRelay && !connected && !closed && !usingRelay) {
+        relayFallbackTimer = unrefIfPossible(setTimeout(() => {
+          if (!closed && !connected && !usingRelay) {
+            activateRelayTransport(offerMsg.peerId);
+          }
+        }, relayFallbackDelayMs));
+      }
+
       return {
         mode: 'auto',
         roomCode: code,
@@ -1901,14 +2375,35 @@
 
     function close() {
       if (closed) return;
+      if (relayFallbackTimer) {
+        clearTimeout(relayFallbackTimer);
+        relayFallbackTimer = null;
+      }
+      if (relayRetryTimer) {
+        clearInterval(relayRetryTimer);
+        relayRetryTimer = null;
+      }
       if (connected && channel && channel.readyState === 'open') {
         send({ type: 'leave' });
+      }
+      if (usingRelay && activeSignalBus && activeRelayPeerId) {
+        activeSignalBus.publish({
+          kind: 'relay_close',
+          roomCode: room.roomCode,
+          peerId: activeRelayPeerId,
+          from: activeClientId || activeRelayPeerId
+        });
       }
       closed = true;
       stopClientHeartbeat();
       if (activeSignalBus) {
-        activeSignalBus.close();
+        const busRef = activeSignalBus;
         activeSignalBus = null;
+        if (usingRelay && connected) {
+          unrefIfPossible(setTimeout(() => busRef.close(), 25));
+        } else {
+          busRef.close();
+        }
       }
       if (channel) {
         try {
