@@ -44,6 +44,7 @@
   }
 
   function resolveWsFactory(opts) {
+    if (opts && opts.autoSignaling === false) return null;
     if (opts && typeof opts.wsFactory === 'function') return opts.wsFactory;
     if (!opts || !opts.fetchFn) {
       if (typeof root.WebSocket === 'function') {
@@ -551,6 +552,25 @@
     return candidates[idx];
   }
 
+  function selectNextHostCandidate(playerList) {
+    if (!Array.isArray(playerList)) return null;
+    let fallbackSpec = null;
+    for (let i = 0; i < playerList.length; i++) {
+      const p = playerList[i];
+      if (!p || p.isHost || p.disconnected) continue;
+      if (!p.spectator) return p;
+      if (!fallbackSpec) fallbackSpec = p;
+    }
+    return fallbackSpec;
+  }
+
+  function unrefIfPossible(timer) {
+    if (timer && typeof timer.unref === 'function') {
+      timer.unref();
+    }
+    return timer;
+  }
+
   /**
    * Creates a P2P Room Host where the creator's browser acts as the authoritative
    * room server for connected WebRTC peers.
@@ -570,19 +590,33 @@
     );
     const shouldAutoSignal = shouldAutoSignalWs || shouldAutoSignalFetch;
     const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 950);
+    const heartbeatIntervalMs = Math.max(25, Number(opts.heartbeatIntervalMs) || 2500);
+    const heartbeatTimeoutMs = Math.max(60, Number(opts.heartbeatTimeoutMs) || 7000);
     const hostName = String(opts.hostName || 'HOST').trim().slice(0, 20) || 'HOST';
     const roomCode = normalizeRoomCode(opts.roomCode) || generateRoomCode(4);
+    const initSet =
+      opts.pieceSet === 'pentomino' || opts.pieceSet === 'tetromino' || opts.pieceSet === 'chaos'
+        ? opts.pieceSet
+        : 'tetromino';
+    const initMode = opts.gameMode === 'blitz' ? 'blitz' : 'vs';
+    const initMult = Number.isFinite(Number(opts.garbageMultiplier))
+      ? Math.max(0, Math.min(4, Number(opts.garbageMultiplier)))
+      : 1;
+    const initGrav = Number.isFinite(Number(opts.gravityLevel))
+      ? Math.max(1, Math.min(10, Math.floor(Number(opts.gravityLevel))))
+      : 1;
+    const initRound = Number.isFinite(Number(opts.round)) && Number(opts.round) >= 0 ? Math.floor(Number(opts.round)) : 0;
 
     const room = {
       roomCode,
       roomName: String(opts.roomName || (hostName + "'S FOXROOM")).slice(0, 32),
-      pieceSet: 'tetromino',
-      gameMode: 'vs',
+      pieceSet: initSet,
+      gameMode: initMode,
       blitzDurationMs: Math.max(5000, Number(opts.blitzDurationMs) || 120000),
-      garbageMultiplier: 1,
-      gravityLevel: 1,
+      garbageMultiplier: initMult,
+      gravityLevel: initGrav,
       status: 'lobby',
-      round: 0,
+      round: initRound,
       winner: null,
       lastResults: null
     };
@@ -615,7 +649,13 @@
     const seenEventIds = new Set();
     const seenClientReqs = new Set();
     const seenAnswerPeerIds = new Set();
-    const chat = [];
+    const chat = Array.isArray(opts.chat)
+      ? opts.chat.slice(-40).map((c) => ({
+          author: String((c && c.author) || 'SYS'),
+          text: String((c && c.text) || ''),
+          system: Boolean(c && c.system)
+        }))
+      : [];
     const listeners = new Set();
     let nextPeerSeq = 2;
     let attackNonce = 1;
@@ -626,6 +666,7 @@
     let signalBus = null;
     let pollTimer = null;
     let blitzTimer = null;
+    let heartbeatTimer = null;
     let closed = false;
 
     function getSnapshot() {
@@ -774,7 +815,8 @@
       }
 
       const alivePlayers = activePlayers.filter((p) => p.alive);
-      if (activePlayers.length >= 2 && alivePlayers.length <= 1) {
+      const totalParticipants = activePlayers.length + roundDisconnected.length;
+      if (totalParticipants >= 2 && alivePlayers.length <= 1) {
         finalizeRound(alivePlayers[0] || null);
       } else if (activePlayers.length === 1 && alivePlayers.length === 0) {
         finalizeRound(activePlayers[0] || players.get('host') || null);
@@ -809,10 +851,17 @@
         return;
       }
       if (!msg || typeof msg.type !== 'string') return;
+      const conn = connections.get(peerId);
+      if (conn) conn.lastSeenAt = Date.now();
       const player = players.get(peerId);
       if (!player) return;
 
       switch (msg.type) {
+        case 'pong':
+          break;
+        case 'leave':
+          handlePeerDisconnect(peerId, 'left the room');
+          break;
         case 'hello':
           player.name = String(msg.name || player.name).trim().slice(0, 20) || player.name;
           if (!announcedPeers.has(peerId)) {
@@ -883,11 +932,111 @@
       }
     }
 
+    function stopHostHeartbeat() {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+    }
+
+    function ensureHostHeartbeat() {
+      if (closed || heartbeatTimer || connections.size === 0) return;
+      heartbeatTimer = unrefIfPossible(setInterval(() => {
+        if (closed || connections.size === 0) {
+          stopHostHeartbeat();
+          return;
+        }
+        const now = Date.now();
+        for (const [pid, conn] of Array.from(connections.entries())) {
+          if (!conn.channel || conn.channel.readyState === 'closed') {
+            handlePeerDisconnect(pid, 'disconnected');
+            continue;
+          }
+          if (conn.openedAt && now - conn.lastSeenAt > heartbeatTimeoutMs) {
+            handlePeerDisconnect(pid, 'timed out');
+            continue;
+          }
+          const cState = conn.pc && conn.pc.connectionState;
+          const iState = conn.pc && conn.pc.iceConnectionState;
+          if (cState === 'failed' || cState === 'closed' || iState === 'failed' || iState === 'closed') {
+            handlePeerDisconnect(pid, 'disconnected');
+            continue;
+          }
+          if (conn.channel.readyState === 'open') {
+            sendToPeer(pid, { type: 'ping', ts: now });
+          }
+        }
+      }, heartbeatIntervalMs));
+    }
+
+    function handlePeerDisconnect(peerId, reasonText) {
+      if (closed) return;
+      const conn = connections.get(peerId);
+      const left = players.get(peerId);
+      if (!conn && !left) return;
+
+      connections.delete(peerId);
+      players.delete(peerId);
+      announcedPeers.delete(peerId);
+      if (connections.size === 0) {
+        stopHostHeartbeat();
+      }
+      if (conn) {
+        try {
+          if (conn.channel) conn.channel.onclose = null;
+          if (conn.pc) {
+            conn.pc.onconnectionstatechange = null;
+            conn.pc.oniceconnectionstatechange = null;
+          }
+          if (conn.channel && conn.channel.readyState !== 'closed') conn.channel.close();
+          if (conn.pc && typeof conn.pc.close === 'function') conn.pc.close();
+        } catch (_) {}
+      }
+
+      if (left && !left.spectator && room.status === 'playing') {
+        const snapshotLeft = { ...left, disconnected: true };
+        if (snapshotLeft.alive) {
+          snapshotLeft.alive = false;
+          snapshotLeft.finished = true;
+          eliminationSeq += 1;
+          snapshotLeft.koOrder = eliminationSeq;
+          snapshotLeft.eliminatedAt = Date.now();
+        }
+        roundDisconnected.push(snapshotLeft);
+      }
+
+      if (left) {
+        pushChat('SYS', `${left.name} ${reasonText || 'disconnected'}.`, true);
+      } else {
+        broadcastRoomState();
+      }
+      evaluateRoundEnd();
+    }
+
     function attachPeerChannel(peerId, pc, channel, initialName) {
       const cleanedInitial = initialName ? String(initialName).trim().slice(0, 20) : '';
       const slotName = cleanedInitial || ('PLAYER ' + peerId.slice(1));
-      connections.set(peerId, { pc, channel });
+      const connEntry = { pc, channel, openedAt: 0, lastSeenAt: Date.now() };
+      connections.set(peerId, connEntry);
+
+      const handleStateCheck = () => {
+        if (closed || !connections.has(peerId)) return;
+        const cState = pc && pc.connectionState;
+        const iState = pc && pc.iceConnectionState;
+        if (cState === 'failed' || cState === 'closed' || iState === 'failed' || iState === 'closed') {
+          handlePeerDisconnect(peerId, 'disconnected');
+        } else if ((cState === 'disconnected' || iState === 'disconnected') && connEntry.openedAt) {
+          sendToPeer(peerId, { type: 'ping', ts: Date.now() });
+        }
+      };
+      if (pc) {
+        pc.onconnectionstatechange = handleStateCheck;
+        pc.oniceconnectionstatechange = handleStateCheck;
+      }
+
       channel.onopen = () => {
+        connEntry.openedAt = Date.now();
+        connEntry.lastSeenAt = connEntry.openedAt;
         if (!players.has(peerId)) {
           players.set(peerId, {
             id: peerId,
@@ -910,32 +1059,13 @@
             board: null
           });
         }
-        sendToPeer(peerId, { type: 'welcome', id: peerId });
+        sendToPeer(peerId, { type: 'welcome', id: peerId, autoSignaling: shouldAutoSignal });
         broadcastRoomState();
+        ensureHostHeartbeat();
       };
       channel.onmessage = (ev) => handlePeerMessage(peerId, ev && ev.data);
       channel.onclose = () => {
-        const left = players.get(peerId);
-        if (left && !left.spectator && room.status === 'playing') {
-          const snapshotLeft = { ...left, disconnected: true };
-          if (snapshotLeft.alive) {
-            snapshotLeft.alive = false;
-            snapshotLeft.finished = true;
-            eliminationSeq += 1;
-            snapshotLeft.koOrder = eliminationSeq;
-            snapshotLeft.eliminatedAt = Date.now();
-          }
-          roundDisconnected.push(snapshotLeft);
-        }
-        connections.delete(peerId);
-        players.delete(peerId);
-        announcedPeers.delete(peerId);
-        if (left) {
-          pushChat('SYS', `${left.name} disconnected.`, true);
-        } else {
-          broadcastRoomState();
-        }
-        evaluateRoundEnd();
+        handlePeerDisconnect(peerId, 'disconnected');
       };
     }
 
@@ -1213,8 +1343,34 @@
     }
 
     function close() {
+      if (closed) return;
+      const successor = selectNextHostCandidate(Array.from(players.values()));
+      const canMigrate = Boolean(successor && room.roomCode && (shouldAutoSignalWs || shouldAutoSignalFetch));
+      if (connections.size > 0) {
+        broadcast({
+          type: 'host_closing',
+          reason: canMigrate ? 'host_migrating' : 'host_left',
+          hostName,
+          roomCode: room.roomCode,
+          canMigrate,
+          successorId: successor ? successor.id : null,
+          successorName: successor ? successor.name : null,
+          snapshot: {
+            roomCode: room.roomCode,
+            roomName: room.roomName,
+            pieceSet: room.pieceSet,
+            gameMode: room.gameMode,
+            blitzDurationMs: room.blitzDurationMs,
+            garbageMultiplier: room.garbageMultiplier,
+            gravityLevel: room.gravityLevel,
+            round: room.round,
+            chat: chat.slice(-25)
+          }
+        });
+      }
       closed = true;
       clearBlitzTimer();
+      stopHostHeartbeat();
       if (signalBus) {
         signalBus.close();
         signalBus = null;
@@ -1229,14 +1385,27 @@
         } catch (_) {}
       }
       pendingOffers.clear();
-      for (const conn of connections.values()) {
-        try {
-          conn.channel.close();
-          conn.pc.close();
-        } catch (_) {}
-      }
+      const connsToClose = Array.from(connections.values());
       connections.clear();
       listeners.clear();
+
+      if (connsToClose.length > 0) {
+        const closeSockets = () => {
+          for (const conn of connsToClose) {
+            try {
+              if (conn.channel) conn.channel.onclose = null;
+              if (conn.pc) {
+                conn.pc.onconnectionstatechange = null;
+                conn.pc.oniceconnectionstatechange = null;
+              }
+              conn.channel.close();
+              conn.pc.close();
+            } catch (_) {}
+          }
+        };
+        // Allow queued host_closing frame to flush before tearing down SCTP/channels.
+        unrefIfPossible(setTimeout(closeSockets, 25));
+      }
     }
 
     function setSelfSpectator(val) {
@@ -1286,6 +1455,9 @@
     const fetchFn = resolveFetch(opts);
     const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 650);
     const joinTimeoutMs = Math.max(500, Number(opts.joinTimeoutMs) || 15000);
+    const heartbeatIntervalMs = Math.max(25, Number(opts.heartbeatIntervalMs) || 2500);
+    const heartbeatTimeoutMs = Math.max(60, Number(opts.heartbeatTimeoutMs) || 8000);
+    let roomAutoSignaling = Boolean(opts.autoSignaling !== false && (wsFactory || fetchFn));
     const playerName = String(opts.playerName || 'PLAYER').trim().slice(0, 20) || 'PLAYER';
 
     let pc = null;
@@ -1293,9 +1465,12 @@
     let selfId = null;
     let connected = false;
     let ready = true;
-    let spectator = false;
+    let spectator = Boolean(opts.spectator);
     let closed = false;
+    let hostLostHandled = false;
     let activeSignalBus = null;
+    let clientHeartbeatTimer = null;
+    let lastHostSeenAt = 0;
     let room = {
       roomCode: '',
       roomName: 'FOXMOD P2P ROOM',
@@ -1335,6 +1510,83 @@
       }
     }
 
+    function stopClientHeartbeat() {
+      if (clientHeartbeatTimer) {
+        clearInterval(clientHeartbeatTimer);
+        clientHeartbeatTimer = null;
+      }
+    }
+
+    function handleHostLost(hostCloseMsg) {
+      if (closed || hostLostHandled) return;
+      hostLostHandled = true;
+      stopClientHeartbeat();
+      const wasConnected = connected;
+      connected = false;
+
+      if (channel) {
+        try {
+          channel.onclose = null;
+          if (channel.readyState !== 'closed') channel.close();
+        } catch (_) {}
+      }
+      if (pc) {
+        try {
+          pc.onconnectionstatechange = null;
+          pc.oniceconnectionstatechange = null;
+          if (typeof pc.close === 'function') pc.close();
+        } catch (_) {}
+      }
+
+      const prevHost = players.find((p) => p && p.isHost);
+      const previousHostName = (hostCloseMsg && hostCloseMsg.hostName) || (prevHost && prevHost.name) || 'HOST';
+      const fallbackSuccessor = selectNextHostCandidate(players);
+      const successorId = hostCloseMsg ? hostCloseMsg.successorId : (fallbackSuccessor ? fallbackSuccessor.id : null);
+      const successorName = hostCloseMsg ? hostCloseMsg.successorName : (fallbackSuccessor ? fallbackSuccessor.name : null);
+      const canMigrate = hostCloseMsg
+        ? Boolean(hostCloseMsg.canMigrate && successorId && room.roomCode)
+        : Boolean(wasConnected && roomAutoSignaling && room.roomCode && successorId && selfId);
+
+      if (canMigrate) {
+        const baseSnap = (hostCloseMsg && hostCloseMsg.snapshot) || {
+          roomCode: room.roomCode,
+          roomName: room.roomName,
+          pieceSet: room.pieceSet,
+          gameMode: room.gameMode,
+          blitzDurationMs: room.blitzDurationMs,
+          garbageMultiplier: room.garbageMultiplier,
+          gravityLevel: room.gravityLevel,
+          round: room.round,
+          chat: chat.slice(-25)
+        };
+        room.status = 'migrating';
+        if (selfId && successorId === selfId) {
+          notify('host_migrate_self', {
+            ...baseSnap,
+            previousHostName,
+            successorId,
+            successorName: successorName || playerName
+          });
+        } else {
+          notify('host_migrating', {
+            ...baseSnap,
+            previousHostName,
+            successorId,
+            successorName
+          });
+        }
+        return;
+      }
+
+      room.status = 'disconnected';
+      notify('host_closed', {
+        reason: (hostCloseMsg && hostCloseMsg.reason) || 'host_left',
+        hostName: previousHostName,
+        roomCode: room.roomCode
+      });
+      notify('disconnected');
+    }
+
     function send(payload) {
       if (!channel || channel.readyState !== 'open') return;
       try {
@@ -1350,10 +1602,20 @@
         return;
       }
       if (!msg || typeof msg.type !== 'string') return;
+      lastHostSeenAt = Date.now();
 
       switch (msg.type) {
+        case 'ping':
+          send({ type: 'pong', ts: msg.ts || Date.now() });
+          break;
+        case 'host_closing':
+          handleHostLost(msg);
+          break;
         case 'welcome':
           selfId = msg.id;
+          if (msg.autoSignaling !== undefined) {
+            roomAutoSignaling = Boolean(msg.autoSignaling);
+          }
           notify('welcome', { id: selfId });
           break;
         case 'room_state':
@@ -1413,15 +1675,23 @@
         room.roomName = decoded.roomName;
       }
       pc = createDefaultPeerConnection(rtcFactory);
+      pc.onconnectionstatechange = () => {
+        if (connected && pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) {
+          handleHostLost(null);
+        }
+      };
       pc.oniceconnectionstatechange = () => {
         if (!connected && pc && pc.iceConnectionState === 'failed') {
           notify('webrtc_failed', { reason: 'ICE failed (strict NAT or firewall)' });
+        } else if (connected && pc && (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed')) {
+          handleHostLost(null);
         }
       };
       pc.ondatachannel = (ev) => {
         channel = ev.channel;
         channel.onopen = () => {
           connected = true;
+          lastHostSeenAt = Date.now();
           if (activeSignalBus) {
             activeSignalBus.close();
             activeSignalBus = null;
@@ -1431,12 +1701,25 @@
             send({ type: 'spectator', spectator: true });
           }
           notify('connected');
+          stopClientHeartbeat();
+          clientHeartbeatTimer = unrefIfPossible(setInterval(() => {
+            if (closed || !connected) {
+              stopClientHeartbeat();
+              return;
+            }
+            if (
+              !channel ||
+              channel.readyState === 'closed' ||
+              (pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) ||
+              Date.now() - lastHostSeenAt > heartbeatTimeoutMs
+            ) {
+              handleHostLost(null);
+            }
+          }, heartbeatIntervalMs));
         };
         channel.onmessage = (mEv) => handleServerMessage(mEv && mEv.data);
         channel.onclose = () => {
-          connected = false;
-          room.status = 'disconnected';
-          notify('disconnected');
+          handleHostLost(null);
         };
       };
       await pc.setRemoteDescription(decoded.sdp);
@@ -1617,18 +1900,26 @@
     }
 
     function close() {
+      if (closed) return;
+      if (connected && channel && channel.readyState === 'open') {
+        send({ type: 'leave' });
+      }
       closed = true;
+      stopClientHeartbeat();
       if (activeSignalBus) {
         activeSignalBus.close();
         activeSignalBus = null;
       }
       if (channel) {
         try {
+          channel.onclose = null;
           channel.close();
         } catch (_) {}
       }
       if (pc) {
         try {
+          pc.onconnectionstatechange = null;
+          pc.oniceconnectionstatechange = null;
           pc.close();
         } catch (_) {}
       }
@@ -1727,6 +2018,7 @@
     encodeSignal,
     decodeSignal,
     pickAttackTarget,
+    selectNextHostCandidate,
     buildRoundStandings,
     createHostServer,
     createClientPeer

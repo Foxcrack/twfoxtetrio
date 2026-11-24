@@ -2633,3 +2633,177 @@ test('foxmod mutual invite panel, PEOPLE button, 30s cooldown, in-room guard, an
     }
   }
 });
+
+test('foxmod_multi handles host_closed kick, host_migrate_self UI promotion, and beforeunload room flush', async () => {
+  const winListeners = new Map();
+  const rtcMap = new Map();
+  let rtcSeq = 1;
+  class LocalRtc {
+    constructor() {
+      this._id = 'uirtc-' + rtcSeq++;
+      this.iceGatheringState = 'complete';
+      this.localDescription = null;
+      this.remoteDescription = null;
+      this.ondatachannel = null;
+      this._pending = null;
+      rtcMap.set(this._id, this);
+    }
+    createDataChannel(label) {
+      const ch = { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null };
+      this._pending = ch;
+      return ch;
+    }
+    async createOffer() {
+      return { type: 'offer', sdp: 'v=0\r\nfrom=' + this._id };
+    }
+    async createAnswer() {
+      return { type: 'answer', sdp: 'v=0\r\nfrom=' + this._id };
+    }
+    async setLocalDescription(d) {
+      this.localDescription = d;
+    }
+    async setRemoteDescription(d) {
+      this.remoteDescription = d;
+      if (d && d.type === 'answer') {
+        const rem = rtcMap.get(String(d.sdp || '').split('from=')[1]);
+        const a = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+        const b = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+        a.send = (data) => b.onmessage && queueMicrotask(() => b.onmessage({ data }));
+        b.send = (data) => a.onmessage && queueMicrotask(() => a.onmessage({ data }));
+        a.close = () => {
+          a.readyState = 'closed';
+          b.readyState = 'closed';
+          if (a.onclose) a.onclose();
+          if (b.onclose) b.onclose();
+        };
+        b.close = a.close;
+        if (this._pending) {
+          a.onopen = this._pending.onopen;
+          a.onmessage = this._pending.onmessage;
+          a.onclose = this._pending.onclose;
+          this._pending.send = a.send;
+          this._pending.close = a.close;
+          Object.defineProperty(this._pending, 'readyState', { get: () => a.readyState });
+        }
+        if (rem && rem.ondatachannel) rem.ondatachannel({ channel: b });
+        if (a.onopen) a.onopen();
+        if (b.onopen) b.onopen();
+      }
+    }
+    close() {}
+  }
+
+  const env = createFakeDomEnvironment('https:', {
+    RTCPeerConnection: LocalRtc,
+    addEventListener(type, fn) {
+      if (!winListeners.has(type)) winListeners.set(type, []);
+      winListeners.get(type).push(fn);
+    }
+  });
+  const doc = env.context.document;
+  const FakeEl = env.elements.get('me_username').constructor;
+  env.elements.get('me_username').textContent = 'GuestFox';
+  const notifications = new FakeEl('div', 'notifications', '');
+  doc.body.appendChild(notifications);
+
+  env.triggerDOMContentLoaded();
+  await new Promise((r) => setTimeout(r, 15));
+
+  const p2pApi = env.context.__TWFOX_INTERNAL__.p2pRoom;
+
+  // 1. Manual host exits -> guest UI kicks back to foxmod & displays orange FOXMOD ROOM CLOSED notification
+  const manualHost = p2pApi.createHostServer({ hostName: 'HostBoss', rtcFactory: () => new LocalRtc(), autoSignaling: false });
+  const manInv = await manualHost.createInvite('GuestFox');
+
+  env.elements.get('twfoxtetrio-home-foxmod').click();
+  env.elements.get('twfoxtetrio-card-multi').click();
+  env.elements.get('twfoxtetrio-join-room-btn').click();
+  env.elements.get('twfoxtetrio-join-offer-input').value = manInv.code;
+  env.elements.get('twfoxtetrio-join-generate-btn').click();
+  await new Promise((r) => setTimeout(r, 25));
+
+  const replyCode = env.elements.get('twfoxtetrio-join-answer-output').value;
+  await manualHost.acceptAnswer(manInv.peerId, replyCode);
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
+
+  manualHost.close();
+  await new Promise((r) => setTimeout(r, 25));
+
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod');
+  assert.equal(doc.body.classList.contains('twfox-in-multi-room'), false);
+  const closedToast = notifications.querySelectorAll('.twfox-invite-notif').find(
+    (n) => n.getAttribute('data-fox-notice') === 'FOXMOD ROOM CLOSED'
+  );
+  assert.ok(closedToast, 'Client should receive orange FOXMOD ROOM CLOSED toast on host leave');
+  closedToast.querySelector('.notification_button').click();
+
+  // 2. Host rotates to GuestFox cleanly when host_migrate_self fires
+  const hostLobbySnap = p2pApi.createHostServer({ hostName: 'PrevHost', roomCode: 'R8K2', rtcFactory: () => new LocalRtc(), autoSignaling: false });
+  const rotInv = await hostLobbySnap.createInvite('GuestFox');
+  env.elements.get('twfoxtetrio-card-multi').click();
+  env.elements.get('twfoxtetrio-join-room-btn').click();
+  env.elements.get('twfoxtetrio-join-offer-input').value = rotInv.code;
+  env.elements.get('twfoxtetrio-join-generate-btn').click();
+  await new Promise((r) => setTimeout(r, 25));
+  const rotReply = env.elements.get('twfoxtetrio-join-answer-output').value;
+  await hostLobbySnap.acceptAnswer(rotInv.peerId, rotReply);
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
+
+  // Inject mock auto-signaling host_closing packet over open client channel (bypassing manual autoSignaling=false)
+  // Using fetch-based auto room to test real host_migrate_self end-to-end
+  hostLobbySnap.close();
+  await new Promise((r) => setTimeout(r, 20));
+
+  const topics = new Map();
+  let seq = 1;
+  async function mockFetch(url, init) {
+    const m = String(url).match(/\/(twfoxtetrio-v1-[A-Z0-9]+)/);
+    const topic = m ? m[1] : 'u';
+    if (!topics.has(topic)) topics.set(topic, []);
+    const list = topics.get(topic);
+    if (init && init.method === 'POST') {
+      list.push(JSON.stringify({ id: 'x' + seq++, event: 'message', topic, message: String(init.body || '') }));
+      return { ok: true, status: 200, text: async () => '' };
+    }
+    return { ok: true, status: 200, text: async () => list.join('\n') };
+  }
+  const origWs = env.context.WebSocket;
+  const origFetch = env.context.fetch;
+  const origCreateClient = p2pApi.createClientPeer;
+  p2pApi.createClientPeer = (o) => origCreateClient({ ...(o || {}), fetchFn: mockFetch, pollIntervalMs: 20, joinTimeoutMs: 2000 });
+
+  try {
+    const autoHost = p2pApi.createHostServer({ hostName: 'PrevAuto', roomCode: 'W4N7', rtcFactory: () => new LocalRtc(), fetchFn: mockFetch, pollIntervalMs: 20 });
+    env.elements.get('twfoxtetrio-card-multi').click();
+    env.elements.get('twfoxtetrio-join-room-btn').click();
+    env.elements.get('twfoxtetrio-join-offer-input').value = 'W4N7';
+    env.elements.get('twfoxtetrio-join-generate-btn').click();
+    await new Promise((r) => setTimeout(r, 80));
+
+    assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
+    assert.equal(env.elements.get('twfoxtetrio-lobby-invite-code').textContent, '#W4N7');
+    assert.equal(env.elements.get('twfoxtetrio-host-start-btn').classList.contains('hidden'), true);
+
+    // Original Host closes -> GuestFox automatically rotates to HOST preserving #W4N7!
+    autoHost.close();
+    await new Promise((r) => setTimeout(r, 40));
+
+    assert.equal(env.menus.getAttribute('data-menu-type'), 'foxmod_multi');
+    assert.equal(env.elements.get('twfoxtetrio-lobby-invite-code').textContent, '#W4N7');
+    assert.equal(env.elements.get('twfoxtetrio-host-start-btn').classList.contains('hidden'), false);
+    const rotToast = notifications.querySelectorAll('.twfox-invite-notif').find(
+      (n) => n.getAttribute('data-fox-notice') === 'FOXMOD HOST ROTATED'
+    );
+    assert.ok(rotToast, 'Promoted player should see orange FOXMOD HOST ROTATED notification');
+
+    // 3. Window beforeunload closes active room session cleanly
+    for (const fn of winListeners.get('beforeunload') || []) fn();
+    assert.equal(doc.body.classList.contains('twfox-in-multi-room'), false);
+  } finally {
+    p2pApi.createClientPeer = origCreateClient;
+    env.context.WebSocket = origWs;
+    env.context.fetch = origFetch;
+  }
+});

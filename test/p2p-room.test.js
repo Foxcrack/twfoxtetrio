@@ -520,3 +520,196 @@ test('room supports playing <-> spectating toggle and excludes spectators from m
   c2.close();
   host.close();
 });
+
+test('host evicts peers that crash/time out (heartbeat) or drop connectionState, and awards win if playing', async () => {
+  const rtcFactory = createLoopbackRtcFactory();
+  const host = p2p.createHostServer({
+    hostName: 'TWFoxcrack',
+    rtcFactory,
+    heartbeatIntervalMs: 30,
+    heartbeatTimeoutMs: 95
+  });
+
+  // Create a custom client peer whose channel stalls silently (never replies to ping and never fires onclose)
+  const silentHostInv = await host.createInvite('SilentCrasher');
+  const peerPc = rtcFactory();
+  let capturedChannel = null;
+  peerPc.ondatachannel = (ev) => {
+    capturedChannel = ev.channel;
+    capturedChannel.onopen = () => {
+      capturedChannel.send(JSON.stringify({ type: 'hello', name: 'SilentCrasher' }));
+    };
+    // Intentionally swallow ping messages without sending pong to simulate hung/closed Electron process
+    capturedChannel.onmessage = () => {};
+  };
+  const decodedOffer = await p2p.decodeSignal(silentHostInv.code);
+  await peerPc.setRemoteDescription(decodedOffer.sdp);
+  const ansSdp = await peerPc.createAnswer();
+  await peerPc.setLocalDescription(ansSdp);
+  const ansCode = await p2p.encodeSignal({
+    role: 'answer',
+    peerId: decodedOffer.peerId,
+    name: 'SilentCrasher',
+    sdp: peerPc.localDescription
+  });
+  await host.acceptAnswer(silentHostInv.peerId, ansCode);
+  await new Promise((r) => setTimeout(r, 35));
+
+  assert.equal(host.getSnapshot().players.length, 2);
+  host.startMatch();
+  await new Promise((r) => setTimeout(r, 20));
+
+  // Wait past heartbeatTimeoutMs (95ms) without pong -> Host auto-evicts SilentCrasher & ends round
+  await new Promise((r) => setTimeout(r, 150));
+  const afterTimeout = host.getSnapshot();
+  assert.equal(afterTimeout.players.length, 1);
+  assert.equal(afterTimeout.players[0].name, 'TWFoxcrack');
+  assert.equal(afterTimeout.room.status, 'results');
+  assert.equal(afterTimeout.room.winner, 'TWFoxcrack');
+  assert.ok(afterTimeout.chat.some((c) => /SilentCrasher timed out/i.test(c.text)));
+
+  host.close();
+});
+
+test('host_closed fires on manual P2P host exit and auto-signaling rooms elect next host deterministically', async () => {
+  // 1. Manual fallback (no signaling relay) -> host.close() emits host_closed on remaining client
+  const rtcManual = createLoopbackRtcFactory();
+  const manualHost = p2p.createHostServer({ hostName: 'HostOne', rtcFactory: rtcManual, autoSignaling: false });
+  const manualClient = p2p.createClientPeer({ playerName: 'GuestOne', rtcFactory: rtcManual });
+  const manualEvents = [];
+  manualClient.subscribe((_s, ev, detail) => manualEvents.push({ ev, detail }));
+
+  const manInv = await manualHost.createInvite();
+  const manAns = await manualClient.joinFromInvite(manInv.code);
+  await manualHost.acceptAnswer(manInv.peerId, manAns);
+  await new Promise((r) => setTimeout(r, 30));
+
+  manualHost.close();
+  await new Promise((r) => setTimeout(r, 30));
+  const closedEv = manualEvents.find((e) => e.ev === 'host_closed');
+  assert.ok(closedEv, 'Manual P2P client should receive host_closed when Host leaves');
+  assert.equal(closedEv.detail.hostName, 'HostOne');
+  assert.equal(manualClient.getSnapshot().room.status, 'disconnected');
+  manualClient.close();
+
+  // 2. Online MQTT room with 3 players -> when Host leaves, Client 2 rotates to HOST and Client 3 reconnects to Client 2!
+  const rtcAuto = createLoopbackRtcFactory();
+  const brokerPeers = new Set();
+  function wsFactory() {
+    let subTopic = null;
+    const ws = {
+      readyState: 0,
+      binaryType: 'arraybuffer',
+      onopen: null,
+      onmessage: null,
+      onclose: null,
+      send(data) {
+        const u = new Uint8Array(data);
+        const type = u[0] & 0xf0;
+        if (type === 0x10) {
+          queueMicrotask(() => ws.onmessage && ws.onmessage({ data: Uint8Array.from([0x20, 0x02, 0x00, 0x00]).buffer }));
+        } else if (type === 0x80) {
+          let idx = 4;
+          const tLen = (u[idx] << 8) | u[idx + 1];
+          idx += 2;
+          subTopic = Buffer.from(u.slice(idx, idx + tLen)).toString('utf8');
+          brokerPeers.add(ws);
+          ws._topic = subTopic;
+          queueMicrotask(() => ws.onmessage && ws.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer }));
+        } else if (type === 0x30) {
+          let idx = 1;
+          while ((u[idx] & 0x80) !== 0) idx++;
+          idx++;
+          const tLen = (u[idx] << 8) | u[idx + 1];
+          const topic = Buffer.from(u.slice(idx + 2, idx + 2 + tLen)).toString('utf8');
+          const payloadBytes = u.slice(idx + 2 + tLen);
+          const tb = Buffer.from(topic, 'utf8');
+          const body = Buffer.concat([Buffer.from([(tb.length >> 8) & 255, tb.length & 255]), tb, payloadBytes]);
+          const lenBytes = [];
+          let v = body.length;
+          do {
+            let b = v % 128;
+            v = Math.floor(v / 128);
+            if (v > 0) b |= 128;
+            lenBytes.push(b);
+          } while (v > 0);
+          const frame = Buffer.concat([Buffer.from([0x30]), Buffer.from(lenBytes), body]);
+          for (const sub of brokerPeers) {
+            if (sub._topic === topic && sub.onmessage && sub.readyState === 1) {
+              queueMicrotask(() => sub.onmessage({ data: Uint8Array.from(frame).buffer }));
+            }
+          }
+        }
+      },
+      close() {
+        ws.readyState = 3;
+        brokerPeers.delete(ws);
+        if (ws.onclose) ws.onclose();
+      }
+    };
+    queueMicrotask(() => {
+      ws.readyState = 1;
+      if (ws.onopen) ws.onopen();
+    });
+    return ws;
+  }
+
+  const hostA = p2p.createHostServer({ hostName: 'HostA', rtcFactory: rtcAuto, wsFactory, brokers: ['wss://mock/mqtt'] });
+  const code = hostA.getSnapshot().room.roomCode;
+  await new Promise((r) => setTimeout(r, 25));
+  hostA.updateSettings({ pieceSet: 'pentomino', gameMode: 'blitz' });
+
+  const c2 = p2p.createClientPeer({ playerName: 'NewHostB', rtcFactory: rtcAuto, wsFactory, brokers: ['wss://mock/mqtt'] });
+  const c3 = p2p.createClientPeer({ playerName: 'ClientC', rtcFactory: rtcAuto, wsFactory, brokers: ['wss://mock/mqtt'] });
+  const c2Events = [];
+  const c3Events = [];
+  c2.subscribe((_s, ev, detail) => c2Events.push({ ev, detail }));
+  c3.subscribe((_s, ev, detail) => c3Events.push({ ev, detail }));
+
+  await c2.joinByCode(code);
+  await new Promise((r) => setTimeout(r, 35));
+  await c3.joinByCode(code);
+  await new Promise((r) => setTimeout(r, 35));
+  assert.equal(hostA.getSnapshot().players.length, 3);
+
+  // HostA closes -> Client 2 gets host_migrate_self with preserved settings; Client 3 gets host_migrating naming NewHostB
+  hostA.close();
+  await new Promise((r) => setTimeout(r, 35));
+
+  const promoEv = c2Events.find((e) => e.ev === 'host_migrate_self');
+  const migEv = c3Events.find((e) => e.ev === 'host_migrating');
+  assert.ok(promoEv, 'First non-host player should be elected new HOST');
+  assert.equal(promoEv.detail.roomCode, code);
+  assert.equal(promoEv.detail.pieceSet, 'pentomino');
+  assert.equal(promoEv.detail.gameMode, 'blitz');
+  assert.ok(migEv, 'Remaining client should receive host_migrating pointing to NewHostB');
+  assert.equal(migEv.detail.successorName, 'NewHostB');
+
+  // NewHostB promotes cleanly preserving #CODE & settings, and ClientC joins NewHostB's room automatically
+  c2.close();
+  c3.close();
+  const hostB = p2p.createHostServer({
+    hostName: 'NewHostB',
+    roomCode: promoEv.detail.roomCode,
+    pieceSet: promoEv.detail.pieceSet,
+    gameMode: promoEv.detail.gameMode,
+    rtcFactory: rtcAuto,
+    wsFactory,
+    brokers: ['wss://mock/mqtt']
+  });
+  await new Promise((r) => setTimeout(r, 25));
+  const c3Rejoined = p2p.createClientPeer({ playerName: 'ClientC', rtcFactory: rtcAuto, wsFactory, brokers: ['wss://mock/mqtt'] });
+  await c3Rejoined.joinByCode(code);
+  await new Promise((r) => setTimeout(r, 40));
+
+  const newSnap = hostB.getSnapshot();
+  assert.equal(newSnap.room.roomCode, code);
+  assert.equal(newSnap.room.pieceSet, 'pentomino');
+  assert.deepEqual(
+    newSnap.players.map((p) => p.name),
+    ['NewHostB', 'ClientC']
+  );
+
+  c3Rejoined.close();
+  hostB.close();
+});

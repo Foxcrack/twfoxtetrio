@@ -2689,11 +2689,14 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
     let refreshMutualInviteUi = null;
     let joinRoomByInviteCode = null;
     let showOrangeInviteNotification = null;
+    let showOrangeNoticeNotification = null;
+    let ejectFromClosedRoom = null;
     let sendInviteToFriend = null;
     const activeInviteToasts = new Map();
     let badgeInviteUnsub = null;
     let badgePresenceUnsub = null;
     let socialObserver = null;
+    let hostMigrateTimer = null;
 
     const INVITE_PLANE_SVG =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" aria-hidden="true">' +
@@ -3417,6 +3420,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
 
     function teardownPeerSession() {
       clearFinishTransition();
+      if (hostMigrateTimer && typeof root.clearTimeout === 'function') {
+        root.clearTimeout(hostMigrateTimer);
+        hostMigrateTimer = null;
+      }
       if (multiController) multiController.stop();
       if (inviteTicker && typeof root.clearInterval === 'function') {
         root.clearInterval(inviteTicker);
@@ -3437,6 +3444,25 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       if (typeof refreshMutualInviteUi === 'function') {
         refreshMutualInviteUi();
       }
+    }
+
+    function detachCurrentPeerOnly() {
+      clearFinishTransition();
+      if (hostMigrateTimer && typeof root.clearTimeout === 'function') {
+        root.clearTimeout(hostMigrateTimer);
+        hostMigrateTimer = null;
+      }
+      if (multiController) multiController.stop();
+      if (peerUnsub) {
+        peerUnsub();
+        peerUnsub = null;
+      }
+      if (peerSession) {
+        peerSession.close();
+        peerSession = null;
+      }
+      multiGame = null;
+      multiSubMode = 'lobby';
     }
 
     function showMultiSubMode(nextSub) {
@@ -3680,6 +3706,83 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
             }
           }
         }
+      }
+
+      if (evType === 'host_migrate_self' && detail && p2pRoom) {
+        const myName = resolveLocalUsername(runtimeApi, detail.successorName || 'HOST');
+        const nextCode = detail.roomCode || '';
+        const prevHost = detail.previousHostName || 'Previous HOST';
+        detachCurrentPeerOnly();
+        const promotedHost = p2pRoom.createHostServer({
+          hostName: myName,
+          roomCode: nextCode,
+          roomName: `${myName}'S FOXROOM`,
+          pieceSet: detail.pieceSet || 'tetromino',
+          gameMode: detail.gameMode || 'vs',
+          blitzDurationMs: detail.blitzDurationMs || 120000,
+          garbageMultiplier: detail.garbageMultiplier ?? 1,
+          gravityLevel: detail.gravityLevel || 1,
+          round: detail.round || 0,
+          chat: Array.isArray(detail.chat) ? detail.chat : []
+        });
+        bindPeerSession(promotedHost);
+        multiDom.setCenterTab('invite');
+        showMultiSubMode('lobby');
+        if (activeFoxView !== 'foxmod_multi') {
+          navigateMenu('foxmod_multi');
+        }
+        promotedHost.sendChat(`[HOST] ${prevHost} left — ${myName} is now the room HOST.`);
+        if (multiDom.hostInviteStatus) {
+          multiDom.hostInviteStatus.textContent = `Host rotated — you are now HOST of #${nextCode}!`;
+        }
+        if (typeof showOrangeNoticeNotification === 'function') {
+          showOrangeNoticeNotification('FOXMOD HOST ROTATED', `You are now the HOST of room #${nextCode}.`);
+        }
+        return;
+      }
+
+      if (evType === 'host_migrating' && detail && p2pRoom) {
+        const nextCode = detail.roomCode || '';
+        const nextHostLabel = detail.successorName || 'next player';
+        const prevSpec = Boolean(snap && snap.spectator);
+        detachCurrentPeerOnly();
+        showMultiSubMode('lobby');
+        if (multiDom.winnerBanner) {
+          multiDom.winnerBanner.textContent = `HOST LEFT · ROTATING TO ${nextHostLabel}...`;
+        }
+        if (multiDom.hostInviteStatus) {
+          multiDom.hostInviteStatus.textContent = `Previous Host left — reconnecting to ${nextHostLabel} on #${nextCode}...`;
+        }
+        if (typeof root.setTimeout === 'function') {
+          hostMigrateTimer = root.setTimeout(async function () {
+            hostMigrateTimer = null;
+            if (!nextCode || activeFoxView !== 'foxmod_multi') return;
+            try {
+              const myName = resolveLocalUsername(runtimeApi, 'PLAYER');
+              const migratedClient = p2pRoom.createClientPeer({
+                playerName: myName,
+                spectator: prevSpec,
+                joinTimeoutMs: 9000
+              });
+              bindPeerSession(migratedClient);
+              await migratedClient.joinByCode(nextCode);
+            } catch (_) {
+              ejectFromClosedRoom(`Host left and migration to ${nextHostLabel} failed.`);
+            }
+          }, 420);
+          if (hostMigrateTimer && typeof hostMigrateTimer.unref === 'function') {
+            hostMigrateTimer.unref();
+          }
+        } else {
+          ejectFromClosedRoom('Host left — returned to FOXMOD.');
+        }
+        return;
+      }
+
+      if (evType === 'host_closed') {
+        const closedHost = (detail && detail.hostName) || 'HOST';
+        ejectFromClosedRoom(`${closedHost} left — FOXMOD room closed.`);
+        return;
       }
 
       if (evType === 'connected' && snap.role !== 'host') {
@@ -5048,6 +5151,62 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         return fallback;
       }
 
+      showOrangeNoticeNotification = function (titleText, bodyText) {
+        const host = resolveNotificationsHost();
+        if (!host) return;
+        const toastKey = `notice:${titleText}`;
+        removeInviteToast(toastKey);
+        const okBtn = createEl('div', {
+          className: 'notification_button flex-item pri',
+          text: 'OK',
+          attrs: { role: 'button', tabindex: '0' }
+        });
+        const toastEl = createEl(
+          'div',
+          {
+            className: 'notification ns snotify modalnotify twfox-invite-notif',
+            style: '--pri:#FF7B1C;--sec:#FF7B1C;border-color:#FF7B1C;',
+            attrs: { 'data-fox-notice': titleText }
+          },
+          [
+            createEl('div', { className: 'notification_icon', html: ICONS.fox }, [
+              createEl('div', { className: 'notification_icon_sub' })
+            ]),
+            createEl('div', { className: 'notification_body' }, [
+              createEl('h1', { text: titleText || 'FOXMOD' }),
+              createEl('p', { text: bodyText || '' })
+            ]),
+            createEl('div', { className: 'notification_timeoutbar', style: '--time: 9s; background: #FF7B1C;' }),
+            createEl('div', { className: 'notification_button_holder flex-row ns' }, [okBtn])
+          ]
+        );
+        okBtn.addEventListener('click', function () {
+          removeInviteToast(toastKey);
+        });
+        host.appendChild(toastEl);
+        let dismissTimer = null;
+        if (typeof root.setTimeout === 'function') {
+          dismissTimer = root.setTimeout(function () {
+            removeInviteToast(toastKey);
+          }, 9000);
+          if (dismissTimer && typeof dismissTimer.unref === 'function') {
+            dismissTimer.unref();
+          }
+        }
+        activeInviteToasts.set(toastKey, { el: toastEl, timer: dismissTimer });
+      };
+
+      ejectFromClosedRoom = function (reasonMsg) {
+        const wasInMulti = activeFoxView === 'foxmod_multi';
+        teardownPeerSession();
+        if (wasInMulti) {
+          navigateMenu('foxmod');
+        }
+        if (typeof showOrangeNoticeNotification === 'function') {
+          showOrangeNoticeNotification('FOXMOD ROOM CLOSED', reasonMsg || 'The Host left the room.');
+        }
+      };
+
       showOrangeInviteNotification = function (invite) {
         if (!invite || !invite.roomCode || !invite.from) return;
         const currentSnap = peerSession && peerSession.getSnapshot ? peerSession.getSnapshot() : null;
@@ -6258,6 +6417,16 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
     if (typeof root.setTimeout === 'function') {
       const deferWire = root.setTimeout(wireInviteSystems, 0);
       if (deferWire && typeof deferWire.unref === 'function') deferWire.unref();
+    }
+
+    if (typeof root.addEventListener === 'function') {
+      const flushPeerOnUnload = function () {
+        if (peerSession) {
+          teardownPeerSession();
+        }
+      };
+      root.addEventListener('beforeunload', flushPeerOnUnload);
+      root.addEventListener('pagehide', flushPeerOnUnload);
     }
 
     const menusEl = document.getElementById('menus');
