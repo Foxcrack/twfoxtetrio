@@ -21,12 +21,69 @@
   const RESULTS_ID = 'twfoxtetrio-race-results';
 
   const RACE_CSS = `
+@keyframes twfoxRaceCardRot {
+  from { transform: perspective(700px) rotateY(0deg); }
+  to { transform: perspective(700px) rotateY(360deg); }
+}
+@keyframes twfoxRaceCardTilt {
+  0% { transform: scale(1) rotateX(0deg); }
+  40% { transform: scale(1.1) rotateX(-15deg); }
+  70% { transform: scale(1.1) rotateX(15deg); }
+  100% { transform: scale(1) rotateX(0deg); }
+}
+@keyframes twfoxRacePartyOpen {
+  0% {
+    opacity: 0;
+    max-height: 6.2rem;
+    overflow: hidden;
+    transform: translateY(-8px) scaleY(0.94);
+  }
+  100% {
+    opacity: 1;
+    max-height: 36rem;
+    overflow: hidden;
+    transform: translateY(0) scaleY(1);
+  }
+}
+@keyframes twfoxRaceReadySlide {
+  from {
+    margin-top: -2.4rem;
+    opacity: 0.25;
+  }
+  to {
+    margin-top: 0.85rem;
+    opacity: 1;
+  }
+}
+@keyframes twfoxRaceSlotIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+#${CARD_ID} {
+  transition: .3s transform;
+}
 #${CARD_ID}.is-race-selected {
   transform: translate3d(calc(var(--x) * 36.5rem), 0.5rem, 0) perspective(700px) rotate(var(--br)) scale(1);
 }
 #${CARD_ID}.is-race-selected:hover {
   transform: translate3d(calc(var(--x) * 36.5rem), -2.5rem, 0) perspective(700px) rotate(var(--br)) scale(1);
   z-index: 2;
+}
+#${CARD_ID}.is-race-selected:active {
+  transform: translate3d(calc(var(--x) * 36.5rem), -2.5rem, -2rem) perspective(700px) rotate(var(--br)) scale(.9);
+  transition: 50ms transform;
+}
+#${CARD_ID}.spin .zenith_card_rot {
+  animation: .25s twfoxRaceCardRot cubic-bezier(.59, .08, .6, .93);
+}
+#${CARD_ID}.spin .zenith_card_tilt {
+  animation: .25s twfoxRaceCardTilt linear;
 }
 #${CARD_ID} .zenith_card_front,
 #${CARD_ID} .zenith_card_back,
@@ -61,9 +118,19 @@
   position: relative;
   text-align: left;
   padding-top: 0.75rem;
+  transform-origin: top center;
 }
 #${PARTY_ID}.hidden {
   display: none !important;
+}
+#${PARTY_ID}.is-opening:not(.hidden) {
+  animation: 280ms cubic-bezier(.17, .65, .45, .99) twfoxRacePartyOpen;
+}
+#${PARTY_ID}.is-opening:not(.hidden) .twfox-race-ready-bar {
+  animation: 300ms cubic-bezier(.17, .65, .45, .99) twfoxRaceReadySlide;
+}
+#${PARTY_ID}.is-opening:not(.hidden) .twfox-race-slot {
+  animation: 240ms cubic-bezier(.21, .46, .62, 1) twfoxRaceSlotIn backwards;
 }
 #${PARTY_ID} .twfox-race-hdr {
   display: flex;
@@ -649,6 +716,13 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let inviteCooldownTicker = null;
     let statusOverride = '';
     let isMountingDom = false;
+    let cardSpinTimer = null;
+    let partyOpenAnimTimer = null;
+    let wasPartyShown = false;
+    let suppressDuoObserver = false;
+    let duoClassObserver = null;
+    let observedZMenuForDuo = null;
+    let observedDuoCardForClass = null;
 
     const inviteTracker = foxInviteLogic && typeof foxInviteLogic.createInviteTracker === 'function'
       ? foxInviteLogic.createInviteTracker()
@@ -715,7 +789,83 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       }
     }
 
-    function fanAllDeckCardsEvenly() {
+    function findDuoCard() {
+      const byId = document.getElementById('zenith-duo-card');
+      if (byId) return byId;
+      const deckCards = document.getElementById('zenith_deck_cards');
+      if (!deckCards || typeof deckCards.querySelectorAll !== 'function') return null;
+      const cards = deckCards.querySelectorAll('.zenith_card');
+      for (const ch of cards) {
+        if (ch && ch !== cardEl && typeof ch.getAttribute === 'function' && ch.getAttribute('data-card') === 'duo') {
+          return ch;
+        }
+      }
+      return null;
+    }
+
+    function isDuoActiveNow() {
+      const zMenu = document.getElementById('zenithmenu');
+      const duoCard = findDuoCard();
+      return Boolean(
+        (zMenu && zMenu.classList && zMenu.classList.contains('duo')) ||
+        (duoCard && duoCard.classList && duoCard.classList.contains('active'))
+      );
+    }
+
+    function triggerCardSpin() {
+      if (!cardEl || !cardEl.classList) return;
+      if (cardSpinTimer) {
+        clearTimeout(cardSpinTimer);
+        cardSpinTimer = null;
+      }
+      cardEl.classList.remove('spin');
+      if (typeof cardEl.getBoundingClientRect === 'function') {
+        cardEl.getBoundingClientRect();
+      }
+      cardEl.classList.add('spin');
+      cardSpinTimer = setTimeout(() => {
+        if (cardEl && cardEl.classList) cardEl.classList.remove('spin');
+        cardSpinTimer = null;
+      }, 250);
+      if (cardSpinTimer && typeof cardSpinTimer.unref === 'function') cardSpinTimer.unref();
+    }
+
+    function clearCardSpin() {
+      if (cardSpinTimer) {
+        clearTimeout(cardSpinTimer);
+        cardSpinTimer = null;
+      }
+      if (cardEl && cardEl.classList) {
+        cardEl.classList.remove('spin');
+      }
+    }
+
+    function deactivateDuoCardIfActive() {
+      const zMenu = document.getElementById('zenithmenu');
+      const duoCard = findDuoCard();
+      if (!isDuoActiveNow()) return;
+      suppressDuoObserver = true;
+      try {
+        if (duoCard && typeof duoCard.click === 'function') {
+          if (duoCard.classList) duoCard.classList.add('forceoff');
+          try {
+            duoCard.click();
+          } finally {
+            if (duoCard.classList) duoCard.classList.remove('forceoff');
+          }
+        }
+        if (duoCard && duoCard.classList && duoCard.classList.contains('active')) {
+          duoCard.classList.remove('active');
+        }
+        if (zMenu && zMenu.classList && zMenu.classList.contains('duo')) {
+          zMenu.classList.remove('duo');
+        }
+      } finally {
+        suppressDuoObserver = false;
+      }
+    }
+
+    function fanAllDeckCardsEvenly(restoreDefaultInfo) {
       const deckCards = document.getElementById('zenith_deck_cards');
       if (!deckCards || !deckCards.children) return;
       const count = deckCards.children.length;
@@ -726,6 +876,18 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           ch.style.setProperty('--x', String(xVal));
         }
         setClass(ch, 'hover-blocked', false);
+      }
+      if (restoreDefaultInfo) {
+        if (infoEl) setClass(infoEl, 'hidden', true);
+        const deckInfos = document.getElementById('zenith_deck_infos');
+        if (deckInfos && typeof deckInfos.querySelectorAll === 'function') {
+          const infos = deckInfos.querySelectorAll('.zenith_deck_info');
+          for (const inf of infos) {
+            if (inf && typeof inf.getAttribute === 'function' && inf.getAttribute('data-for') === 'x-nocard') {
+              setClass(inf, 'hidden', false);
+            }
+          }
+        }
       }
     }
 
@@ -766,6 +928,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         session = null;
       }
       if (resetPhase !== false) {
+        clearCardSpin();
         racePhase = 'idle';
         hasEnteredLivePlay = false;
         peekMyResult = false;
@@ -1029,6 +1192,25 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (zMenu) {
         setClass(zMenu, 'twfox-race-open', showParty);
       }
+      if (showParty && !wasPartyShown) {
+        if (partyOpenAnimTimer) {
+          clearTimeout(partyOpenAnimTimer);
+          partyOpenAnimTimer = null;
+        }
+        setClass(partyEl, 'is-opening', true);
+        partyOpenAnimTimer = setTimeout(() => {
+          setClass(partyEl, 'is-opening', false);
+          partyOpenAnimTimer = null;
+        }, 320);
+        if (partyOpenAnimTimer && typeof partyOpenAnimTimer.unref === 'function') partyOpenAnimTimer.unref();
+      } else if (!showParty) {
+        if (partyOpenAnimTimer) {
+          clearTimeout(partyOpenAnimTimer);
+          partyOpenAnimTimer = null;
+        }
+        setClass(partyEl, 'is-opening', false);
+      }
+      wasPartyShown = showParty;
       setClass(partyEl, 'hidden', !showParty);
       if (!showParty) return;
 
@@ -1350,14 +1532,27 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     }
 
     function selectRaceCard(nextState) {
-      cardSelected = Boolean(nextState);
-      if (cardSelected && !session) {
-        ensureHostSessionCreated();
+      const nextBool = Boolean(nextState);
+      if (nextBool === cardSelected) {
+        syncVisualState();
+        return;
       }
-      if (!cardSelected && session && racePhase === 'idle') {
-        const snap = session.getSnapshot();
-        if (!snap.players || snap.players.length <= 1) {
-          teardownRaceSession(true);
+      if (nextBool) {
+        deactivateDuoCardIfActive();
+        cardSelected = true;
+        triggerCardSpin();
+        if (!session) {
+          ensureHostSessionCreated();
+        }
+      } else {
+        clearCardSpin();
+        cardSelected = false;
+        if (session && racePhase === 'idle') {
+          const snap = session.getSnapshot();
+          if (!snap.players || snap.players.length <= 1) {
+            teardownRaceSession(true);
+            return;
+          }
         }
       }
       syncVisualState();
@@ -1409,8 +1604,10 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         if (qpCard && typeof qpCard.click === 'function') qpCard.click();
       }
 
+      deactivateDuoCardIfActive();
       teardownRaceSession(true);
       cardSelected = true;
+      triggerCardSpin();
       statusOverride = `Connecting to Race #${clean}...`;
       const myName = getSelfUsername() || 'PLAYER';
       session = p2pRoom.createClientPeer({ playerName: myName, joinTimeoutMs: 12000 });
@@ -1595,6 +1792,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
               cardEl.style.setProperty('--ry', ((ev.offsetY - h / 2) / h) * -20 + 'deg');
             }
           });
+          cardEl.addEventListener('mouseleave', function () {
+            if (cardEl.style && typeof cardEl.style.setProperty === 'function') {
+              cardEl.style.setProperty('--rx', '0deg');
+              cardEl.style.setProperty('--ry', '0deg');
+            }
+          });
           cardEl.addEventListener('click', function (ev) {
             if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
             if (ev && typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
@@ -1603,12 +1806,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           }, true);
 
           deckCards.insertBefore(cardEl, deckCards.firstChild || null);
-          fanAllDeckCardsEvenly();
+          fanAllDeckCardsEvenly(false);
 
           if (!deckCards.__twfoxRaceLeaveBound) {
             deckCards.__twfoxRaceLeaveBound = true;
             deckCards.addEventListener('mouseleave', () => {
-              fanAllDeckCardsEvenly();
+              fanAllDeckCardsEvenly(true);
             });
           }
         } else {
@@ -1715,15 +1918,62 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           } else {
             slides.appendChild(partyEl);
           }
-          const duoCardNode = document.getElementById('zenith-duo-card');
-          if (duoCardNode && !duoCardNode.__twfoxRaceSyncBound) {
-            duoCardNode.__twfoxRaceSyncBound = true;
-            duoCardNode.addEventListener('click', () => {
-              if (cardSelected) selectRaceCard(false);
-            });
-          }
         } else {
           partyEl = document.getElementById(PARTY_ID);
+        }
+
+        const closeRaceIfDuoActivated = () => {
+          if (suppressDuoObserver) return;
+          const duoNode = findDuoCard();
+          if (duoNode && duoNode.classList && duoNode.classList.contains('forceoff')) return;
+          if (!cardSelected && !session) return;
+          clearCardSpin();
+          cardSelected = false;
+          teardownRaceSession(true);
+        };
+
+        const duoCardNode = findDuoCard();
+        if (duoCardNode && !duoCardNode.__twfoxRaceSyncBound) {
+          duoCardNode.__twfoxRaceSyncBound = true;
+          duoCardNode.addEventListener('click', closeRaceIfDuoActivated, true);
+        }
+        if (deckCards && !deckCards.__twfoxRaceDuoDelegateBound) {
+          deckCards.__twfoxRaceDuoDelegateBound = true;
+          deckCards.addEventListener('click', (ev) => {
+            if (!cardSelected && !session) return;
+            const duoNode = findDuoCard();
+            if (!duoNode || !ev || !ev.target) return;
+            let cur = ev.target;
+            while (cur && cur !== deckCards) {
+              if (cur === duoNode) {
+                closeRaceIfDuoActivated();
+                return;
+              }
+              cur = cur.parentNode;
+            }
+          }, true);
+        }
+        if (typeof root.MutationObserver === 'function') {
+          if (zMenu && observedZMenuForDuo !== zMenu) {
+            observedZMenuForDuo = zMenu;
+            if (!duoClassObserver) {
+              duoClassObserver = new root.MutationObserver(() => {
+                if (!suppressDuoObserver && (cardSelected || session) && isDuoActiveNow()) {
+                  closeRaceIfDuoActivated();
+                }
+              });
+            }
+            duoClassObserver.observe(zMenu, { attributes: true, attributeFilter: ['class'] });
+          }
+          if (duoCardNode && observedDuoCardForClass !== duoCardNode) {
+            observedDuoCardForClass = duoCardNode;
+            const cardObs = new root.MutationObserver(() => {
+              if (!suppressDuoObserver && (cardSelected || session) && isDuoActiveNow()) {
+                closeRaceIfDuoActivated();
+              }
+            });
+            cardObs.observe(duoCardNode, { attributes: true, attributeFilter: ['class'] });
+          }
         }
 
         syncVisualState();

@@ -3602,6 +3602,16 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
   const deckCards = new FakeEl('div', 'zenith_deck_cards', '');
   const duoCard = new FakeEl('div', 'zenith-duo-card', 'zenith_card rg_zenith_card');
   duoCard.setAttribute('data-card', 'duo');
+  duoCard.addEventListener('click', () => {
+    const nextDuo = !duoCard.classList.contains('active');
+    if (nextDuo) {
+      duoCard.classList.add('active');
+      zMenu.classList.add('duo');
+    } else {
+      duoCard.classList.remove('active');
+      zMenu.classList.remove('duo');
+    }
+  });
   deckCards.appendChild(duoCard);
   const deckInfos = new FakeEl('div', 'zenith_deck_infos', '');
   slides.appendChild(startZenith);
@@ -3624,15 +3634,41 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     assert.ok(raceCard, 'THE RACE tarot card should mount inside #zenith_deck_cards');
     assert.ok(raceInfo, 'data-for="race" info block should mount inside #zenith_deck_infos');
 
-    // Selecting the card MUST NOT set TETR.IO's .active server-mod class, and hides #start_zenith via .twfox-race-open (Duo style)
+    // Activating THE LOVERS first and then clicking THE RACE automatically disables THE LOVERS,
+    // plays the 250ms card spin + smooth party unfold, and never leaves both cards active at once
     const backSpecBtn = env.elements.get('twfoxtetrio-race-back-spec-btn');
     assert.equal(backSpecBtn.classList.contains('hidden'), true, 'Floating back-to-spectator button must stay hidden outside spectator peek');
+
+    duoCard.click();
+    assert.equal(duoCard.classList.contains('active'), true);
+    assert.equal(zMenu.classList.contains('duo'), true);
+
     raceCard.click();
+    assert.equal(duoCard.classList.contains('active'), false, 'Activating THE RACE must deactivate THE LOVERS');
+    assert.equal(zMenu.classList.contains('duo'), false);
     assert.equal(raceCard.classList.contains('active'), false);
     assert.equal(raceCard.classList.contains('is-race-selected'), true);
+    assert.equal(raceCard.classList.contains('spin'), true, 'THE RACE card must trigger native spin animation on activation');
     assert.equal(zMenu.classList.contains('twfox-race-open'), true);
     const partyEl = env.elements.get('twfoxtetrio-race-party');
     assert.equal(partyEl.classList.contains('hidden'), false);
+    assert.equal(partyEl.classList.contains('is-opening'), true, 'Party panel must trigger smooth unfold transition on open');
+
+    // Conversely, clicking THE LOVERS while THE RACE is active closes THE RACE cleanly
+    duoCard.click();
+    assert.equal(raceCard.classList.contains('is-race-selected'), false, 'Activating THE LOVERS must deactivate THE RACE');
+    assert.equal(partyEl.classList.contains('hidden'), true);
+    assert.equal(zMenu.classList.contains('twfox-race-open'), false);
+    assert.equal(duoCard.classList.contains('active'), true);
+
+    // Re-open THE RACE for the 4-player match test (THE LOVERS turns off again) and verify spin clears after ~250ms
+    raceCard.click();
+    assert.equal(duoCard.classList.contains('active'), false);
+    assert.equal(zMenu.classList.contains('duo'), false);
+    assert.equal(partyEl.classList.contains('hidden'), false);
+    await new Promise((r) => setTimeout(r, 340));
+    assert.equal(raceCard.classList.contains('spin'), false);
+    assert.equal(partyEl.classList.contains('is-opening'), false);
 
     const hostSnap = zenRace.getState().session;
     const roomCode = hostSnap.room.roomCode;
