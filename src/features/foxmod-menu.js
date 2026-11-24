@@ -5675,26 +5675,35 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           ['skins', 'Skins'],
           ['sfx', 'SFX']
         ];
-        const catWrap = createEl('div', { className: 'twfox-assets-cats' });
-        const catButtons = new Map();
-        for (const [catKey, catLabel] of catDefs) {
-          const btn = createEl('button', {
-            id: `twfoxtetrio-assets-cat-${catKey}`,
-            className: 'twfox-btn is-sm twfox-assets-cat' + (catKey === 'all' ? ' is-active' : ''),
-            text: catLabel,
-            type: 'button'
-          });
-          btn.addEventListener('click', function () {
-            currentCategory = catKey;
-            currentPage = 0;
-            for (const [k, b] of catButtons.entries()) {
-              setClass(b, 'is-active', k === catKey);
-            }
-            renderExploreList();
-          });
-          catButtons.set(catKey, btn);
-          catWrap.appendChild(btn);
+        /** Builds a shared .twfox-assets-cats category filter row with active-button toggling. */
+        function createCategoryFilterRow(idPrefix, onSelect) {
+          const wrap = createEl('div', { className: 'twfox-assets-cats' });
+          const buttons = new Map();
+          for (const [catKey, catLabel] of catDefs) {
+            const btn = createEl('button', {
+              id: `${idPrefix}-${catKey}`,
+              className: 'twfox-btn is-sm twfox-assets-cat' + (catKey === 'all' ? ' is-active' : ''),
+              text: catLabel,
+              type: 'button'
+            });
+            btn.addEventListener('click', function () {
+              for (const [k, b] of buttons.entries()) {
+                setClass(b, 'is-active', k === catKey);
+              }
+              onSelect(catKey);
+            });
+            buttons.set(catKey, btn);
+            wrap.appendChild(btn);
+          }
+          return wrap;
         }
+
+        let installedCategory = 'all';
+        const catWrap = createCategoryFilterRow('twfoxtetrio-assets-cat', function (catKey) {
+          currentCategory = catKey;
+          currentPage = 0;
+          renderExploreList();
+        });
 
         const exploreStatusEl = createEl('div', {
           id: 'twfoxtetrio-assets-catalog-status',
@@ -5714,6 +5723,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         ]);
 
         // Installed panel
+        const installedCatWrap = createCategoryFilterRow('twfoxtetrio-assets-installed-cat', function (catKey) {
+          installedCategory = catKey;
+          renderInstalledList();
+        });
         const installedStatusEl = createEl('div', {
           id: 'twfoxtetrio-assets-installed-status',
           className: 'twfox-assets-status',
@@ -5721,6 +5734,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         });
         const installedListEl = createEl('div', { id: 'twfoxtetrio-assets-installed-list', className: 'twfox-assets-list' });
         const installedPanel = createEl('div', { id: 'twfoxtetrio-assets-panel-installed', className: 'hidden' }, [
+          installedCatWrap,
           installedStatusEl,
           installedListEl
         ]);
@@ -6133,12 +6147,21 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           if (!assetsApi) return;
           const state = assetsApi.getState();
           const list = state.installed || [];
+          const filteredList = assetsLogic && typeof assetsLogic.filterInstalledAssets === 'function'
+            ? assetsLogic.filterInstalledAssets(list, installedCategory)
+            : list;
           tabInstalledBtn.textContent = `DOWNLOADED (${list.length})`;
-          installedStatusEl.textContent = list.length > 0
-            ? `${list.length} assets saved locally on your device.`
-            : 'No downloaded assets yet. Visit EXPLORE (TETR.IO+) or BACKGROUND / LOCAL.';
+          if (list.length === 0) {
+            installedStatusEl.textContent = 'No downloaded assets yet. Visit EXPLORE (TETR.IO+) or BACKGROUND / LOCAL.';
+          } else if (installedCategory === 'all') {
+            installedStatusEl.textContent = `${list.length} assets saved locally on your device.`;
+          } else if (filteredList.length === 0) {
+            installedStatusEl.textContent = `No downloaded ${installedCategory.toUpperCase()} assets found.`;
+          } else {
+            installedStatusEl.textContent = `Showing ${filteredList.length} of ${list.length} saved assets.`;
+          }
 
-          for (const rec of list) {
+          for (const rec of filteredList) {
             const active = assetsApi.isActive(rec.id);
             const caps = rec.capabilities || {};
             const capTags = [];

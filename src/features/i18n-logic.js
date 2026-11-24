@@ -571,6 +571,12 @@
     if ((m = trimmed.match(/^(\d+) assets saved locally on your device\.$/i))) {
       return `${m[1]} assets guardados localmente en tu equipo.`;
     }
+    if ((m = trimmed.match(/^Showing (\d+) of (\d+) saved assets\.$/i))) {
+      return `Mostrando ${m[1]} de ${m[2]} assets guardados.`;
+    }
+    if ((m = trimmed.match(/^No downloaded ([A-Z]+) assets found\.$/i))) {
+      return `No hay ${m[1].toUpperCase()} descargados.`;
+    }
     if ((m = trimmed.match(/^by (.+?) · (.+)$/i))) {
       return `por ${m[1]} · ${m[2]}`;
     }

@@ -3164,3 +3164,125 @@ test('OPEN ASSETS FOLDER exports downloaded items, opens Electron folder, and im
   await assetsApi.uninstallAsset(dropSkin.id);
   assert.deepEqual(deletedFiles, ['skins/CustomDropSkin.png']);
 });
+
+test('DOWNLOADED tab filters saved skins and SFX via All / Skins / SFX pills cleanly', async () => {
+  const fakePng = Buffer.alloc(24);
+  fakePng[0] = 0x89; fakePng[1] = 0x50; fakePng[2] = 0x4e; fakePng[3] = 0x47;
+  fakePng[4] = 0x0d; fakePng[5] = 0x0a; fakePng[6] = 0x1a; fakePng[7] = 0x0a;
+  fakePng.writeUInt32BE(13, 8);
+  fakePng.write('IHDR', 12, 'ascii');
+  fakePng.writeUInt32BE(256, 16);
+  fakePng.writeUInt32BE(256, 20);
+
+  let diskItems = [
+    {
+      kind: 'file',
+      subfolder: 'skins',
+      relPath: 'skins/AlphaSkin.png',
+      fileName: 'AlphaSkin.png',
+      mtimeMs: 11111,
+      size: fakePng.length,
+      base64: fakePng.toString('base64')
+    },
+    {
+      kind: 'file',
+      subfolder: 'skins',
+      relPath: 'skins/BetaSkin.png',
+      fileName: 'BetaSkin.png',
+      mtimeMs: 22222,
+      size: fakePng.length,
+      base64: fakePng.toString('base64')
+    },
+    {
+      kind: 'dir',
+      subfolder: 'sfx',
+      relPath: 'sfx/RetroVoiceSfx',
+      dirName: 'RetroVoiceSfx',
+      mtimeMs: 33333,
+      size: 16,
+      files: [{ fileName: 'harddrop.ogg', base64: Buffer.from('OggS-test').toString('base64') }]
+    }
+  ];
+
+  const env = createFakeDomEnvironment('https:', {
+    IPC: {
+      async invoke(channel, arg) {
+        if (channel === 'twfoxtetrio-assets-scan-folder') {
+          return { ok: true, rootPath: 'C:\\Users\\fox\\AppData\\Roaming\\tetrio-desktop\\foxmod-assets', items: diskItems };
+        }
+        if (channel === 'twfoxtetrio-assets-save-file') {
+          return { ok: true, relPath: arg.subfolder + '/' + arg.fileName, mtimeMs: 100 };
+        }
+        if (channel === 'twfoxtetrio-assets-delete-file') {
+          diskItems = diskItems.filter((x) => x.relPath !== arg.relPath);
+          return { ok: true };
+        }
+        return { ok: false, status: 404, base64: '' };
+      }
+    }
+  });
+
+  env.triggerDOMContentLoaded();
+  const assetsApi = env.context.__TWFOX_INTERNAL__.customAssets;
+  await assetsApi.ready();
+  await assetsApi.rescanAssetsFolder();
+
+  env.elements.get('twfoxtetrio-home-foxmod').click();
+  env.elements.get('twfoxtetrio-card-config').click();
+  await assetsApi.rescanAssetsFolder();
+
+  const tabInstalled = env.elements.get('twfoxtetrio-assets-tab-installed');
+  const filterAll = env.elements.get('twfoxtetrio-assets-installed-cat-all');
+  const filterSkins = env.elements.get('twfoxtetrio-assets-installed-cat-skins');
+  const filterSfx = env.elements.get('twfoxtetrio-assets-installed-cat-sfx');
+  const statusEl = env.elements.get('twfoxtetrio-assets-installed-status');
+  const listEl = env.elements.get('twfoxtetrio-assets-installed-list');
+
+  function collectText(node) {
+    if (!node) return '';
+    return [node.textContent || ''].concat((node.children || []).map(collectText)).join(' ');
+  }
+
+  assert.ok(filterAll && filterSkins && filterSfx, 'DOWNLOADED panel must expose All, Skins, and SFX filter buttons');
+  tabInstalled.click();
+
+  assert.equal(tabInstalled.textContent, 'DOWNLOADED (3)');
+  assert.equal(filterAll.classList.contains('is-active'), true);
+  assert.equal(listEl.children.length, 3);
+  assert.equal(statusEl.textContent, '3 assets saved locally on your device.');
+
+  // Filter to SFX only (and verify EXPLORE filter active state stays untouched)
+  const exploreAll = env.elements.get('twfoxtetrio-assets-cat-all');
+  filterSfx.click();
+  assert.equal(exploreAll.classList.contains('is-active'), true);
+  assert.equal(filterSfx.classList.contains('is-active'), true);
+  assert.equal(filterAll.classList.contains('is-active'), false);
+  assert.equal(tabInstalled.textContent, 'DOWNLOADED (3)');
+  assert.equal(listEl.children.length, 1);
+  assert.ok(collectText(listEl).includes('RetroVoiceSfx'));
+  assert.ok(!collectText(listEl).includes('AlphaSkin'));
+  assert.equal(statusEl.textContent, 'Showing 1 of 3 saved assets.');
+
+  // Filter to Skins only
+  filterSkins.click();
+  assert.equal(filterSkins.classList.contains('is-active'), true);
+  assert.equal(filterSfx.classList.contains('is-active'), false);
+  assert.equal(tabInstalled.textContent, 'DOWNLOADED (3)');
+  assert.equal(listEl.children.length, 2);
+  const skinsText = collectText(listEl);
+  assert.ok(skinsText.includes('AlphaSkin') && skinsText.includes('BetaSkin'));
+  assert.ok(!skinsText.includes('RetroVoiceSfx'));
+  assert.equal(statusEl.textContent, 'Showing 2 of 3 saved assets.');
+
+  // Uninstall SFX item, then verify empty-filter message under SFX while All retains the 2 skins
+  const sfxRec = assetsApi.getState().installed.find((r) => r.name === 'RetroVoiceSfx');
+  await assetsApi.uninstallAsset(sfxRec.id);
+  filterSfx.click();
+  assert.equal(tabInstalled.textContent, 'DOWNLOADED (2)');
+  assert.equal(listEl.children.length, 0);
+  assert.equal(statusEl.textContent, 'No downloaded SFX assets found.');
+
+  filterAll.click();
+  assert.equal(listEl.children.length, 2);
+  assert.equal(statusEl.textContent, '2 assets saved locally on your device.');
+});

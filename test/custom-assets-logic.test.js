@@ -325,3 +325,20 @@ test('detectSkinSourceLayout, GIF/SVG dimensions, underscore zip matching, and 1
     null
   );
 });
+
+test('filterInstalledAssets and matchesInstalledCategory filter downloaded skins, boards, SFX, mixed packs, and backgrounds', () => {
+  const skinRec = { id: '1', name: 'MonoSkin', category: 'skin', capabilities: { skin: true } };
+  const boardRec = { id: '2', name: 'GalaxyBoard', category: 'board', capabilities: { board: true, queue: true } };
+  const sfxRec = { id: '3', name: 'RetroSfx', category: 'sfx', capabilities: { sfx: true } };
+  const mixedRec = { id: '4', name: 'ComboPack', category: 'skin', capabilities: { skin: true, sfx: true } };
+  const bgRec = { id: '5', name: 'SpaceBg', category: 'background', capabilities: { background: true } };
+  const legacySfx = { id: '6', name: 'LegacySfx', category: 'sfx' };
+  const all = [skinRec, boardRec, sfxRec, mixedRec, bgRec, legacySfx];
+
+  assert.deepEqual(logic.filterInstalledAssets(all, 'all').map((r) => r.id), ['1', '2', '3', '4', '5', '6']);
+  assert.deepEqual(logic.filterInstalledAssets(all, 'skins').map((r) => r.id), ['1', '2', '4']);
+  assert.deepEqual(logic.filterInstalledAssets(all, 'sfx').map((r) => r.id), ['3', '4', '6']);
+  assert.equal(logic.matchesInstalledCategory(bgRec, 'skins'), false);
+  assert.equal(logic.matchesInstalledCategory(bgRec, 'sfx'), false);
+  assert.equal(logic.matchesInstalledCategory(sfxRec, 'skins'), false);
+});

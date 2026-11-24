@@ -443,6 +443,39 @@
     return sorted;
   }
 
+  /** Returns true when a locally stored asset record matches a DOWNLOADED category filter ('all' | 'skins' | 'sfx'). */
+  function matchesInstalledCategory(record, category) {
+    if (!record) return false;
+    const cat = String(category || 'all').toLowerCase();
+    if (cat === 'all') return true;
+    const caps = record.capabilities && typeof record.capabilities === 'object' ? record.capabilities : {};
+    const recCat = String(record.category || '').toLowerCase();
+    if (cat === 'sfx') {
+      return Boolean(caps.sfx || recCat === 'sfx');
+    }
+    if (cat === 'skins') {
+      return Boolean(
+        caps.skin ||
+        caps.ghost ||
+        caps.board ||
+        caps.queue ||
+        caps.grid ||
+        recCat === 'skin' ||
+        recCat === 'board' ||
+        (!caps.sfx && !caps.background && recCat !== 'sfx' && recCat !== 'background')
+      );
+    }
+    return recCat === cat;
+  }
+
+  /** Filters locally stored asset records by category ('all' | 'skins' | 'sfx'). */
+  function filterInstalledAssets(items, category) {
+    const list = Array.isArray(items) ? items : [];
+    const cat = String(category || 'all').toLowerCase();
+    if (cat === 'all') return list.slice();
+    return list.filter((item) => matchesInstalledCategory(item, cat));
+  }
+
   function normalizeSfxAtlasEntries(customSoundAtlas) {
     if (!customSoundAtlas || typeof customSoundAtlas !== 'object') return {};
     const out = {};
@@ -1152,6 +1185,8 @@
     normalizeCatalogItem,
     getStaticCatalogPreviewUrl,
     filterAndSortCatalog,
+    matchesInstalledCategory,
+    filterInstalledAssets,
     normalizeSfxAtlasEntries,
     parseTpseObject,
     parseZipArchive,

@@ -107,4 +107,11 @@ test('i18n-logic translates TETR.IO & FOXMOD UI cleanly with case preservation w
   assert.equal(i18nLogic.translateText('#W4YW', 'es'), '#W4YW');
   assert.equal(i18nLogic.translateText('0:45.320', 'es'), '0:45.320');
   assert.equal(i18nLogic.translateText('https://github.com/Foxcrack/twfoxtetrio', 'es'), 'https://github.com/Foxcrack/twfoxtetrio');
+
+  // Downloaded assets category filters & filtered status messages
+  assert.equal(i18nLogic.translateText('All', 'es'), 'Todos');
+  assert.equal(i18nLogic.translateText('Skins', 'es'), 'Skins');
+  assert.equal(i18nLogic.translateText('SFX', 'es'), 'SFX');
+  assert.equal(i18nLogic.translateText('Showing 2 of 5 saved assets.', 'es'), 'Mostrando 2 de 5 assets guardados.');
+  assert.equal(i18nLogic.translateText('No downloaded SFX assets found.', 'es'), 'No hay SFX descargados.');
 });
