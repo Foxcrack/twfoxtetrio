@@ -1009,7 +1009,7 @@
   }
 
   const api = {
-    version: '0.6.4',
+    version: '0.6.5',
     getState() {
       refreshSelfUsername();
       return {

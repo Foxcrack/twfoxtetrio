@@ -770,29 +770,37 @@ function registerTwfoxMainIpc(deps) {
       fs.renameSync(tmpUpdPath, updPath);
 
       if (platform === 'win32' && !d.forceInPlaceSwap) {
+        const tempDir = String(
+          d.tempDir ||
+            (processRef && processRef.env && (processRef.env.TEMP || processRef.env.TMP)) ||
+            path.dirname(asarPath)
+        ).trim();
+        const swapCmdPath = path.join(tempDir, 'twfox-swap-' + (processRef.pid || Date.now()) + '-' + Date.now() + '.cmd');
         if (!d.skipSpawn && cp && typeof cp.spawn === 'function') {
-          const psScript = [
-            "$ErrorActionPreference = 'Stop'",
-            '$asar = $env:TWFOX_ASAR',
-            '$upd = $env:TWFOX_UPDATE',
-            '$exe = $env:TWFOX_EXE',
-            'for ($i = 0; $i -lt 120; $i++) {',
-            '  try {',
-            "    $s = [System.IO.File]::Open($asar, 'Open', 'ReadWrite', 'None')",
-            '    $s.Close()',
-            '    Move-Item -LiteralPath $upd -Destination $asar -Force',
-            '    if ($exe -and (Test-Path -LiteralPath $exe)) { Start-Process -FilePath $exe }',
-            '    exit 0',
-            '  } catch {',
-            '    Start-Sleep -Milliseconds 250',
-            '  }',
-            '}'
-          ].join('; ');
-          const child = cp.spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', psScript], {
+          // NOTE: Do NOT spawn powershell.exe directly with detached:true on Windows — PowerShell exits 0
+          // immediately without running when detached from a console. cmd.exe /d /c + detached:true survives
+          // parent exit reliably, swaps via atomic same-volume move, waits briefly for SingleInstanceLock,
+          // relaunches TETR.IO, and self-deletes.
+          const cmdBody = [
+            '@echo off',
+            'for /L %%i in (1,1,45) do (',
+            '  move /Y "%TWFOX_UPDATE%" "%TWFOX_ASAR%" >nul 2>&1',
+            '  if not errorlevel 1 goto :relaunch',
+            '  ping -n 2 127.0.0.1 >nul',
+            ')',
+            'goto :cleanup',
+            ':relaunch',
+            'ping -n 2 127.0.0.1 >nul',
+            'if defined TWFOX_EXE if exist "%TWFOX_EXE%" start "" "%TWFOX_EXE%"',
+            ':cleanup',
+            '(goto) 2>nul & del "%~f0"'
+          ].join('\r\n');
+          fs.writeFileSync(swapCmdPath, cmdBody, 'utf8');
+          const child = cp.spawn('cmd.exe', ['/d', '/c', swapCmdPath], {
             env: Object.assign({}, processRef.env, {
               TWFOX_ASAR: asarPath,
               TWFOX_UPDATE: updPath,
-              TWFOX_EXE: d.execPath || processRef.execPath || ''
+              TWFOX_EXE: d.execPath !== undefined ? d.execPath : (processRef.execPath || '')
             }),
             detached: true,
             stdio: 'ignore',
@@ -800,14 +808,22 @@ function registerTwfoxMainIpc(deps) {
           });
           if (child && typeof child.unref === 'function') child.unref();
         }
-        if (!d.skipRelaunch && app && typeof app.quit === 'function') {
+        if (!d.skipRelaunch && app) {
           setTimeout(() => {
             try {
-              app.quit();
+              if (typeof app.quit === 'function') app.quit();
             } catch (_) {}
+            const forceExitTimer = setTimeout(() => {
+              try {
+                if (typeof app.exit === 'function') app.exit(0);
+              } catch (_) {}
+            }, 600);
+            if (forceExitTimer && typeof forceExitTimer.unref === 'function') {
+              forceExitTimer.unref();
+            }
           }, 150);
         }
-        return { ok: true, version: remoteVer, restarting: true, stagedPath: updPath };
+        return { ok: true, version: remoteVer, restarting: true, stagedPath: updPath, swapCmdPath };
       }
 
       if (platform !== 'win32') {
@@ -1160,6 +1176,8 @@ function installMod(asarPath) {
 
     replaceFileSafe(tempPath, asarPath);
     preserveReadableMode(asarPath, origMode);
+    cleanupFile(asarPath + '.update');
+    cleanupFile(asarPath + '.update.tmp');
     const finalCheck = verifyAsar(asarPath);
     console.log('[twfoxtetrio] Mod installed cleanly into: ' + asarPath);
     console.log('[twfoxtetrio] Verified ' + finalCheck.fileCount + ' files (' + finalCheck.totalPackedBytes + ' packed bytes).');
@@ -1210,6 +1228,8 @@ function uninstallMod(asarPath) {
     verifyAsar(tempPath);
     replaceFileSafe(tempPath, asarPath);
     preserveReadableMode(asarPath, origMode);
+    cleanupFile(asarPath + '.update');
+    cleanupFile(asarPath + '.update.tmp');
     verifyAsar(asarPath);
     console.log('[twfoxtetrio] Mod removed cleanly from: ' + asarPath);
   } catch (err) {

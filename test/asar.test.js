@@ -250,6 +250,122 @@ test('registerTwfoxMainIpc stages & applies synthetic ASAR self-updates and bloc
   }
 });
 
+test('registerTwfoxMainIpc win32 detached cmd swapper waits for lock release, swaps app.asar, relaunches, and cleans up', async () => {
+  const { PassThrough } = require('node:stream');
+  const crypto = require('node:crypto');
+  const cp = require('node:child_process');
+  const { registerTwfoxMainIpc, injectModIntoMain } = require('../scripts/install');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'twfox win swap '));
+  const asarPath = path.join(tmpDir, 'app.asar');
+  const seedPath = path.join(tmpDir, 'seed.asar');
+  try {
+    createSyntheticAsar(seedPath);
+    const baseMain = injectModIntoMain(readAsarFile(seedPath, 'main.js').toString('utf8'));
+    const basePreload =
+      readAsarFile(seedPath, 'preload.js').toString('utf8') +
+      "\n// === TWFOXTETRIO MOD START ===\nconsole.log('old');\n// === TWFOXTETRIO MOD END ===\n";
+    writePatchedAsar(
+      seedPath,
+      {
+        'preload.js': Buffer.from(basePreload, 'utf8'),
+        'main.js': Buffer.from(baseMain, 'utf8')
+      },
+      asarPath
+    );
+
+    const handlers = new Map();
+    const remoteRoutes = {
+      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json': '{"name":"twfoxtetrio","version":"9.9.9"}',
+      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/scripts/build.js':
+        "const SOURCE_FILES = [\n  'src/core/runtime.js'\n];\n",
+      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/src/core/runtime.js':
+        "/* updated runtime 9.9.9 */ window.__TWFOX_WIN_SWAP__ = true;\n"
+    };
+    const mockHttps = {
+      get(url, _opts, cb) {
+        const res = new PassThrough();
+        res.statusCode = Object.prototype.hasOwnProperty.call(remoteRoutes, url) ? 200 : 404;
+        res.headers = { 'content-type': 'text/plain' };
+        queueMicrotask(() => {
+          cb(res);
+          res.end(Buffer.from(remoteRoutes[url] || 'not found', 'utf8'));
+        });
+        return { on() {}, setTimeout() {} };
+      }
+    };
+
+    const markerFile = path.join(tmpDir, 'relaunched.txt');
+    const fakeExeCmd = path.join(tmpDir, 'fake tetrio.cmd');
+    fs.writeFileSync(fakeExeCmd, `@echo off\r\necho RELAUNCHED_OK > "${markerFile}"\r\nexit /b 0\r\n`);
+
+    let lockerChild = null;
+    if (process.platform === 'win32') {
+      // Hold an open handle on asarPath briefly so move /Y sees sharing violation first, then releases on quit
+      lockerChild = cp.spawn(
+        process.execPath,
+        [
+          '-e',
+          `const fs = require('fs'); const fd = fs.openSync(${JSON.stringify(asarPath)}, 'r'); setTimeout(() => { fs.closeSync(fd); process.exit(0); }, 450);`
+        ],
+        { stdio: 'ignore' }
+      );
+    }
+
+    let quitCalled = false;
+    registerTwfoxMainIpc({
+      ipcMain: { handle: (ch, fn) => handlers.set(ch, fn) },
+      app: { quit() { quitCalled = true; }, exit() {} },
+      https: mockHttps,
+      fs,
+      path,
+      crypto,
+      cp: process.platform === 'win32' ? cp : null,
+      asarPath,
+      tempDir: tmpDir,
+      execPath: process.platform === 'win32' ? fakeExeCmd : '/bin/tetrio',
+      skipSpawn: process.platform !== 'win32',
+      processRef: { platform: 'win32', pid: process.pid, env: process.env, resourcesPath: tmpDir, execPath: process.execPath }
+    });
+
+    const applyRes = await handlers.get('twfoxtetrio-self-update-apply')();
+    assert.equal(applyRes.ok, true);
+    assert.equal(applyRes.version, '9.9.9');
+    assert.ok(applyRes.swapCmdPath && applyRes.swapCmdPath.endsWith('.cmd'));
+
+    if (process.platform === 'win32') {
+      // Wait for lockerChild exit + cmd loop swap + relaunch + cmd self-delete (max 8s)
+      const deadline = Date.now() + 8000;
+      let swapped = false;
+      while (Date.now() < deadline) {
+        if (
+          !fs.existsSync(asarPath + '.update') &&
+          !fs.existsSync(applyRes.swapCmdPath) &&
+          fs.existsSync(markerFile)
+        ) {
+          swapped = true;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      if (lockerChild && lockerChild.exitCode === null) {
+        try { lockerChild.kill(); } catch (_) {}
+      }
+      assert.equal(swapped, true, 'Detached cmd swapper should swap app.asar, launch exe, and self-delete .cmd');
+      assert.equal(verifyAsar(asarPath).ok, true);
+      const nextPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
+      assert.ok(nextPreload.includes('window.__TWFOX_WIN_SWAP__ = true;'));
+      assert.ok(fs.readFileSync(markerFile, 'utf8').includes('RELAUNCHED_OK'));
+      await new Promise((r) => setTimeout(r, 250));
+      assert.equal(quitCalled, true);
+    } else {
+      assert.equal(fs.existsSync(asarPath + '.update'), true);
+    }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('registerTwfoxMainIpc manages custom assets folder creation, openPath, save, scan, and safe deletion', async () => {
   const crypto = require('node:crypto');
   const { registerTwfoxMainIpc } = require('../scripts/install');

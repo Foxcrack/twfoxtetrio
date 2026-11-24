@@ -101,7 +101,7 @@
     return '';
   }
 
-  const installedVersion = String(api.version || '0.6.4')
+  const installedVersion = String(api.version || '0.6.5')
     .trim()
     .replace(/^v/i, '');
 
