@@ -44,6 +44,27 @@
     return '';
   }
 
+  const VALID_PIECE_KEYS = new Set(['i', 'j', 'l', 'o', 's', 't', 'z']);
+
+  function sanitizeBoardPiece(raw) {
+    if (!raw) return null;
+    const str = typeof raw === 'string'
+      ? raw
+      : (typeof raw === 'object' ? (raw.type || raw.key || raw.c || '') : '');
+    const clean = String(str || '').trim().toLowerCase();
+    return VALID_PIECE_KEYS.has(clean) ? clean : null;
+  }
+
+  function sanitizeBoardNext(rawNext) {
+    if (!Array.isArray(rawNext)) return [];
+    const out = [];
+    for (let i = 0; i < rawNext.length && out.length < 5; i++) {
+      const k = sanitizeBoardPiece(rawNext[i]);
+      if (k) out.push(k);
+    }
+    return out;
+  }
+
   function isManualSignalCode(raw) {
     return /^FOX[01]:/i.test(String(raw || '').trim());
   }
@@ -1124,6 +1145,9 @@
           break;
         case 'board_state':
           player.board = Array.isArray(msg.board) ? msg.board : null;
+          if (msg.hold !== undefined) player.hold = sanitizeBoardPiece(msg.hold);
+          if (msg.canHold !== undefined) player.canHold = Boolean(msg.canHold);
+          if (msg.next !== undefined) player.next = sanitizeBoardNext(msg.next);
           if (msg.altitude !== undefined) {
             const nextAlt = Math.max(0, Number(msg.altitude) || 0);
             player.altitude = nextAlt;
@@ -1144,6 +1168,9 @@
             type: 'peer_board',
             id: peerId,
             board: player.board,
+            hold: player.hold || null,
+            canHold: player.canHold !== false,
+            next: Array.isArray(player.next) ? player.next : [],
             altitude: player.altitude,
             peakAltitude: player.peakAltitude,
             floor: player.floor,
@@ -1489,6 +1516,9 @@
       const self = players.get('host');
       if (!self || !snapshot) return;
       self.board = snapshot.compactBoard !== undefined ? snapshot.compactBoard : self.board;
+      if (snapshot.hold !== undefined) self.hold = sanitizeBoardPiece(snapshot.hold);
+      if (snapshot.canHold !== undefined) self.canHold = Boolean(snapshot.canHold);
+      if (snapshot.next !== undefined) self.next = sanitizeBoardNext(snapshot.next);
       if (snapshot.altitude !== undefined) {
         const nextAlt = Math.max(0, Number(snapshot.altitude) || 0);
         self.altitude = nextAlt;
@@ -1513,6 +1543,9 @@
         type: 'peer_board',
         id: 'host',
         board: self.board,
+        hold: self.hold || null,
+        canHold: self.canHold !== false,
+        next: Array.isArray(self.next) ? self.next : [],
         altitude: self.altitude,
         peakAltitude: self.peakAltitude,
         floor: self.floor,
@@ -2162,6 +2195,9 @@
           const target = players.find((p) => p.id === msg.id);
           if (target) {
             target.board = msg.board;
+            if (msg.hold !== undefined) target.hold = sanitizeBoardPiece(msg.hold);
+            if (msg.canHold !== undefined) target.canHold = Boolean(msg.canHold);
+            if (msg.next !== undefined) target.next = sanitizeBoardNext(msg.next);
             if (msg.altitude !== undefined) {
               const nextAlt = Math.max(0, Number(msg.altitude) || 0);
               target.altitude = nextAlt;
@@ -2736,6 +2772,9 @@
         if (!snapshot) return;
         const selfPlayer = selfId ? players.find((p) => p.id === selfId) : null;
         if (selfPlayer) {
+          if (snapshot.hold !== undefined) selfPlayer.hold = sanitizeBoardPiece(snapshot.hold);
+          if (snapshot.canHold !== undefined) selfPlayer.canHold = Boolean(snapshot.canHold);
+          if (snapshot.next !== undefined) selfPlayer.next = sanitizeBoardNext(snapshot.next);
           if (snapshot.altitude !== undefined) {
             const nextAlt = Math.max(0, Number(snapshot.altitude) || 0);
             selfPlayer.altitude = nextAlt;
@@ -2753,6 +2792,9 @@
         send({
           type: 'board_state',
           board: snapshot.compactBoard,
+          hold: snapshot.hold !== undefined ? sanitizeBoardPiece(snapshot.hold) : undefined,
+          canHold: snapshot.canHold !== undefined ? Boolean(snapshot.canHold) : undefined,
+          next: snapshot.next !== undefined ? sanitizeBoardNext(snapshot.next) : undefined,
           altitude: snapshot.altitude !== undefined ? Number(snapshot.altitude) || 0 : undefined,
           peakAltitude: snapshot.peakAltitude !== undefined ? Number(snapshot.peakAltitude) || 0 : undefined,
           floor: snapshot.floor !== undefined ? Math.max(1, Math.floor(Number(snapshot.floor) || 1)) : undefined,

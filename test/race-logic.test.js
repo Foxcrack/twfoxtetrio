@@ -81,3 +81,13 @@ test('race-logic normalizes full 40x10 TETR.IO board + active falling piece safe
   assert.ok(art.frontUrl.startsWith('data:image/svg+xml'));
   assert.ok(art.backUrl.startsWith('data:image/svg+xml'));
 });
+
+test('race-logic sanitizes held piece and next queue up to 5 pieces', () => {
+  assert.equal(raceLogic.sanitizePieceKey('T'), 't');
+  assert.equal(raceLogic.sanitizePieceKey({ type: 'I' }), 'i');
+  assert.equal(raceLogic.sanitizePieceKey('invalid'), null);
+  assert.deepEqual(
+    raceLogic.sanitizeNextQueue(['i', { type: 'T' }, 'bad', 'o', 's', 'z', 'j']),
+    ['i', 't', 'o', 's', 'z']
+  );
+});

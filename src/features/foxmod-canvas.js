@@ -324,9 +324,24 @@
     ctx.restore();
   }
 
+  function normalizeWingPieceKey(raw) {
+    if (!raw || !engine || !engine.PIECE_DEFS) return null;
+    const rawStr = typeof raw === 'string'
+      ? raw
+      : (typeof raw === 'object' ? (raw.type || raw.key || raw.c || '') : '');
+    const trimmed = String(rawStr || '').trim();
+    if (!trimmed) return null;
+    if (engine.PIECE_DEFS[trimmed]) return trimmed;
+    const upper = trimmed.toUpperCase();
+    if (engine.PIECE_DEFS[upper]) return upper;
+    const lower = trimmed.toLowerCase();
+    return engine.PIECE_DEFS[lower] ? lower : null;
+  }
+
   function drawWingPiece(ctx, key, boxX, boxY, boxW, boxH, disabled) {
-    if (!key || !engine.PIECE_DEFS[key]) return;
-    const def = engine.PIECE_DEFS[key];
+    const cleanKey = normalizeWingPieceKey(key);
+    if (!cleanKey || !engine.PIECE_DEFS[cleanKey]) return;
+    const def = engine.PIECE_DEFS[cleanKey];
     const cells = def.rotations[0];
     let minX = 99;
     let minY = 99;
@@ -340,7 +355,9 @@
     }
     const pieceW = maxX - minX + 1;
     const pieceH = maxY - minY + 1;
-    const cellSize = Math.min((boxW - 14) / Math.max(3.5, pieceW), (boxH - 10) / Math.max(2.5, pieceH), 15);
+    const hPad = boxW < 60 ? Math.max(2, Math.round(boxW * 0.1)) : 14;
+    const vPad = boxH < 36 ? Math.max(2, Math.round(boxH * 0.1)) : 10;
+    const cellSize = Math.min((boxW - hPad) / Math.max(3.5, pieceW), (boxH - vPad) / Math.max(2.5, pieceH), 15);
     const ox = boxX + (boxW - pieceW * cellSize) / 2;
     const oy = boxY + (boxH - pieceH * cellSize) / 2;
     const slot = disabled ? 'd' : def.slot;
@@ -357,9 +374,11 @@
     }
   }
 
-  function drawWingHeaderBox(ctx, x, y, w, h, title, alignRightCut) {
-    const hdrH = 22;
-    const cut = 14;
+  function drawWingHeaderBox(ctx, x, y, w, h, title, alignRightCut, metrics) {
+    const m = metrics || {};
+    const hdrH = Number.isFinite(m.hdrH) ? m.hdrH : 22;
+    const cut = Number.isFinite(m.cut) ? m.cut : 14;
+    const fontSize = Number.isFinite(m.fontSize) ? m.fontSize : 13;
     ctx.save();
     ctx.beginPath();
     if (alignRightCut) {
@@ -385,9 +404,10 @@
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x, y, w, hdrH);
     ctx.fillStyle = '#000000';
-    ctx.font = '900 13px HUN, Segoe UI, sans-serif';
+    ctx.font = `900 ${fontSize}px HUN, Segoe UI, sans-serif`;
     ctx.textAlign = alignRightCut ? 'left' : 'right';
-    ctx.fillText(title, alignRightCut ? x + 8 : x + w - 8, y + 16);
+    const textPad = Math.max(4, Math.round(hdrH * 0.36));
+    ctx.fillText(title, alignRightCut ? x + textPad : x + w - textPad, y + hdrH - Math.max(3, Math.round((hdrH - fontSize) * 0.45)));
     ctx.restore();
   }
 
@@ -622,6 +642,80 @@
     }
   }
 
+  function drawBoardGridAndCells(ctx, bx, by, bw, bh, compactBoard, alive, placement, borderWidth) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+    ctx.fillRect(bx, by, bw, bh);
+
+    const cols = Array.isArray(compactBoard) && compactBoard.length > 0 && compactBoard[0] ? compactBoard[0].length || 10 : 10;
+    const rows = Array.isArray(compactBoard) && compactBoard.length > 0 ? compactBoard.length : 20;
+    const cellW = bw / cols;
+    const cellH = bh / rows;
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = 1;
+    for (let gx = 1; gx < cols; gx++) {
+      ctx.beginPath();
+      ctx.moveTo(bx + gx * cellW, by);
+      ctx.lineTo(bx + gx * cellW, by + bh);
+      ctx.stroke();
+    }
+    for (let gy = 1; gy < rows; gy++) {
+      ctx.beginPath();
+      ctx.moveTo(bx, by + gy * cellH);
+      ctx.lineTo(bx + bw, by + gy * cellH);
+      ctx.stroke();
+    }
+
+    if (Array.isArray(compactBoard) && compactBoard.length > 0) {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const val = compactBoard[y][x];
+          if (val) {
+            drawTetrioMino(
+              ctx,
+              bx + x * cellW,
+              by + y * cellH,
+              Math.ceil(Math.max(cellW, cellH)),
+              alive === false ? 'd' : val,
+              1,
+              false
+            );
+          }
+        }
+      }
+    }
+
+    const lw = Number.isFinite(borderWidth) ? borderWidth : 2;
+    const inset = lw * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(bx + inset, by);
+    ctx.lineTo(bx + inset, by + bh - inset);
+    ctx.lineTo(bx + bw - inset, by + bh - inset);
+    ctx.lineTo(bx + bw - inset, by);
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = alive === false ? '#ff3d5c' : '#ffffff';
+    ctx.stroke();
+
+    if (alive === false) {
+      const koSize = Math.max(13, Math.round(bw * 0.16));
+      const subSize = Math.max(10, Math.round(bw * 0.115));
+      ctx.fillStyle = 'rgba(8, 6, 12, 0.64)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#ff4b6e';
+      ctx.font = `900 ${koSize}px HUN, Segoe UI, sans-serif`;
+      ctx.textAlign = 'center';
+      const numPlacement = Number(placement);
+      if (Number.isFinite(numPlacement) && numPlacement > 0) {
+        ctx.fillText('KO', bx + bw / 2, by + bh / 2 - 2);
+        ctx.fillStyle = '#ffd1da';
+        ctx.font = `800 ${subSize}px HUN, Segoe UI, sans-serif`;
+        ctx.fillText('Nº' + numPlacement, bx + bw / 2, by + bh / 2 + subSize + 4);
+      } else {
+        ctx.fillText('KO', bx + bw / 2, by + bh / 2 + Math.round(koSize * 0.35));
+      }
+    }
+  }
+
   /**
    * Renders a compact opponent board preview using native TETR.IO skin colors.
    */
@@ -633,77 +727,79 @@
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
-    ctx.fillRect(0, 0, w, h);
+    drawBoardGridAndCells(ctx, 0, 0, w, h, compactBoard, alive, placement, 2);
+  }
 
-    const cols = Array.isArray(compactBoard) && compactBoard.length > 0 && compactBoard[0] ? compactBoard[0].length || 10 : 10;
-    const rows = Array.isArray(compactBoard) && compactBoard.length > 0 ? compactBoard.length : 20;
-    const cellW = w / cols;
-    const cellH = h / rows;
+  /**
+   * Renders a compact or spectator TETR.IO-style Race board with flush HOLD (left),
+   * open-U playfield (center), and NEXT 5 pieces (right).
+   */
+  function renderRacePlayfield(canvas, state, options) {
+    if (!canvas || typeof canvas.getContext !== 'function') return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    // Subtle 10x20 gridlines matching TETR.IO opponent playfields
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-    ctx.lineWidth = 1;
-    for (let gx = 1; gx < cols; gx++) {
-      ctx.beginPath();
-      ctx.moveTo(gx * cellW, 0);
-      ctx.lineTo(gx * cellW, h);
-      ctx.stroke();
+    const st = state && typeof state === 'object' ? state : {};
+    const opts = options && typeof options === 'object' ? options : {};
+    const compact = Boolean(opts.compact);
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const wingW = Math.max(28, Math.round(w * 0.185));
+    const padX = Math.max(2, Math.floor((w - wingW * 2) * 0.04));
+    const cell = Math.max(4, Math.floor(Math.min((w - wingW * 2 - padX * 2) / 10, (h - 10) / 20.5)));
+    const boardW = cell * 10;
+    const boardH = cell * 20;
+    const boardX = Math.floor((w - boardW) / 2);
+    const boardY = Math.max(4, Math.floor((h - boardH) * 0.56));
+
+    const hdrMetrics = compact
+      ? { hdrH: 13, cut: 6, fontSize: 8 }
+      : { hdrH: 16, cut: 9, fontSize: 10 };
+
+    const holdX = boardX - wingW;
+    const holdH = Math.min(boardH, Math.round(wingW * 1.24));
+    drawWingHeaderBox(ctx, holdX, boardY, wingW, holdH, trHud('HOLD'), false, hdrMetrics);
+    drawWingPiece(
+      ctx,
+      st.hold,
+      holdX + 2,
+      boardY + hdrMetrics.hdrH + 2,
+      wingW - 4,
+      holdH - hdrMetrics.hdrH - 4,
+      st.canHold === false
+    );
+
+    const nextX = boardX + boardW;
+    const nextSlots = 5;
+    const slotH = Math.floor(Math.min((boardH - hdrMetrics.hdrH - 6) / nextSlots, wingW * 0.82));
+    const nextH = Math.min(boardH, hdrMetrics.hdrH + 5 + nextSlots * slotH);
+    const nextList = Array.isArray(st.next) ? st.next.slice(0, nextSlots) : [];
+    drawWingHeaderBox(ctx, nextX, boardY, wingW, nextH, trHud('NEXT'), true, hdrMetrics);
+    for (let i = 0; i < nextList.length; i++) {
+      drawWingPiece(
+        ctx,
+        nextList[i],
+        nextX + 2,
+        boardY + hdrMetrics.hdrH + 2 + i * slotH,
+        wingW - 4,
+        slotH - 2,
+        false
+      );
     }
-    for (let gy = 1; gy < rows; gy++) {
-      ctx.beginPath();
-      ctx.moveTo(0, gy * cellH);
-      ctx.lineTo(w, gy * cellH);
-      ctx.stroke();
-    }
 
-    if (Array.isArray(compactBoard) && compactBoard.length > 0) {
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          const val = compactBoard[y][x];
-          if (val) {
-            drawTetrioMino(
-              ctx,
-              x * cellW,
-              y * cellH,
-              Math.ceil(Math.max(cellW, cellH)),
-              alive === false ? 'd' : val,
-              1,
-              false
-            );
-          }
-        }
-      }
-    }
-
-    // Open-top U-shaped border matching real TETR.IO opponent boards
-    ctx.beginPath();
-    ctx.moveTo(1, 0);
-    ctx.lineTo(1, h - 1);
-    ctx.lineTo(w - 1, h - 1);
-    ctx.lineTo(w - 1, 0);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = alive === false ? '#ff3d5c' : '#ffffff';
-    ctx.stroke();
-
-    if (alive === false) {
-      const koSize = Math.max(14, Math.round(w * 0.14));
-      const subSize = Math.max(11, Math.round(w * 0.1));
-      ctx.fillStyle = 'rgba(8, 6, 12, 0.62)';
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = '#ff4b6e';
-      ctx.font = `900 ${koSize}px HUN, Segoe UI, sans-serif`;
-      ctx.textAlign = 'center';
-      const numPlacement = Number(placement);
-      if (Number.isFinite(numPlacement) && numPlacement > 0) {
-        ctx.fillText('KO', w / 2, h / 2 - 2);
-        ctx.fillStyle = '#ffd1da';
-        ctx.font = `800 ${subSize}px HUN, Segoe UI, sans-serif`;
-        ctx.fillText('Nº' + numPlacement, w / 2, h / 2 + subSize + 4);
-      } else {
-        ctx.fillText('KO', w / 2, h / 2 + Math.round(koSize * 0.35));
-      }
-    }
+    drawBoardGridAndCells(
+      ctx,
+      boardX,
+      boardY,
+      boardW,
+      boardH,
+      st.board,
+      st.alive,
+      st.placement,
+      compact ? 1.6 : 2
+    );
   }
 
   /**
@@ -1008,6 +1104,7 @@
     formatDuration,
     renderPlayfield,
     renderMiniBoard,
+    renderRacePlayfield,
     createPlayfieldController,
     reloadSprites
   };

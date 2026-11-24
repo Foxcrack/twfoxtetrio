@@ -1100,3 +1100,62 @@ test('p2p room shares sanitized host and peer avatars and removes disconnected c
 
   host.close();
 });
+
+test('p2p room relays hold, canHold, and next queue pieces between host and peers', async () => {
+  const rtcAuto = createLoopbackRtcFactory();
+  const wsFactory = createInMemoryMqttWsFactory();
+
+  const host = p2p.createHostServer({
+    hostName: 'HostOne',
+    gameMode: 'race',
+    maxPlayers: 4,
+    rtcFactory: rtcAuto,
+    wsFactory,
+    brokers: ['wss://mock/mqtt']
+  });
+  const code = host.getSnapshot().room.roomCode;
+  await new Promise((r) => setTimeout(r, 25));
+
+  const peer = p2p.createClientPeer({
+    playerName: 'RunnerTwo',
+    rtcFactory: rtcAuto,
+    wsFactory,
+    brokers: ['wss://mock/mqtt']
+  });
+  await peer.joinByCode(code);
+  await new Promise((r) => setTimeout(r, 30));
+
+  host.setReady(true);
+  peer.setReady(true);
+  await new Promise((r) => setTimeout(r, 30));
+
+  host.updateSelfBoard({
+    compactBoard: Array.from({ length: 20 }, () => new Array(10).fill(null)),
+    hold: 'T',
+    canHold: false,
+    next: ['i', 'o', 's', 'z', 'l', 'j'],
+    altitude: 145.5,
+    floor: 2
+  });
+  peer.updateSelfBoard({
+    compactBoard: Array.from({ length: 20 }, () => new Array(10).fill(null)),
+    hold: { type: 'I' },
+    canHold: true,
+    next: ['j', 'l', 't', 's', 'o'],
+    altitude: 210.4,
+    floor: 3
+  });
+  await new Promise((r) => setTimeout(r, 35));
+
+  const peerSawHost = peer.getSnapshot().players.find((p) => p.id === 'host');
+  const hostSawPeer = host.getSnapshot().players.find((p) => p.id !== 'host');
+  assert.equal(peerSawHost.hold, 't');
+  assert.equal(peerSawHost.canHold, false);
+  assert.deepEqual(peerSawHost.next, ['i', 'o', 's', 'z', 'l']);
+  assert.equal(hostSawPeer.hold, 'i');
+  assert.equal(hostSawPeer.canHold, true);
+  assert.deepEqual(hostSawPeer.next, ['j', 'l', 't', 's', 'o']);
+
+  peer.close();
+  host.close();
+});

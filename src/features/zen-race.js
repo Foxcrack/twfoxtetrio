@@ -414,7 +414,7 @@
 #${DOCK_ID} {
   position: fixed;
   right: 12px;
-  top: 56px;
+  bottom: 12px;
   z-index: 999996;
   pointer-events: none;
   user-select: none;
@@ -422,73 +422,96 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: 0;
   opacity: 0;
-  transform: translateX(18px);
+  transform: translateY(14px);
   transition: opacity 160ms ease, transform 160ms ease;
 }
 #${DOCK_ID}.is-visible {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateY(0);
 }
 #${DOCK_ID} .twfox-race-dock-hdr {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px;
-  border-radius: 5px;
-  border: 1.5px solid rgba(255, 136, 48, 0.8);
-  background: rgba(22, 10, 14, 0.86);
+  padding: 4px 10px;
+  border-radius: 5px 5px 0 0;
+  border: 1.5px solid rgba(255, 140, 52, 0.78);
+  border-bottom: none;
+  background: rgba(20, 10, 14, 0.92);
   color: #ffc585;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 900;
   letter-spacing: 0.08em;
 }
 #${DOCK_ID} .twfox-race-boards-row {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 0;
+  border-radius: 6px 0 6px 6px;
+  border: 1.5px solid rgba(255, 154, 76, 0.72);
+  background: rgba(12, 7, 12, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.68);
+  overflow: hidden;
 }
 #${DOCK_ID} .twfox-race-board-card {
-  width: 118px;
-  padding: 6px;
-  border-radius: 6px;
-  border: 1.5px solid rgba(255, 160, 92, 0.55);
-  background: rgba(14, 9, 14, 0.84);
-  backdrop-filter: blur(5px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  width: clamp(92px, 8.6vw, 114px);
+  flex: 0 0 clamp(92px, 8.6vw, 114px);
+  padding: 4px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 3px;
+  background: rgba(14, 9, 14, 0.88);
+  box-sizing: border-box;
+}
+#${DOCK_ID} .twfox-race-board-card + .twfox-race-board-card {
+  border-left: 1px solid rgba(255, 160, 92, 0.34);
 }
 #${DOCK_ID} .twfox-race-board-card.is-ko {
-  border-color: rgba(255, 75, 110, 0.55);
-  opacity: 0.78;
+  background: rgba(24, 10, 16, 0.84);
+  opacity: 0.82;
 }
 #${DOCK_ID} .twfox-race-board-name {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.74rem;
+  gap: 4px;
+  font-size: 0.7rem;
   font-weight: 900;
   color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
 }
+#${DOCK_ID} .twfox-race-board-name .twfox-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#${DOCK_ID} .twfox-race-board-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+}
 #${DOCK_ID} .twfox-race-board-alt {
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   font-weight: 900;
   color: #ffd085;
   font-variant-numeric: tabular-nums;
 }
 #${DOCK_ID} .twfox-race-board-meta {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 800;
   color: rgba(255, 224, 194, 0.78);
+  white-space: nowrap;
 }
 
 body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
@@ -504,8 +527,8 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 18px;
-  background: radial-gradient(circle at center, rgba(24, 12, 20, 0.82), rgba(8, 5, 10, 0.92));
+  padding: 16px;
+  background: radial-gradient(circle at center, rgba(24, 12, 20, 0.84), rgba(8, 5, 10, 0.94));
   color: #ffffff;
   font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
 }
@@ -513,68 +536,139 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
   display: none !important;
 }
 #${SPECTATOR_ID} .twfox-spec-topbar {
-  width: min(960px, 95vw);
+  width: min(calc(var(--twfox-spec-cols, 2) * 276px), 96vw);
+  min-width: min(560px, 96vw);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   padding: 8px 14px;
   border-radius: 6px;
-  border: 1.5px solid rgba(255, 132, 42, 0.7);
-  background: rgba(20, 10, 14, 0.92);
+  border: 1.5px solid rgba(255, 132, 42, 0.74);
+  background: rgba(20, 10, 14, 0.94);
+  box-sizing: border-box;
 }
 #${SPECTATOR_ID} .twfox-spec-main {
-  width: min(960px, 95vw);
+  width: min(calc(var(--twfox-spec-cols, 2) * 276px), 96vw);
+  max-width: 96vw;
   display: flex;
-  align-items: flex-start;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 0;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 145, 58, 0.8);
+  background: rgba(12, 7, 12, 0.94);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.76);
+  overflow: hidden;
+  box-sizing: border-box;
 }
-#${SPECTATOR_ID} .twfox-spec-focus {
+#${SPECTATOR_ID} .twfox-spec-runner {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 8px 10px;
+  background: rgba(16, 9, 15, 0.92);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 120ms ease;
+}
+#${SPECTATOR_ID} .twfox-spec-runner + .twfox-spec-runner {
+  border-left: 1px solid rgba(255, 160, 92, 0.34);
+}
+#${SPECTATOR_ID} .twfox-spec-runner:hover:not(.is-ko) {
+  background: rgba(34, 17, 16, 0.94);
+}
+#${SPECTATOR_ID} .twfox-spec-runner.is-watching {
+  background: rgba(52, 23, 14, 0.94);
+  box-shadow: inset 0 3px 0 #ff9442;
+}
+#${SPECTATOR_ID} .twfox-spec-runner.is-ko {
+  background: rgba(18, 10, 16, 0.86);
+  opacity: 0.76;
+  cursor: default;
+}
+#${SPECTATOR_ID} .twfox-spec-card-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+#${SPECTATOR_ID} .twfox-spec-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-weight: 900;
+  font-size: 0.86rem;
+  color: #ffffff;
+}
+#${SPECTATOR_ID} .twfox-spec-rank {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 146, 62, 0.2);
+  border: 1px solid rgba(255, 154, 76, 0.55);
+  color: #ffd085;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+#${SPECTATOR_ID} .twfox-spec-runner.is-watching .twfox-spec-rank {
+  background: #ff8e3c;
+  color: #160a0d;
+}
+#${SPECTATOR_ID} .twfox-spec-status {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(94, 240, 156, 0.14);
+  color: #84ffba;
+  border: 1px solid rgba(94, 240, 156, 0.35);
+}
+#${SPECTATOR_ID} .twfox-spec-runner.is-ko .twfox-spec-status {
+  background: rgba(255, 75, 110, 0.16);
+  color: #ff8ea5;
+  border-color: rgba(255, 75, 110, 0.35);
+}
+#${SPECTATOR_ID} .twfox-spec-card-foot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: 2px solid rgba(255, 145, 58, 0.82);
-  background: rgba(14, 8, 13, 0.9);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+  gap: 2px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 #${SPECTATOR_ID} .twfox-spec-alt {
-  font-size: 1.75rem;
+  font-size: 1.25rem;
   font-weight: 900;
   color: #ffd37d;
   font-variant-numeric: tabular-nums;
 }
-#${SPECTATOR_ID} .twfox-spec-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 260px;
-  flex: 1 1 260px;
+#${SPECTATOR_ID} .twfox-spec-meta {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: rgba(255, 220, 185, 0.8);
+  text-align: center;
+  white-space: nowrap;
 }
-#${SPECTATOR_ID} .twfox-spec-runner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  border: 1.5px solid rgba(255, 255, 255, 0.16);
-  background: rgba(24, 14, 22, 0.88);
-  cursor: pointer;
-}
-#${SPECTATOR_ID} .twfox-spec-runner.is-watching {
-  border-color: #ff8e3c;
-  background: rgba(58, 26, 14, 0.92);
-}
-#${SPECTATOR_ID} .twfox-spec-runner.is-ko {
-  opacity: 0.62;
-  cursor: default;
+@media (max-width: 780px) {
+  #${SPECTATOR_ID} .twfox-spec-main {
+    flex-wrap: wrap;
+  }
+  #${SPECTATOR_ID} .twfox-spec-runner {
+    flex: 1 1 48%;
+  }
 }
 
 #${RESULTS_ID} {
@@ -773,8 +867,8 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let specEl = null;
     let specHeaderEl = null;
     let specCanvasEl = null;
-    let specAltEl = null;
-    let specMetaEl = null;
+    let specTopbarEl = null;
+    let specSubEl = null;
     let specListEl = null;
     let specPeekBtnEl = null;
     let backToSpecBtnEl = null;
@@ -784,6 +878,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let resultsNextBtnEl = null;
 
     const rivalCanvases = new Map();
+    const specCanvases = new Map();
 
     function getSelfUsername() {
       const st = api.getState ? api.getState() : null;
@@ -1276,6 +1371,9 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           const compactBoard = raceLogic.normalizeCompactBoard(zSnap.board, zSnap.falling, zSnap.bufferHeight);
           const payload = {
             compactBoard,
+            hold: typeof raceLogic.sanitizePieceKey === 'function' ? raceLogic.sanitizePieceKey(zSnap.hold) : (zSnap.hold || null),
+            canHold: zSnap.canHold !== false,
+            next: typeof raceLogic.sanitizeNextQueue === 'function' ? raceLogic.sanitizeNextQueue(zSnap.next) : (Array.isArray(zSnap.next) ? zSnap.next.slice(0, 5) : []),
             altitude: curAlt,
             peakAltitude: selfPeakAltitude,
             floor: fl.floor,
@@ -1757,6 +1855,26 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       }
     }
 
+    function drawPlayerRaceBoard(canvas, player, placement, compact) {
+      if (!canvas || !foxmodCanvas) return;
+      if (typeof foxmodCanvas.renderRacePlayfield === 'function') {
+        foxmodCanvas.renderRacePlayfield(
+          canvas,
+          {
+            board: player.board,
+            alive: player.alive,
+            placement,
+            hold: player.hold || null,
+            canHold: player.canHold !== false,
+            next: Array.isArray(player.next) ? player.next : []
+          },
+          { compact: Boolean(compact) }
+        );
+      } else if (typeof foxmodCanvas.renderMiniBoard === 'function') {
+        foxmodCanvas.renderMiniBoard(canvas, player.board, player.alive, placement);
+      }
+    }
+
     function renderDock() {
       if (!dockEl || !dockBoardsEl) return;
       const bodyEl = document.body;
@@ -1776,10 +1894,15 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         dockHeaderEl.textContent = `THE RACE · LIVE (${myRank ? `Nº${myRank.placement}/${ranked.length}` : `${ranked.length}/4`})`;
       }
 
-      // Display rivals side-by-side (or all players cleanly docked beside your active TETR.IO board)
+      // Display all rival boards flush side-by-side in equal-size horizontal tiles (bottom-right)
       dockBoardsEl.innerHTML = '';
       const rivals = activePool.filter((p) => p.id !== selfId);
       const displayList = rivals.length > 0 ? rivals : activePool;
+      const activeDockIds = new Set(displayList.map((p) => p.id));
+      for (const oldId of Array.from(rivalCanvases.keys())) {
+        if (!activeDockIds.has(oldId)) rivalCanvases.delete(oldId);
+      }
+
       for (const pl of displayList) {
         const rankInfo = ranked.find((r) => r.id === pl.id);
         const rankNum = rankInfo ? rankInfo.placement : '-';
@@ -1788,14 +1911,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         let c = rivalCanvases.get(pl.id);
         if (!c) {
           c = el('canvas', {
-            attrs: { width: '104', height: '208' },
-            style: 'display:block;width:104px;height:208px;border-radius:3px;'
+            attrs: { width: '200', height: '264' },
+            style: 'display:block;width:100%;height:auto;border-radius:2px;'
           });
           rivalCanvases.set(pl.id, c);
         }
-        if (foxmodCanvas && typeof foxmodCanvas.renderMiniBoard === 'function') {
-          foxmodCanvas.renderMiniBoard(c, pl.board, pl.alive, pl.alive === false ? rankNum : null);
-        }
+        drawPlayerRaceBoard(c, pl, pl.alive === false ? rankNum : null, true);
         const cardClasses = ['twfox-race-board-card', pl.alive === false ? 'is-ko' : ''].filter(Boolean).join(' ');
         dockBoardsEl.appendChild(
           el('div', { className: cardClasses, attrs: { 'data-race-player': pl.id } }, [
@@ -1804,8 +1925,10 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
               el('span', { text: `Nº${rankNum}` })
             ]),
             c,
-            el('div', { className: 'twfox-race-board-alt', text: `${peakAlt.toFixed(1)} M` }),
-            el('div', { className: 'twfox-race-board-meta', text: `F${floorInfo.floor} · ${(Number(pl.pps) || 0).toFixed(1)}/S` })
+            el('div', { className: 'twfox-race-board-foot' }, [
+              el('span', { className: 'twfox-race-board-alt', text: `${peakAlt.toFixed(1)} M` }),
+              el('span', { className: 'twfox-race-board-meta', text: `F${floorInfo.floor} · ${(Number(pl.pps) || 0).toFixed(1)}/S` })
+            ])
           ])
         );
       }
@@ -1814,7 +1937,9 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     function renderSpectator() {
       if (!specEl) return;
       const snap = session ? session.getSnapshot() : null;
-      const players = (snap && snap.players) ? snap.players.filter((p) => !p.spectator) : [];
+      const players = (snap && snap.players)
+        ? snap.players.filter((p) => p && !p.spectator && !p.disconnected).slice(0, raceLogic.MAX_RACE_PLAYERS)
+        : [];
       const selfId = snap ? (snap.role === 'host' ? 'host' : snap.selfId) : 'host';
       const target = raceLogic.pickNextAliveTarget(players, selfId, spectatingTargetId);
       const shouldShow = Boolean(session && racePhase === 'dead' && target && !peekMyResult);
@@ -1829,30 +1954,68 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (!shouldShow) return;
 
       spectatingTargetId = target.id;
-      const targetAlt = Math.max(Number(target.peakAltitude) || 0, Number(target.altitude) || 0);
-      const targetFloor = raceLogic.computeFloorFromAltitude(targetAlt, target.floor);
+      const ranked = raceLogic.computeRaceStandings(players, [], 0, 0);
+      const colCount = Math.max(2, Math.min(4, players.length || 2));
+      if (specEl.style && typeof specEl.style.setProperty === 'function') {
+        specEl.style.setProperty('--twfox-spec-cols', String(colCount));
+      }
 
       if (specHeaderEl) {
         specHeaderEl.textContent = `SPECTATING ${String(target.name || 'RUNNER').toUpperCase()}`;
       }
-      if (specAltEl) {
-        specAltEl.textContent = `${targetAlt.toFixed(1)} M · F${targetFloor.floor}`;
-      }
-      if (specMetaEl) {
-        specMetaEl.textContent = `${targetFloor.name} · ${(Number(target.pps) || 0).toFixed(2)} PPS · YOUR ALTITUDE: ${selfPeakAltitude.toFixed(1)} M`;
-      }
-      if (specCanvasEl && foxmodCanvas && typeof foxmodCanvas.renderMiniBoard === 'function') {
-        foxmodCanvas.renderMiniBoard(specCanvasEl, target.board, target.alive, null);
+      if (specSubEl) {
+        specSubEl.textContent = `YOUR ALTITUDE: ${selfPeakAltitude.toFixed(1)} M · CLICK A RUNNER TO FOCUS`;
       }
 
       if (specListEl) {
         specListEl.innerHTML = '';
-        const ranked = raceLogic.computeRaceStandings(players, [], 0, 0);
-        for (const r of ranked) {
-          const pl = players.find((x) => x.id === r.id) || r;
+        const activeIds = new Set(players.map((p) => p.id));
+        for (const oldId of Array.from(specCanvases.keys())) {
+          if (!activeIds.has(oldId)) specCanvases.delete(oldId);
+        }
+
+        for (const pl of players) {
+          const rankInfo = ranked.find((r) => r.id === pl.id);
+          const rankNum = rankInfo ? rankInfo.placement : '-';
+          const peakAlt = Math.max(Number(pl.peakAltitude) || 0, Number(pl.altitude) || 0);
+          const floorInfo = raceLogic.computeFloorFromAltitude(peakAlt, pl.floor);
           const isAlive = pl.alive !== false && !pl.disconnected;
           const isWatching = pl.id === target.id;
-          const row = el('div', {
+          const isSelf = pl.id === selfId;
+
+          let c = specCanvases.get(pl.id);
+          if (!c) {
+            c = el('canvas', {
+              attrs: { width: '264', height: '336' },
+              style: 'display:block;width:100%;height:auto;border-radius:3px;'
+            });
+            specCanvases.set(pl.id, c);
+          }
+          if (isWatching) {
+            if (specCanvasEl && specCanvasEl !== c) {
+              if (typeof specCanvasEl.removeAttribute === 'function') {
+                specCanvasEl.removeAttribute('id');
+              } else {
+                specCanvasEl.id = '';
+              }
+            }
+            if (typeof c.setAttribute === 'function') {
+              c.setAttribute('id', 'twfoxtetrio-race-spec-canvas');
+            } else {
+              c.id = 'twfoxtetrio-race-spec-canvas';
+            }
+            specCanvasEl = c;
+          } else if (c.id === 'twfoxtetrio-race-spec-canvas') {
+            if (typeof c.removeAttribute === 'function') {
+              c.removeAttribute('id');
+            } else {
+              c.id = '';
+            }
+          }
+
+          drawPlayerRaceBoard(c, pl, isAlive ? null : rankNum, false);
+
+          const card = el('div', {
             className: [
               'twfox-spec-runner',
               isWatching ? 'is-watching' : '',
@@ -1860,22 +2023,29 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
             ].filter(Boolean).join(' '),
             attrs: { 'data-spec-player-id': pl.id }
           }, [
-            el('div', {}, [
-              el('div', { className: 'twfox-player-name', style: 'font-weight:900;font-size:0.95rem;', text: `Nº${r.placement} ${pl.name}` }),
-              el('div', {
-                style: 'font-size:0.75rem;color:rgba(255,215,180,0.75);',
-                text: isAlive ? `LIVE · F${r.floor} ${r.floorName}` : 'FINISHED / KO'
-              })
+            el('div', { className: 'twfox-spec-card-hdr' }, [
+              el('div', { className: 'twfox-spec-card-identity' }, [
+                el('span', { className: 'twfox-spec-rank', text: `Nº${rankNum}` }),
+                el('span', { className: 'twfox-player-name', text: String(pl.name || 'RUNNER') + (isSelf ? ' (YOU)' : '') })
+              ]),
+              el('span', { className: 'twfox-spec-status', text: isAlive ? 'LIVE' : 'KO' })
             ]),
-            el('div', { style: 'text-align:right;font-weight:900;color:#ffd085;', text: `${r.altitude.toFixed(1)} M` })
+            c,
+            el('div', { className: 'twfox-spec-card-foot' }, [
+              el('div', { className: 'twfox-spec-alt', text: `${peakAlt.toFixed(1)} M · F${floorInfo.floor}` }),
+              el('div', {
+                className: 'twfox-spec-meta',
+                text: `${floorInfo.name} · ${(Number(pl.pps) || 0).toFixed(2)} PPS · ${Number(pl.lines) || 0} L`
+              })
+            ])
           ]);
           if (isAlive && pl.id !== selfId) {
-            row.addEventListener('click', () => {
+            card.addEventListener('click', () => {
               spectatingTargetId = pl.id;
               renderSpectator();
             });
           }
-          specListEl.appendChild(row);
+          specListEl.appendChild(card);
         }
       }
     }
@@ -2044,8 +2214,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (!specEl && document.body) {
         specHeaderEl = el('div', {
           id: 'twfoxtetrio-race-spectate-target',
-          style: 'font-size:1.1rem;font-weight:900;color:#ffbe7b;',
+          style: 'font-size:1.05rem;font-weight:900;color:#ffbe7b;',
           text: 'SPECTATING'
+        });
+        specSubEl = el('span', {
+          style: 'font-size:0.76rem;font-weight:800;color:#ffd09e;',
+          text: 'CLICK A RUNNER TO FOCUS'
         });
         specPeekBtnEl = el('button', {
           id: 'twfoxtetrio-race-peek-btn',
@@ -2057,24 +2231,15 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           peekMyResult = true;
           syncVisualState();
         });
-        specCanvasEl = el('canvas', {
-          id: 'twfoxtetrio-race-spec-canvas',
-          attrs: { width: '230', height: '460' },
-          style: 'display:block;width:230px;height:460px;border-radius:4px;'
-        });
-        specAltEl = el('div', { className: 'twfox-spec-alt', text: '0.0 M' });
-        specMetaEl = el('div', { style: 'font-size:0.82rem;font-weight:800;color:rgba(255,220,185,0.85);text-align:center;', text: '' });
-        specListEl = el('div', { className: 'twfox-spec-list' });
+        specTopbarEl = el('div', { className: 'twfox-spec-topbar' }, [
+          specHeaderEl,
+          specSubEl,
+          specPeekBtnEl
+        ]);
+        specListEl = el('div', { className: 'twfox-spec-main' });
         specEl = el('div', { id: SPECTATOR_ID, className: 'hidden' }, [
-          el('div', { className: 'twfox-spec-topbar' }, [
-            specHeaderEl,
-            el('span', { style: 'font-size:0.78rem;font-weight:800;color:#ffd09e;', text: 'CLICK A RUNNER TO SWITCH VIEW' }),
-            specPeekBtnEl
-          ]),
-          el('div', { className: 'twfox-spec-main' }, [
-            el('div', { className: 'twfox-spec-focus' }, [specCanvasEl, specAltEl, specMetaEl]),
-            specListEl
-          ])
+          specTopbarEl,
+          specListEl
         ]);
         document.body.appendChild(specEl);
       }

@@ -123,6 +123,25 @@
     };
   }
 
+  function sanitizePieceKey(raw) {
+    if (!raw) return null;
+    const rawStr = typeof raw === 'string'
+      ? raw
+      : (typeof raw === 'object' ? (raw.type || raw.key || raw.c || '') : '');
+    const clean = String(rawStr || '').trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(FALLBACK_TETROMINO_SHAPES, clean) ? clean : null;
+  }
+
+  function sanitizeNextQueue(rawNext) {
+    if (!Array.isArray(rawNext)) return [];
+    const out = [];
+    for (let i = 0; i < rawNext.length && out.length < 5; i++) {
+      const k = sanitizePieceKey(rawNext[i]);
+      if (k) out.push(k);
+    }
+    return out;
+  }
+
   function sanitizeCellValue(raw) {
     if (!raw) return null;
     if (typeof raw === 'string') {
@@ -366,6 +385,8 @@
     FLOOR_COLORS,
     clampAltitude,
     computeFloorFromAltitude,
+    sanitizePieceKey,
+    sanitizeNextQueue,
     normalizeCompactBoard,
     areAllRacePlayersReady,
     getAliveRacePlayers,

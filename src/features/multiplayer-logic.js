@@ -285,6 +285,9 @@
             elapsedMs: 0,
             board: null,
             falling: null,
+            hold: null,
+            canHold: true,
+            next: [],
             bufferHeight: 20
           };
         }
@@ -317,6 +320,9 @@
             elapsedMs: 0,
             board: null,
             falling: null,
+            hold: null,
+            canHold: true,
+            next: [],
             bufferHeight: 20
           };
         }
@@ -357,6 +363,21 @@
             }
           : null;
 
+        let hold = null;
+        if (typeof gState.hold === 'string' && gState.hold) {
+          hold = gState.hold.trim().toLowerCase();
+        } else if (gState.hold && typeof gState.hold === 'object' && gState.hold.type) {
+          hold = String(gState.hold.type).trim().toLowerCase();
+        }
+        const canHold = !gState.holdlocked;
+        const next = Array.isArray(gState.bag)
+          ? gState.bag
+              .slice(0, 5)
+              .map((item) => (typeof item === 'string' ? item : item && item.type ? String(item.type) : ''))
+              .map((k) => k.trim().toLowerCase())
+              .filter(Boolean)
+          : [];
+
         let currentFrame = 0;
         try {
           currentFrame = Number(selfWrapper.getFrame()) || 0;
@@ -386,6 +407,9 @@
           elapsedMs: Math.round(elapsedFrames * (1000 / 60)),
           board: rawBoard,
           falling,
+          hold,
+          canHold,
+          next,
           bufferHeight
         };
       }

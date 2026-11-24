@@ -4138,3 +4138,57 @@ test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on Q
   }
   await joinPromise.catch(() => {});
 });
+
+test('renderRacePlayfield draws HOLD and NEXT 5 wings for compact dock and spectator canvases', () => {
+  const env = createFakeDomEnvironment('https:');
+  env.triggerDOMContentLoaded();
+  const foxmodCanvas = env.context.__TWFOX_INTERNAL__.foxmodCanvas;
+  assert.ok(foxmodCanvas && typeof foxmodCanvas.renderRacePlayfield === 'function');
+
+  const drawnTexts = [];
+  let filledRects = 0;
+  const fakeCtx = {
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: 'left',
+    globalAlpha: 1,
+    save() {},
+    restore() {},
+    clearRect() {},
+    fillRect() {
+      filledRects += 1;
+    },
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    closePath() {},
+    fill() {},
+    stroke() {},
+    fillText(txt) {
+      drawnTexts.push(String(txt));
+    }
+  };
+  const fakeCanvas = {
+    width: 264,
+    height: 336,
+    getContext: (type) => (type === '2d' ? fakeCtx : null)
+  };
+
+  foxmodCanvas.renderRacePlayfield(
+    fakeCanvas,
+    {
+      board: Array.from({ length: 20 }, () => new Array(10).fill(null)),
+      alive: true,
+      hold: 't',
+      canHold: true,
+      next: ['i', 'o', 's', 'z', 'l']
+    },
+    { compact: false }
+  );
+
+  assert.equal(drawnTexts.includes('HOLD'), true, 'Spectator board canvas should render HOLD header');
+  assert.equal(drawnTexts.includes('NEXT'), true, 'Spectator board canvas should render NEXT header');
+  assert.equal(filledRects > 20, true, 'HOLD and NEXT minos plus board well should be painted');
+});
