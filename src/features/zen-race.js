@@ -798,6 +798,243 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       return (bag && bag.foxPawBadge) || null;
     }
 
+    const avatarCacheByUser = new Map();
+    const avatarFetchInFlight = new Set();
+    let hasSeenZenithVisibleForSession = false;
+    let inviteJoinGraceUntil = 0;
+    let inviteNavTimer = null;
+
+    function clearInviteNavTimer() {
+      if (inviteNavTimer) {
+        clearInterval(inviteNavTimer);
+        inviteNavTimer = null;
+      }
+    }
+
+    function normalizeNameKey(raw) {
+      return foxInviteLogic
+        ? foxInviteLogic.normalizeUsername(raw)
+        : String(raw || '').trim().toLowerCase();
+    }
+
+    function sanitizeAvatarUrlSafe(raw) {
+      const trimmed = String(raw || '').trim();
+      if (!trimmed) return '';
+      let candidate = trimmed;
+      if (candidate.startsWith('//')) {
+        candidate = 'https:' + candidate;
+      } else if (candidate.startsWith('/')) {
+        candidate = 'https://tetr.io' + candidate;
+      }
+      if (p2pRoom && typeof p2pRoom.sanitizeAvatarUrl === 'function') {
+        return p2pRoom.sanitizeAvatarUrl(candidate);
+      }
+      return /^https?:\/\/[^\s"'<>]+$/i.test(candidate) ? candidate : '';
+    }
+
+    function extractNodeAvatarUrl(node) {
+      if (!node) return '';
+      const directSrc = typeof node.src === 'string' && node.src.trim()
+        ? node.src.trim()
+        : (typeof node.getAttribute === 'function' ? String(node.getAttribute('src') || '').trim() : '');
+      if (directSrc) return sanitizeAvatarUrlSafe(directSrc);
+      const bg = node.style && typeof node.style.backgroundImage === 'string' ? node.style.backgroundImage : '';
+      const m = bg.match(/url\(\s*(['"]?)(.*?)\1\s*\)/i);
+      return m && m[2] ? sanitizeAvatarUrlSafe(m[2]) : '';
+    }
+
+    function requestRemoteAvatar(username) {
+      const norm = normalizeNameKey(username);
+      if (!norm || norm === 'player' || avatarCacheByUser.has(norm) || avatarFetchInFlight.has(norm)) return;
+      const fetchFn = typeof root.fetch === 'function' ? root.fetch : null;
+      if (!fetchFn) return;
+      avatarFetchInFlight.add(norm);
+      Promise.resolve()
+        .then(() => fetchFn('https://ch.tetr.io/api/users/' + encodeURIComponent(norm)))
+        .then((res) => (res && res.ok && typeof res.json === 'function' ? res.json() : null))
+        .then((payload) => {
+          const userObj = payload && payload.data ? (payload.data.user || payload.data) : null;
+          let url = '';
+          if (userObj && userObj._id && userObj.avatar_revision) {
+            url = sanitizeAvatarUrlSafe(
+              'https://tetr.io/user-content/avatars/' +
+              encodeURIComponent(String(userObj._id)) +
+              '.jpg?rv=' +
+              encodeURIComponent(String(userObj.avatar_revision))
+            );
+          }
+          avatarCacheByUser.set(norm, url);
+          if (url && (cardSelected || session)) {
+            renderParty();
+          }
+        })
+        .catch(() => {
+          avatarCacheByUser.set(norm, '');
+        })
+        .finally(() => {
+          avatarFetchInFlight.delete(norm);
+        });
+    }
+
+    function getSelfAvatarUrl() {
+      const selfIds = ['zenith_party_self_avatar', 'me_avatar', 'me_avatar_img'];
+      for (const id of selfIds) {
+        const found = extractNodeAvatarUrl(document.getElementById(id));
+        if (found) return found;
+      }
+      const foxBadge = getFoxBadge();
+      const selfName = getSelfUsername();
+      if (foxBadge && typeof foxBadge.getAvatarUrl === 'function') {
+        const fromBadge = sanitizeAvatarUrlSafe(foxBadge.getAvatarUrl(selfName));
+        if (fromBadge) return fromBadge;
+      }
+      const norm = normalizeNameKey(selfName);
+      if (norm && avatarCacheByUser.has(norm)) {
+        return avatarCacheByUser.get(norm) || '';
+      }
+      if (norm && norm !== 'player') {
+        requestRemoteAvatar(selfName);
+      }
+      return '';
+    }
+
+    function resolvePlayerAvatar(playerObj, selfId) {
+      if (!playerObj) return '';
+      const cleanName = String(playerObj.name || '').trim();
+      const fromPeer = sanitizeAvatarUrlSafe(playerObj.avatar || '');
+      if (playerObj.id === selfId) {
+        const selfUrl = getSelfAvatarUrl();
+        if (selfUrl) return selfUrl;
+      }
+      if (fromPeer) return fromPeer;
+      const foxBadge = getFoxBadge();
+      if (foxBadge && typeof foxBadge.getAvatarUrl === 'function') {
+        const fromBadge = sanitizeAvatarUrlSafe(foxBadge.getAvatarUrl(cleanName));
+        if (fromBadge) return fromBadge;
+      }
+      const norm = normalizeNameKey(cleanName);
+      if (norm && avatarCacheByUser.has(norm)) {
+        return avatarCacheByUser.get(norm) || '';
+      }
+      if (norm && norm !== 'player') {
+        requestRemoteAvatar(cleanName);
+      }
+      return '';
+    }
+
+    function isInQuickPlayLobbyUi() {
+      const zMenu = document.getElementById('zenithmenu');
+      if (!zMenu) return false;
+      if (zMenu.classList && zMenu.classList.contains('hidden')) return false;
+      const menusEl = document.getElementById('menus');
+      const menuType = menusEl && typeof menusEl.getAttribute === 'function' ? menusEl.getAttribute('data-menu-type') : '';
+      if (menuType && menuType !== 'zenith') return false;
+      const inZenithBody = Boolean(document.body && document.body.classList && document.body.classList.contains('inzenith'));
+      return Boolean(inZenithBody || menuType === 'zenith' || document.getElementById('zenith_deck_cards'));
+    }
+
+    function findQuickPlayNavTarget() {
+      const direct = document.getElementById('multi_quickplay') || document.getElementById('sig_quickplay');
+      if (direct) return direct;
+      try {
+        if (typeof document.querySelector === 'function') {
+          return document.querySelector('[data-menu="zenith"]');
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    function triggerLeaveQuickPlayCleanup() {
+      clearInviteNavTimer();
+      hasSeenZenithVisibleForSession = false;
+      inviteJoinGraceUntil = 0;
+      clearCardSpin();
+      cardSelected = false;
+      if (session) {
+        teardownRaceSession(true);
+      } else {
+        syncVisualState();
+      }
+    }
+
+    function bindLeaveZenithButton() {
+      const leaveZp = document.getElementById('leavezenith');
+      if (leaveZp && !leaveZp.__twfoxRaceLeaveBound && typeof leaveZp.addEventListener === 'function') {
+        leaveZp.__twfoxRaceLeaveBound = true;
+        leaveZp.addEventListener('click', () => {
+          if (Date.now() < inviteJoinGraceUntil) return;
+          triggerLeaveQuickPlayCleanup();
+        });
+      }
+    }
+
+    function escapeToQuickPlayStep(attempt) {
+      const helpers = internals.foxMenuHelpers;
+      if (helpers && typeof helpers.hideFoxmodScrollersImmediately === 'function') {
+        helpers.hideFoxmodScrollersImmediately();
+      }
+      if (helpers && typeof helpers.closeMultiSession === 'function') {
+        helpers.closeMultiSession();
+      }
+
+      const socialEl = document.getElementById('social');
+      const socialBg = document.getElementById('social_bg');
+      if (socialEl && socialEl.classList && socialEl.classList.contains('open') && socialBg && typeof socialBg.click === 'function') {
+        socialBg.click();
+      }
+
+      const exitReplay = document.getElementById('exit_replay');
+      if (exitReplay && (!exitReplay.classList || !exitReplay.classList.contains('hidden')) && typeof exitReplay.click === 'function') {
+        exitReplay.click();
+      }
+      const exitSpectate = document.getElementById('exit_spectate');
+      if (exitSpectate && (!exitSpectate.classList || !exitSpectate.classList.contains('hidden')) && typeof exitSpectate.click === 'function') {
+        exitSpectate.click();
+      }
+      if (document.body && document.body.classList && document.body.classList.contains('matchmaking')) {
+        const mmBtn = document.getElementById('enter_matchmaking');
+        if (mmBtn && typeof mmBtn.click === 'function') {
+          mmBtn.click();
+        }
+      }
+
+      const rState = api.getState ? api.getState() : null;
+      const inGameNow = Boolean(
+        (rState && rState.inGame) ||
+        (document.body && document.body.classList && document.body.classList.contains('ingame'))
+      );
+      if (inGameNow && typeof api.abortActiveGameForInvite === 'function') {
+        api.abortActiveGameForInvite();
+      }
+
+      const inOfficialMulti = Boolean(
+        (rState && rState.inMultiplayer) ||
+        (document.body && document.body.classList && document.body.classList.contains('innormalmulti'))
+      );
+      const leaveRoomBtn = document.getElementById('leaveroom');
+      const canClickLeaveRoom = Boolean(
+        leaveRoomBtn &&
+        typeof leaveRoomBtn.click === 'function' &&
+        (!leaveRoomBtn.classList || !leaveRoomBtn.classList.contains('hidden')) &&
+        (inOfficialMulti || !isInQuickPlayLobbyUi())
+      );
+      if (canClickLeaveRoom) {
+        leaveRoomBtn.click();
+      }
+
+      if (!isInQuickPlayLobbyUi()) {
+        const qpTarget = findQuickPlayNavTarget();
+        if (qpTarget && typeof qpTarget.click === 'function') {
+          qpTarget.click();
+        } else if (attempt >= 2) {
+          const backBtn = document.getElementById('back');
+          if (backBtn && (!backBtn.classList || !backBtn.classList.contains('hidden')) && typeof backBtn.click === 'function') {
+            backBtn.click();
+          }
+        }
+      }
+    }
+
     function stopRaceLoop() {
       if (pollTimer) {
         clearInterval(pollTimer);
@@ -972,9 +1209,13 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
     function ensureHostSessionCreated() {
       if (session || !p2pRoom) return session;
+      clearInviteNavTimer();
+      hasSeenZenithVisibleForSession = isInQuickPlayLobbyUi();
+      inviteJoinGraceUntil = 0;
       const hostName = getSelfUsername() || 'HOST';
       session = p2pRoom.createHostServer({
         hostName,
+        hostAvatar: getSelfAvatarUrl(),
         roomName: `${hostName}'S RACE`,
         gameMode: raceLogic.RACE_GAME_MODE,
         maxPlayers: raceLogic.MAX_RACE_PLAYERS,
@@ -1110,6 +1351,20 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       }
       const normTarget = foxInviteLogic.normalizeUsername(targetUsername);
       if (!normTarget) return false;
+      const invStatus = typeof foxBadge.getFriendInviteStatus === 'function'
+        ? foxBadge.getFriendInviteStatus(normTarget)
+        : { invitable: true, reason: '', badge: '' };
+      if (!invStatus.invitable) {
+        statusOverride = invStatus.reason === 'league'
+          ? `${normTarget.toUpperCase()} is in TETRA LEAGUE.`
+          : invStatus.reason === 'busy'
+            ? `${normTarget.toUpperCase()} is BUSY.`
+            : `${normTarget.toUpperCase()} is offline.`;
+        inviteNoteText = statusOverride;
+        inviteNoteIsError = true;
+        renderParty();
+        return false;
+      }
       if (foxInviteLogic.isUserInRoom(normTarget, players)) {
         statusOverride = `${normTarget.toUpperCase()} is already in the room.`;
         inviteNoteText = statusOverride;
@@ -1279,7 +1534,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         isHost: true,
         ready: false,
         connected: true
-      }]).slice(0, raceLogic.MAX_RACE_PLAYERS);
+      }]).filter((p) => p && !p.disconnected).slice(0, raceLogic.MAX_RACE_PLAYERS);
       const roomCode = (snap && snap.room && snap.room.roomCode) || '';
       const activeList = players.filter((p) => !p.spectator && !p.disconnected);
       const readyCount = activeList.filter((p) => Boolean(p.ready)).length;
@@ -1288,8 +1543,8 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         codePillEl.textContent = roomCode ? `#${roomCode}` : '#LOCAL';
       }
 
-      const selfAvatarEl = document.getElementById('zenith_party_self_avatar') || document.getElementById('me_avatar');
-      const selfAvatarSrc = (selfAvatarEl && selfAvatarEl.src) || '';
+      const selfAvatarSrc = getSelfAvatarUrl();
+      const resolvedAvatars = players.map((p) => resolvePlayerAvatar(p, selfId));
       lastRenderedSelfName = getSelfUsername();
       ensurePresenceWatch();
 
@@ -1299,7 +1554,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         '|' +
         selfAvatarSrc +
         '|' +
-        players.map((p) => `${p.id}:${p.name}:${p.ready ? 1 : 0}:${p.isHost ? 1 : 0}`).join(';');
+        players.map((p, idx) => `${p.id}:${p.name}:${p.ready ? 1 : 0}:${p.isHost ? 1 : 0}:${resolvedAvatars[idx] || ''}`).join(';');
 
       if (slotsEl && slotsKey !== lastSlotsSignature) {
         lastSlotsSignature = slotsKey;
@@ -1319,22 +1574,49 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           }
           const slotClasses = ['twfox-race-slot', p.ready ? 'is-ready' : ''].filter(Boolean).join(' ');
           const cleanName = String(p.name || 'PLAYER');
-          const avatarNode = p.id === selfId && selfAvatarSrc
-            ? el('img', { className: 'twfox-race-avatar', attrs: { src: selfAvatarSrc, alt: '' } })
-            : el('div', { className: 'twfox-race-avatar-badge', text: cleanName.slice(0, 2).toUpperCase() });
+          const slotAvatar = resolvedAvatars[i] || '';
+          const badgeEl = el('div', {
+            className: 'twfox-race-avatar-badge',
+            text: cleanName.slice(0, 2).toUpperCase(),
+            style: slotAvatar ? 'display:none;' : ''
+          });
+          const slotChildren = [badgeEl];
+          if (slotAvatar) {
+            const avatarImg = el('img', {
+              className: 'twfox-race-avatar',
+              attrs: { src: slotAvatar, alt: '' }
+            });
+            if (typeof avatarImg.addEventListener === 'function') {
+              avatarImg.addEventListener('error', () => {
+                if (badgeEl) {
+                  if (badgeEl.style) badgeEl.style.display = '';
+                  setClass(badgeEl, 'hidden', false);
+                }
+                if (avatarImg.parentNode && typeof avatarImg.parentNode.removeChild === 'function') {
+                  avatarImg.parentNode.removeChild(avatarImg);
+                } else if (typeof avatarImg.remove === 'function') {
+                  avatarImg.remove();
+                } else {
+                  if (avatarImg.style) avatarImg.style.display = 'none';
+                  setClass(avatarImg, 'hidden', true);
+                }
+              });
+            }
+            slotChildren.push(avatarImg);
+          }
+          slotChildren.push(
+            el('div', {
+              className: 'twfox-race-slot-name twfox-paw-target twfox-player-name',
+              text: cleanName + (p.id === selfId ? ' (YOU)' : ''),
+              attrs: { 'data-username': cleanName.toLowerCase() }
+            }),
+            el('div', {
+              className: 'twfox-race-slot-sub',
+              text: p.ready ? 'READY!' : (p.isHost ? 'HOST' : 'WAITING')
+            })
+          );
           slotsEl.appendChild(
-            el('div', { className: slotClasses }, [
-              avatarNode,
-              el('div', {
-                className: 'twfox-race-slot-name twfox-paw-target twfox-player-name',
-                text: cleanName + (p.id === selfId ? ' (YOU)' : ''),
-                attrs: { 'data-username': cleanName.toLowerCase() }
-              }),
-              el('div', {
-                className: 'twfox-race-slot-sub',
-                text: p.ready ? 'READY!' : (p.isHost ? 'HOST' : 'WAITING')
-              })
-            ])
+            el('div', { className: slotClasses }, slotChildren)
           );
         }
       }
@@ -1406,15 +1688,46 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         const now = Date.now();
         for (const [normU, btn] of inviteBtnsByUser.entries()) {
           const inRoom = Boolean(foxInviteLogic && foxInviteLogic.isUserInRoom(normU, players));
+          const invStatus = foxBadge && typeof foxBadge.getFriendInviteStatus === 'function'
+            ? foxBadge.getFriendInviteStatus(normU)
+            : { invitable: true, reason: '', badge: '' };
+          const blocked = !invStatus.invitable;
+          const blockBadge = invStatus.badge || 'BUSY';
           const cd = inviteTracker ? inviteTracker.getCooldownRemainingSec(normU, now) : 0;
-          const stateKey = inRoom ? 'in_room' : cd > 0 ? `wait:${cd}` : (!roomCode ? 'no_code' : 'ready');
-          const nextDisabled = Boolean(inRoom || cd > 0 || !roomCode);
+          const stateKey = inRoom
+            ? 'in_room'
+            : blocked
+              ? `blocked:${blockBadge}`
+              : cd > 0
+                ? `wait:${cd}`
+                : (!roomCode ? 'no_code' : 'ready');
+          const nextDisabled = Boolean(inRoom || blocked || cd > 0 || !roomCode);
           if (btn.disabled !== nextDisabled) {
             btn.disabled = nextDisabled;
           }
           if (btn.__twfoxStateKey !== stateKey) {
             btn.__twfoxStateKey = stateKey;
-            btn.textContent = inRoom ? 'IN ROOM' : cd > 0 ? `WAIT ${cd}S` : 'INVITE';
+            btn.textContent = inRoom
+              ? 'IN ROOM'
+              : blocked
+                ? blockBadge
+                : cd > 0
+                  ? `WAIT ${cd}S`
+                  : 'INVITE';
+            if (typeof btn.setAttribute === 'function') {
+              if (blocked) {
+                btn.setAttribute(
+                  'title',
+                  invStatus.reason === 'league'
+                    ? 'Playing or queued in TETRA LEAGUE'
+                    : 'Player status is Busy or Offline'
+                );
+              } else if (typeof btn.removeAttribute === 'function') {
+                btn.removeAttribute('title');
+              } else {
+                btn.setAttribute('title', '');
+              }
+            }
           }
         }
       }
@@ -1671,52 +1984,44 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         return;
       }
 
-      const rState = api.getState ? api.getState() : null;
-      const inOfficialMulti = Boolean(
-        (rState && rState.inMultiplayer) ||
-        (document.body && document.body.classList && document.body.classList.contains('innormalmulti'))
-      );
-      if (inOfficialMulti || (rState && rState.inGame)) {
-        const helpers = internals.foxMenuHelpers;
-        if (helpers && typeof helpers.showOrangeNoticeNotification === 'function') {
-          helpers.showOrangeNoticeNotification(
-            'EXIT CURRENT GAME FIRST',
-            `Return to menus, then accept the Race invite (#${clean}).`
-          );
-        }
-        return;
-      }
-
-      const helpers = internals.foxMenuHelpers;
-      if (helpers && typeof helpers.hideFoxmodScrollersImmediately === 'function') {
-        helpers.hideFoxmodScrollersImmediately();
-      }
-      const socialEl = document.getElementById('social');
-      const socialBg = document.getElementById('social_bg');
-      if (socialEl && socialEl.classList && socialEl.classList.contains('open') && socialBg && typeof socialBg.click === 'function') {
-        socialBg.click();
-      }
-
-      // Open native Quick Play drawer cleanly if not already open
-      const menusEl = document.getElementById('menus');
-      const zMenu = document.getElementById('zenithmenu');
-      const qpCard = document.getElementById('sig_quickplay') || document.querySelector('[data-menu="zenith"]');
-      const needOpenQp =
-        (zMenu && zMenu.classList && zMenu.classList.contains('hidden')) ||
-        (menusEl && menusEl.getAttribute && menusEl.getAttribute('data-menu-type') !== 'zenith');
-      if (needOpenQp && qpCard && typeof qpCard.click === 'function') {
-        qpCard.click();
-      }
+      clearInviteNavTimer();
+      escapeToQuickPlayStep(0);
 
       deactivateDuoCardIfActive();
       teardownRaceSession(true);
+      inviteJoinGraceUntil = Date.now() + 5000;
+      hasSeenZenithVisibleForSession = isInQuickPlayLobbyUi();
       cardSelected = true;
       triggerCardSpin();
       statusOverride = `Connecting to Race #${clean}...`;
       const myName = getSelfUsername() || 'PLAYER';
-      session = p2pRoom.createClientPeer({ playerName: myName, joinTimeoutMs: 12000 });
+      session = p2pRoom.createClientPeer({
+        playerName: myName,
+        avatar: getSelfAvatarUrl(),
+        joinTimeoutMs: 12000
+      });
       sessionUnsub = session.subscribe(handleSessionEvent);
       syncVisualState();
+
+      if (!isInQuickPlayLobbyUi()) {
+        let attempts = 0;
+        inviteNavTimer = setInterval(() => {
+          attempts += 1;
+          if (!cardSelected || !session || isInQuickPlayLobbyUi() || attempts >= 16) {
+            clearInviteNavTimer();
+            if (isInQuickPlayLobbyUi()) {
+              hasSeenZenithVisibleForSession = true;
+              ensureZenithDomMounted();
+              renderParty();
+            }
+            return;
+          }
+          escapeToQuickPlayStep(attempts);
+        }, 180);
+        if (inviteNavTimer && typeof inviteNavTimer.unref === 'function') {
+          inviteNavTimer.unref();
+        }
+      }
 
       try {
         await session.joinByCode(clean);
@@ -2086,6 +2391,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           }
         }
 
+        bindLeaveZenithButton();
         syncVisualState();
         return true;
       } finally {
@@ -2109,10 +2415,26 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
     api.subscribe(() => {
       ensurePresenceWatch();
+      bindLeaveZenithButton();
       if (!document.getElementById(CARD_ID) || !document.getElementById(PARTY_ID)) {
         ensureZenithDomMounted();
       } else if (cardSelected && getSelfUsername() !== lastRenderedSelfName) {
         renderParty();
+      }
+      const rStateNow = api.getState ? api.getState() : null;
+      const inGameNow = Boolean(
+        (rStateNow && rStateNow.inGame) ||
+        (document.body && document.body.classList && document.body.classList.contains('ingame'))
+      );
+      if (!session) {
+        clearInviteNavTimer();
+        hasSeenZenithVisibleForSession = false;
+      } else if (!inGameNow && (racePhase === 'idle' || racePhase === 'countdown')) {
+        if (isInQuickPlayLobbyUi()) {
+          hasSeenZenithVisibleForSession = true;
+        } else if (hasSeenZenithVisibleForSession && Date.now() >= inviteJoinGraceUntil) {
+          triggerLeaveQuickPlayCleanup();
+        }
       }
       if (racePhase === 'entering' || racePhase === 'alive') {
         sampleAndBroadcastLocalRun();
@@ -2121,8 +2443,25 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       }
     });
 
+    if (typeof document.addEventListener === 'function') {
+      document.addEventListener('click', (ev) => {
+        if (Date.now() < inviteJoinGraceUntil || !session) return;
+        const tgt = ev && ev.target;
+        if (!tgt) return;
+        const leaveBtn = document.getElementById('leavezenith');
+        if (
+          tgt.id === 'leavezenith' ||
+          tgt === leaveBtn ||
+          (typeof tgt.closest === 'function' && tgt.closest('#leavezenith'))
+        ) {
+          triggerLeaveQuickPlayCleanup();
+        }
+      }, true);
+    }
+
     if (typeof root.addEventListener === 'function') {
       root.addEventListener('beforeunload', () => teardownRaceSession(false));
+      root.addEventListener('pagehide', () => teardownRaceSession(false));
     }
 
     internals.zenRace = {

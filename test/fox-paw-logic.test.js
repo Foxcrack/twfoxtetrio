@@ -129,3 +129,31 @@ test('applyPawAttribute toggles data-twfox-paw idempotently', () => {
   assert.equal(foxPawLogic.applyPawAttribute(fakeEl, false), true);
   assert.equal(attrs.has('data-twfox-paw'), false);
 });
+
+test('presence payload and registry round-trip busy / in-TL availability cleanly', () => {
+  const now = 1700000000000;
+  const tlPayload = foxPawLogic.buildPresencePayload('Alice', '0.6.13', now, { availability: 'tl' });
+  const tlParsed = foxPawLogic.parsePresenceMessage('twfoxtetrio/v1/foxers/alice', tlPayload, now);
+  assert.equal(tlParsed.availability, 'tl');
+
+  const busyPayload = foxPawLogic.buildPresencePayload('Bob', '0.6.13', now, { availability: 'busy' });
+  const busyParsed = foxPawLogic.parsePresenceMessage('twfoxtetrio/v1/foxers/bob', busyPayload, now);
+  assert.equal(busyParsed.availability, 'busy');
+
+  const normalPayload = foxPawLogic.buildPresencePayload('Carol', '0.6.13', now);
+  assert.equal(Object.prototype.hasOwnProperty.call(JSON.parse(normalPayload), 'st'), false);
+
+  const registry = foxPawLogic.createFoxerRegistry({ ttlMs: 60000 });
+  registry.applyMessage('twfoxtetrio/v1/foxers/alice', tlPayload, now + 100);
+  registry.applyMessage('twfoxtetrio/v1/foxers/bob', busyPayload, now + 100);
+  registry.applyMessage('twfoxtetrio/v1/foxers/carol', normalPayload, now + 100);
+
+  assert.equal(registry.getAvailability('Alice', now + 200), 'tl');
+  assert.equal(registry.getAvailability('bob', now + 200), 'busy');
+  assert.equal(registry.getAvailability('carol', now + 200), '');
+
+  // Switching back to normal presence clears prior busy/tl marker
+  registry.applyMessage('twfoxtetrio/v1/foxers/alice', foxPawLogic.buildPresencePayload('Alice', '0.6.13', now + 300), now + 300);
+  assert.equal(registry.getAvailability('alice', now + 400), '');
+  assert.equal(registry.getAvailability('bob', now + 70000), '');
+});

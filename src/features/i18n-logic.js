@@ -535,7 +535,9 @@
     'all runners finished!': '¡todos los corredores terminaron!',
     'highest altitude': 'mayor altitud',
     'floor': 'piso',
-    'waiting for runners...': 'esperando a los demás corredores...'
+    'waiting for runners...': 'esperando a los demás corredores...',
+    'busy': 'ocupado',
+    'in tl': 'en liga'
   };
 
   function applyCasePattern(source, translated) {

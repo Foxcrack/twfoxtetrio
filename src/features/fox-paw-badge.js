@@ -110,6 +110,7 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
     let enabled = isConfigEnabled(api.getConfig());
     let selfNorm = readSelfUsername(api.getState());
     let lastPublishedUser = '';
+    let lastPublishedAvailability = '';
     let lastPublishedAt = 0;
 
     // MQTT connection state
@@ -134,6 +135,43 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
 
     function isConfigEnabled(cfg) {
       return !(cfg && cfg.foxPawBadge && cfg.foxPawBadge.enabled === false);
+    }
+
+    function readSelfAvailability() {
+      if (typeof document !== 'undefined') {
+        const bodyEl = document.body;
+        const menusEl = document.getElementById('menus');
+        const menuType = menusEl && menusEl.getAttribute ? menusEl.getAttribute('data-menu-type') : '';
+        const leagueSelf = document.getElementById('leagueplayer_self');
+        const inLeagueDom = Boolean(
+          (bodyEl && bodyEl.classList && bodyEl.classList.contains('matchmaking')) ||
+          menuType === 'league' ||
+          menuType === 'endleague' ||
+          (bodyEl &&
+            bodyEl.classList &&
+            bodyEl.classList.contains('multiplexed') &&
+            leagueSelf &&
+            (!leagueSelf.classList || !leagueSelf.classList.contains('hidden')))
+        );
+        if (inLeagueDom) return 'tl';
+
+        const socialStat = document.getElementById('social_status');
+        if (socialStat) {
+          const statImg = typeof socialStat.querySelector === 'function' ? socialStat.querySelector('img') : null;
+          const imgSrc = statImg
+            ? String((typeof statImg.getAttribute === 'function' && statImg.getAttribute('src')) || statImg.src || '')
+            : '';
+          if (/\/status\/busy\.png/i.test(imgSrc) || /\bbusy\b|\bocupado\b/i.test(String(socialStat.textContent || ''))) {
+            return 'busy';
+          }
+        }
+      }
+      try {
+        if (root.localStorage && root.localStorage.getItem('presenceMask') === 'busy') {
+          return 'busy';
+        }
+      } catch (_) {}
+      return '';
     }
 
     function readSelfUsername(stateObj) {
@@ -520,15 +558,17 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
     function syncSelfPresence(forcePublish) {
       if (!p2pRoom || !p2pRoom.mqttPacketPublish) return;
       const now = Date.now();
+      const curAvail = readSelfAvailability();
 
       if (enabled && selfNorm) {
-        if (registry.upsert(selfNorm, now, api.version, now)) {
+        if (registry.upsert(selfNorm, now, api.version, now, curAvail)) {
           scheduleSaveCache();
         }
         if (wsConnected) {
           const needsPublish =
             forcePublish ||
             lastPublishedUser !== selfNorm ||
+            lastPublishedAvailability !== curAvail ||
             now - lastPublishedAt >= HEARTBEAT_PUBLISH_MS - 1000;
           if (needsPublish) {
             // If account switched while connected, clear old account's retained topic first.
@@ -537,9 +577,12 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
               if (oldTopic) sendPacket(p2pRoom.mqttPacketPublish(oldTopic, '', true));
             }
             const topic = logic.buildPresenceTopic(selfNorm);
-            const payload = logic.buildPresencePayload(selfNorm, api.version, now);
+            const payload = curAvail
+              ? logic.buildPresencePayload(selfNorm, api.version, now, { availability: curAvail })
+              : logic.buildPresencePayload(selfNorm, api.version, now);
             if (topic && payload && sendPacket(p2pRoom.mqttPacketPublish(topic, payload, true))) {
               lastPublishedUser = selfNorm;
+              lastPublishedAvailability = curAvail;
               lastPublishedAt = now;
             }
           }
@@ -556,6 +599,7 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
               sendPacket(p2pRoom.mqttPacketPublish(topic, '', true));
             }
             lastPublishedUser = '';
+            lastPublishedAvailability = '';
             lastPublishedAt = 0;
           }
         }
@@ -748,6 +792,8 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         syncSelfPresence(false);
         scanDom();
         notifyPresenceListeners();
+      } else if (enabled && wsConnected && selfNorm && readSelfAvailability() !== lastPublishedAvailability) {
+        syncSelfPresence(true);
       }
     }
 
@@ -845,6 +891,77 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       };
     }
 
+    function getLiveSocialInfo(username) {
+      if (!inviteLogic || typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') {
+        return null;
+      }
+      const norm = inviteLogic.normalizeUsername(username);
+      if (!norm) return null;
+      const rows = document.querySelectorAll('.social_relationship');
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || typeof row.querySelector !== 'function') continue;
+        const h1 = row.querySelector('h1');
+        const spanEl = h1 && typeof h1.querySelector === 'function' ? h1.querySelector('span') : null;
+        const nameEl = spanEl || h1;
+        const rowUser = inviteLogic.normalizeUsername(nameEl && nameEl.textContent ? nameEl.textContent : '');
+        if (rowUser !== norm) continue;
+        const pEl = row.querySelector('p');
+        const imgEl = row.querySelector('.social_relationship_img') || row.querySelector('.avatar');
+        const avatarUrl = imgEl ? String((typeof imgEl.getAttribute === 'function' && imgEl.getAttribute('src')) || imgEl.src || '') : '';
+        return {
+          statusText: pEl && pEl.textContent ? pEl.textContent : '',
+          statusHtml: pEl && typeof pEl.innerHTML === 'string' ? pEl.innerHTML : '',
+          titleText: typeof row.getAttribute === 'function' ? (row.getAttribute('title') || '') : '',
+          isOffline: Boolean(row.classList && row.classList.contains('offline')),
+          isBusyClass: Boolean(row.classList && row.classList.contains('busy')),
+          avatarUrl
+        };
+      }
+      return null;
+    }
+
+    function getFriendInviteStatus(username) {
+      if (!inviteLogic) return { invitable: true, reason: '', badge: '' };
+      const norm = inviteLogic.normalizeUsername(username);
+      if (!norm) return { invitable: false, reason: 'invalid', badge: '' };
+      const now = Date.now();
+      const regAvail = typeof registry.getAvailability === 'function' ? registry.getAvailability(norm, now) : '';
+      const live = getLiveSocialInfo(norm);
+      if (live) {
+        return inviteLogic.classifyInviteAvailability({
+          statusText: live.statusText,
+          statusHtml: live.statusHtml,
+          titleText: live.titleText,
+          isOffline: live.isOffline,
+          isBusyClass: live.isBusyClass,
+          registryAvailability: regAvail
+        });
+      }
+      const list = mutualStore ? mutualStore.listMutual(selfNorm) : [];
+      const cached = list.find((item) => item && item.username === norm) || null;
+      return inviteLogic.classifyInviteAvailability({
+        statusText: cached ? cached.statusText : '',
+        registryAvailability: regAvail || (cached && cached.busyReason === 'league' ? 'tl' : cached && cached.busyReason === 'busy' ? 'busy' : '')
+      });
+    }
+
+    function getAvatarUrl(username) {
+      if (!inviteLogic) return '';
+      const norm = inviteLogic.normalizeUsername(username);
+      if (!norm) return '';
+      const live = getLiveSocialInfo(norm);
+      if (live && live.avatarUrl && !/\/res\/avatar\.png/i.test(live.avatarUrl)) {
+        return live.avatarUrl;
+      }
+      const list = mutualStore ? mutualStore.listMutual(selfNorm) : [];
+      const cached = list.find((item) => item && item.username === norm) || null;
+      if (cached && cached.avatarUrl && !/\/res\/avatar\.png/i.test(cached.avatarUrl)) {
+        return cached.avatarUrl;
+      }
+      return '';
+    }
+
     function listMutualFriends(options) {
       if (!mutualStore) return [];
       mutualStore.setSelfUsername(selfNorm);
@@ -865,6 +982,8 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         return enabled;
       },
       hasFoxer,
+      getFriendInviteStatus,
+      getAvatarUrl,
       listFoxers() {
         return registry.list(Date.now());
       },

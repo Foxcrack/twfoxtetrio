@@ -34,6 +34,16 @@
     return /^[2-9A-HJ-NP-Z]{4,8}$/.test(cleaned) ? cleaned : '';
   }
 
+  function sanitizeAvatarUrl(raw) {
+    if (typeof raw !== 'string') return '';
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.length > 4096) return '';
+    if (/^(?:https?:\/\/|\/user-content\/|\/res\/|data:image\/)/i.test(trimmed)) {
+      return trimmed;
+    }
+    return '';
+  }
+
   function isManualSignalCode(raw) {
     return /^FOX[01]:/i.test(String(raw || '').trim());
   }
@@ -710,6 +720,7 @@
     const heartbeatIntervalMs = Math.max(25, Number(opts.heartbeatIntervalMs) || 2500);
     const heartbeatTimeoutMs = Math.max(60, Number(opts.heartbeatTimeoutMs) || 7000);
     const hostName = String(opts.hostName || 'HOST').trim().slice(0, 20) || 'HOST';
+    const hostAvatar = sanitizeAvatarUrl(opts.hostAvatar || opts.avatar || '');
     const roomCode = normalizeRoomCode(opts.roomCode) || generateRoomCode(4);
     const initSet =
       opts.pieceSet === 'pentomino' || opts.pieceSet === 'tetromino' || opts.pieceSet === 'chaos'
@@ -749,6 +760,7 @@
     players.set('host', {
       id: 'host',
       name: hostName,
+      avatar: hostAvatar,
       isHost: true,
       ready: defaultReadyState,
       spectator: false,
@@ -1082,6 +1094,9 @@
           break;
         case 'hello':
           player.name = String(msg.name || player.name).trim().slice(0, 20) || player.name;
+          if (msg.avatar !== undefined) {
+            player.avatar = sanitizeAvatarUrl(msg.avatar);
+          }
           if (!announcedPeers.has(peerId)) {
             announcedPeers.add(peerId);
             pushChat('SYS', `${player.name} joined the room.`, true);
@@ -1248,9 +1263,10 @@
       checkRaceReadyLaunch();
     }
 
-    function attachPeerChannel(peerId, pc, channel, initialName) {
+    function attachPeerChannel(peerId, pc, channel, initialName, initialAvatar) {
       const cleanedInitial = initialName ? String(initialName).trim().slice(0, 20) : '';
       const slotName = cleanedInitial || ('PLAYER ' + peerId.slice(1));
+      const slotAvatar = sanitizeAvatarUrl(initialAvatar);
       const connEntry = { pc, channel, openedAt: 0, lastSeenAt: Date.now() };
       connections.set(peerId, connEntry);
 
@@ -1276,6 +1292,7 @@
           players.set(peerId, {
             id: peerId,
             name: slotName,
+            avatar: slotAvatar,
             isHost: false,
             ready: defaultReadyState,
             spectator: false,
@@ -1321,7 +1338,13 @@
         ? (cand) => trickleOpts.onTrickleCandidate(peerId, cand)
         : null;
       await waitForIceGathering(pc, 3000, onTrickle);
-      pendingOffers.set(peerId, { pc, channel, label: label || peerId, clientId: trickleOpts && trickleOpts.clientId });
+      pendingOffers.set(peerId, {
+        pc,
+        channel,
+        label: label || peerId,
+        clientId: trickleOpts && trickleOpts.clientId,
+        avatar: trickleOpts && sanitizeAvatarUrl(trickleOpts.avatar)
+      });
       notify('invite_created', { peerId });
       return {
         peerId,
@@ -1360,7 +1383,8 @@
       }
       pendingOffers.delete(targetPeerId);
       const initialName = decoded.name || (entry.label !== targetPeerId ? entry.label : '');
-      attachPeerChannel(targetPeerId, entry.pc, entry.channel, initialName);
+      const initialAvatar = decoded.avatar || entry.avatar || '';
+      attachPeerChannel(targetPeerId, entry.pc, entry.channel, initialName, initialAvatar);
       await entry.pc.setRemoteDescription(decoded.sdp);
       const queuedIce = pendingIceByPeer.get(targetPeerId);
       if (queuedIce && queuedIce.length > 0 && typeof entry.pc.addIceCandidate === 'function') {
@@ -1579,6 +1603,7 @@
         try {
           const invite = await createInvite(msg.name || 'PLAYER', {
             clientId: msg.clientId,
+            avatar: msg.avatar,
             onTrickleCandidate(pId, cand) {
               if (closed || !cand) return;
               const conn = connections.get(pId);
@@ -1699,7 +1724,7 @@
           }
         });
         relayChannels.set(targetPeerId, { ch: rCh, clientId: msg.clientId });
-        attachPeerChannel(targetPeerId, null, rCh, msg.name || 'PLAYER');
+        attachPeerChannel(targetPeerId, null, rCh, msg.name || 'PLAYER', msg.avatar);
         if (typeof rCh.onopen === 'function') rCh.onopen();
         await replyFn({
           kind: 'relay_ack',
@@ -1943,6 +1968,7 @@
     const heartbeatTimeoutMs = Math.max(60, Number(opts.heartbeatTimeoutMs) || 8000);
     let roomAutoSignaling = Boolean(opts.autoSignaling !== false && (wsFactory || fetchFn));
     const playerName = String(opts.playerName || 'PLAYER').trim().slice(0, 20) || 'PLAYER';
+    const playerAvatar = sanitizeAvatarUrl(opts.playerAvatar || opts.avatar || '');
 
     let pc = null;
     let channel = null;
@@ -2227,7 +2253,7 @@
             activeSignalBus.close();
             activeSignalBus = null;
           }
-          send({ type: 'hello', name: playerName });
+          send({ type: 'hello', name: playerName, avatar: playerAvatar });
           if (spectator) {
             send({ type: 'spectator', spectator: true });
           }
@@ -2273,6 +2299,7 @@
         role: 'answer',
         peerId: decoded.peerId || null,
         name: playerName,
+        avatar: playerAvatar,
         sdp: pc.localDescription
       });
     }
@@ -2298,7 +2325,7 @@
       let targetPeerId = null;
       const queuedHostIce = [];
       const isDupRelay = createRelayPacketDeduper(500);
-      const reqPayload = { kind: 'join_req', roomCode: code, clientId, name: playerName };
+      const reqPayload = { kind: 'join_req', roomCode: code, clientId, name: playerName, avatar: playerAvatar };
 
       const finishOffer = (fn, arg) => {
         if (offerSettled) return;
@@ -2362,7 +2389,8 @@
           roomCode: code,
           peerId: activeRelayPeerId,
           clientId,
-          name: playerName
+          name: playerName,
+          avatar: playerAvatar
         };
         if (activeSignalBus) activeSignalBus.publish(openReq);
         let tries = 0;
@@ -2388,7 +2416,7 @@
           } else if (lastAnswerEnvelope && !connected && !usingRelay) {
             cli.publish(lastAnswerEnvelope);
           } else if (usingRelay && !connected) {
-            cli.publish({ kind: 'relay_open', roomCode: code, peerId: activeRelayPeerId, clientId, name: playerName });
+            cli.publish({ kind: 'relay_open', roomCode: code, peerId: activeRelayPeerId, clientId, name: playerName, avatar: playerAvatar });
           }
         },
         onMessage(msg) {
@@ -2416,7 +2444,7 @@
             }
             connected = true;
             lastHostSeenAt = Date.now();
-            send({ type: 'hello', name: playerName });
+            send({ type: 'hello', name: playerName, avatar: playerAvatar });
             if (spectator) {
               send({ type: 'spectator', spectator: true });
             }
@@ -2790,6 +2818,7 @@
     createMqttFrameReader,
     generateRoomCode,
     normalizeRoomCode,
+    sanitizeAvatarUrl,
     encodeSignal,
     decodeSignal,
     pickAttackTarget,

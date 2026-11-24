@@ -4826,6 +4826,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const now = Date.now();
         const inRoom = Boolean(foxInviteLogic && foxInviteLogic.isUserInRoom(username, players));
         const cooldownSec = inviteTracker ? inviteTracker.getCooldownRemainingSec(username, now) : 0;
+        const foxBadge = getFoxPawBadge();
+        const avail = foxBadge && typeof foxBadge.getFriendInviteStatus === 'function'
+          ? foxBadge.getFriendInviteStatus(username)
+          : null;
         let nextDisabled = false;
         let nextText = idleLabel;
         let nextClass = `${baseClass} is-fox-orange`;
@@ -4838,6 +4842,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         } else if (inRoom) {
           nextDisabled = true;
           nextText = 'IN ROOM';
+          nextClass = `${baseClass} is-in-room`;
+        } else if (avail && !avail.invitable) {
+          nextDisabled = true;
+          nextText = avail.badge || 'BUSY';
           nextClass = `${baseClass} is-in-room`;
         } else if (cooldownSec > 0) {
           nextDisabled = true;
@@ -4943,6 +4951,18 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           }
           return false;
         }
+        if (typeof foxBadge.getFriendInviteStatus === 'function') {
+          const avail = foxBadge.getFriendInviteStatus(targetNorm);
+          if (avail && !avail.invitable) {
+            if (multiDom && multiDom.hostInviteStatus) {
+              multiDom.hostInviteStatus.textContent =
+                avail.reason === 'league'
+                  ? `Cannot invite ${targetNorm.toUpperCase()} — currently in TETRA LEAGUE.`
+                  : `Cannot invite ${targetNorm.toUpperCase()} — status is Busy.`;
+            }
+            return false;
+          }
+        }
 
         const fromName = resolveLocalUsername(runtimeApi, 'HOST');
         const res = foxBadge.sendRoomInvite(targetNorm, {
@@ -4993,6 +5013,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const now = Date.now();
         const inRoom = Boolean(foxInviteLogic && foxInviteLogic.isUserInRoom(username, players));
         const cooldownSec = inviteTracker ? inviteTracker.getCooldownRemainingSec(username, now) : 0;
+        const foxBadge = getFoxPawBadge();
+        const avail = foxBadge && typeof foxBadge.getFriendInviteStatus === 'function'
+          ? foxBadge.getFriendInviteStatus(username)
+          : null;
         const countEl = btn.querySelector ? btn.querySelector('span') : null;
         let nextDisabled = false;
         let nextActive = false;
@@ -5009,6 +5033,12 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           nextDisabled = true;
           nextInRoom = true;
           nextTitle = 'Already in your FOXMOD room';
+        } else if (avail && !avail.invitable) {
+          nextDisabled = true;
+          nextInRoom = true;
+          nextTitle = avail.reason === 'league'
+            ? 'Player is in TETRA LEAGUE (invites blocked)'
+            : 'Player is Busy (invites blocked)';
         } else if (cooldownSec > 0) {
           nextDisabled = true;
           nextActive = true;
@@ -6831,7 +6861,12 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       root.__TWFOX_INTERNAL__ = root.__TWFOX_INTERNAL__ || {};
       root.__TWFOX_INTERNAL__.foxMenuHelpers = {
         showOrangeNoticeNotification,
-        hideFoxmodScrollersImmediately
+        hideFoxmodScrollersImmediately,
+        closeMultiSession: function () {
+          if (typeof teardownPeerSession === 'function') {
+            teardownPeerSession();
+          }
+        }
       };
       if (state && state.inGame && state.mode && state.mode !== 'Custom Solo') {
         pendingPracticeReturn = false;

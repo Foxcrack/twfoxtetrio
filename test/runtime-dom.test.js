@@ -3850,3 +3850,291 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     }
   }
 });
+
+test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on QP exit, and auto-exits other modes on invite accept', async () => {
+  const fetchCalls = [];
+  const publishedMqtt = [];
+
+  class MockRaceFeaturesWs {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.binaryType = 'arraybuffer';
+      setTimeout(() => {
+        if (this.readyState !== 0) return;
+        this.readyState = 1;
+        if (this.onopen) this.onopen({});
+      }, 2);
+    }
+    send(bytes) {
+      const parsed = parseMqttClientFrame(bytes);
+      if (parsed.type === 'CONNECT') {
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: buildMqttConnackFrame().buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'SUBSCRIBE' && parsed.topic === 'twfoxtetrio/v1/foxers/+') {
+        setTimeout(() => {
+          if (this.readyState !== 1 || !this.onmessage) return;
+          const now = Date.now();
+          const frames = [
+            buildMqttPublishFrame('twfoxtetrio/v1/foxers/maekrix', JSON.stringify({ u: 'maekrix', v: '0.6.13', ts: now }), true),
+            buildMqttPublishFrame('twfoxtetrio/v1/foxers/busyfox', JSON.stringify({ u: 'busyfox', v: '0.6.13', ts: now, st: 'busy' }), true),
+            buildMqttPublishFrame('twfoxtetrio/v1/foxers/tlchamp', JSON.stringify({ u: 'tlchamp', v: '0.6.13', ts: now, st: 'tl' }), true)
+          ];
+          for (const frame of frames) {
+            this.onmessage({ data: frame.buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'PUBLISH') {
+        publishedMqtt.push({ topic: parsed.topic, text: parsed.text });
+      }
+    }
+    close() {
+      this.readyState = 3;
+      if (this.onclose) this.onclose({});
+    }
+  }
+
+  const env = createFakeDomEnvironment('https:', {
+    WebSocket: MockRaceFeaturesWs,
+    fetch: async (url) => {
+      fetchCalls.push(String(url));
+      return {
+        ok: true,
+        async json() {
+          return {
+            success: true,
+            data: { user: { _id: '5f123abc', avatar_revision: 7 } }
+          };
+        }
+      };
+    }
+  });
+  const doc = env.context.document;
+
+  const zMenu = env.elements.get('zenithmenu');
+  const deckBlock = doc.createElement('div');
+  deckBlock.setAttribute('id', 'zenith_deck_block');
+  const deckCards = doc.createElement('div');
+  deckCards.setAttribute('id', 'zenith_deck_cards');
+  const duoCard = doc.createElement('div');
+  duoCard.setAttribute('id', 'zenith-duo-card');
+  duoCard.className = 'zenith_card';
+  duoCard.setAttribute('data-card', 'duo');
+  deckCards.appendChild(duoCard);
+  deckBlock.appendChild(deckCards);
+  zMenu.appendChild(deckBlock);
+
+  const leaveZenithBtn = doc.createElement('button');
+  leaveZenithBtn.setAttribute('id', 'leavezenith');
+  zMenu.appendChild(leaveZenithBtn);
+
+  const meAvatar = doc.createElement('img');
+  meAvatar.setAttribute('id', 'me_avatar');
+  env.body.appendChild(meAvatar);
+
+  function addSocialFriend(username, statusText, statusHtml, avatarUrl, extraClass) {
+    const row = doc.createElement('div');
+    row.className = 'social_relationship' + (extraClass ? ' ' + extraClass : '');
+    const h1 = doc.createElement('h1');
+    const span = doc.createElement('span');
+    span.textContent = username;
+    h1.appendChild(span);
+    const p = doc.createElement('p');
+    p.textContent = statusText;
+    p.innerHTML = statusHtml || statusText;
+    const img = doc.createElement('img');
+    img.className = 'social_relationship_img';
+    img.src = avatarUrl;
+    img.setAttribute('src', avatarUrl);
+    const btn = doc.createElement('button');
+    btn.className = 'social_relationship_button_invite';
+    row.appendChild(h1);
+    row.appendChild(p);
+    row.appendChild(img);
+    row.appendChild(btn);
+    return row;
+  }
+
+  const socialRel = doc.createElement('div');
+  socialRel.setAttribute('id', 'social_relationships');
+  socialRel.appendChild(addSocialFriend('maekrix', 'Online', '', 'https://tetr.io/user-content/avatars/maek2.jpg?rv=9'));
+  socialRel.appendChild(addSocialFriend('busyfox', 'Busy', '<img src="/res/status/busy.png"> Busy', 'https://tetr.io/user-content/avatars/busy1.jpg?rv=1', 'busy'));
+  socialRel.appendChild(addSocialFriend('tlchamp', 'Playing TETRA LEAGUE', 'In a TETRA LEAGUE game', 'https://tetr.io/user-content/avatars/tl1.jpg?rv=3'));
+  env.body.appendChild(socialRel);
+
+  const leaveRoomBtn = doc.createElement('button');
+  leaveRoomBtn.setAttribute('id', 'leaveroom');
+  const exitReplayBtn = doc.createElement('button');
+  exitReplayBtn.setAttribute('id', 'exit_replay');
+  const exitSpectateBtn = doc.createElement('button');
+  exitSpectateBtn.setAttribute('id', 'exit_spectate');
+  const mmBtn = doc.createElement('button');
+  mmBtn.setAttribute('id', 'enter_matchmaking');
+  const multiQpBtn = doc.createElement('button');
+  multiQpBtn.setAttribute('id', 'multi_quickplay');
+
+  let leaveRoomClicked = false;
+  let exitReplayClicked = false;
+  let exitSpectateClicked = false;
+  let mmClicked = false;
+  let multiQpClicked = false;
+
+  leaveRoomBtn.addEventListener('click', () => {
+    leaveRoomClicked = true;
+    env.body.classList.remove('innormalmulti');
+    leaveRoomBtn.classList.add('hidden');
+  });
+  exitReplayBtn.addEventListener('click', () => {
+    exitReplayClicked = true;
+    exitReplayBtn.classList.add('hidden');
+  });
+  exitSpectateBtn.addEventListener('click', () => {
+    exitSpectateClicked = true;
+    exitSpectateBtn.classList.add('hidden');
+  });
+  mmBtn.addEventListener('click', () => {
+    mmClicked = true;
+    env.body.classList.remove('matchmaking');
+  });
+  multiQpBtn.addEventListener('click', () => {
+    multiQpClicked = true;
+    zMenu.classList.remove('hidden');
+    env.body.classList.add('inzenith');
+    env.menus.setAttribute('data-menu-type', 'zenith');
+  });
+
+  env.triggerDOMContentLoaded();
+  env.meUsername.textContent = 'TWFOXCRACK';
+  await new Promise((r) => setTimeout(r, 25));
+  env.tickIntervals();
+
+  const foxBadge = env.context.__TWFOX_INTERNAL__.foxPawBadge;
+  const zenRace = env.context.__TWFOX_INTERNAL__.zenRace;
+  assert.ok(foxBadge && zenRace);
+
+  // Social DOM + MQTT presence should capture avatars and busy / in-TL status
+  assert.equal(foxBadge.getAvatarUrl('maekrix'), 'https://tetr.io/user-content/avatars/maek2.jpg?rv=9');
+  assert.deepEqual({ ...foxBadge.getFriendInviteStatus('maekrix') }, { invitable: true, reason: '', badge: '' });
+  assert.deepEqual({ ...foxBadge.getFriendInviteStatus('busyfox') }, { invitable: false, reason: 'busy', badge: 'BUSY' });
+  assert.deepEqual({ ...foxBadge.getFriendInviteStatus('tlchamp') }, { invitable: false, reason: 'league', badge: 'IN TL' });
+
+  // Open THE RACE inside Quick Play with no DOM self avatar yet -> triggers ch.tetr.io/api/users fallback
+  env.body.classList.add('inzenith');
+  env.menus.setAttribute('data-menu-type', 'zenith');
+  zenRace.refresh();
+  const raceCard = env.elements.get('twfoxtetrio-zenith-race-card');
+  assert.ok(raceCard);
+  raceCard.click();
+  await new Promise((r) => setTimeout(r, 25));
+  env.tickIntervals();
+
+  assert.equal(fetchCalls.includes('https://ch.tetr.io/api/users/twfoxcrack'), true);
+  const partyEl = env.elements.get('twfoxtetrio-race-party');
+  const avatarImgs = partyEl.querySelectorAll('.twfox-race-avatar');
+  assert.equal(avatarImgs.length, 1);
+  assert.equal(avatarImgs[0].attributes.src, 'https://tetr.io/user-content/avatars/5f123abc.jpg?rv=7');
+
+  // If an avatar image fails to load, fallback badge is revealed and broken <img> removed/hidden
+  avatarImgs[0].dispatchEvent('error');
+  const remainingAvatars = partyEl.querySelectorAll('.twfox-race-avatar');
+  assert.equal(
+    remainingAvatars.length === 0 || remainingAvatars[0].classList.contains('hidden'),
+    true,
+    'Broken avatar image should be removed or hidden on error'
+  );
+  const fallbackBadge = partyEl.querySelector('.twfox-race-avatar-badge');
+  assert.ok(fallbackBadge && !fallbackBadge.classList.contains('hidden'));
+
+  // BUSY and IN TL friends render disabled buttons and cannot send invites
+  const raceButtons = partyEl.querySelectorAll('.twfox-race-btn');
+  const btnByUser = new Map();
+  for (const b of raceButtons) {
+    const u = b.getAttribute('data-race-invite');
+    if (u) btnByUser.set(u, b);
+  }
+  assert.equal(btnByUser.get('maekrix').disabled, false);
+  assert.equal(btnByUser.get('maekrix').textContent, 'INVITE');
+  assert.equal(btnByUser.get('busyfox').disabled, true);
+  assert.equal(btnByUser.get('busyfox').textContent, 'BUSY');
+  assert.equal(btnByUser.get('tlchamp').disabled, true);
+  assert.equal(btnByUser.get('tlchamp').textContent, 'IN TL');
+
+  publishedMqtt.length = 0;
+  btnByUser.get('busyfox').click();
+  btnByUser.get('tlchamp').click();
+  assert.equal(
+    publishedMqtt.filter((p) => p.topic.indexOf('/invites/') !== -1).length,
+    0,
+    'Disabled BUSY / IN TL invite buttons must not publish MQTT invites'
+  );
+  btnByUser.get('maekrix').click();
+  assert.equal(
+    publishedMqtt.some((p) => p.topic === 'twfoxtetrio/v1/invites/maekrix'),
+    true,
+    'Invitable mutual friend must publish Race invite over MQTT'
+  );
+
+  // Exiting Quick Play via #leavezenith closes the Race session immediately
+  assert.ok(zenRace.getState().session);
+  leaveZenithBtn.click();
+  assert.equal(zenRace.getState().session, null);
+  assert.equal(zenRace.getState().cardSelected, false);
+
+  // Also verify FOXMOD Multi / PEOPLE social buttons block BUSY / IN TL
+  const createMultiRoomBtn = env.elements.get('twfoxtetrio-create-room-btn');
+  if (createMultiRoomBtn) {
+    createMultiRoomBtn.click();
+    env.tickIntervals();
+    const socialBtns = socialRel.querySelectorAll('.twfox-social-invite-btn');
+    const busySocial = socialBtns.find((b) => /Busy/i.test(b.title || (b.attributes && b.attributes.title) || ''));
+    const tlSocial = socialBtns.find((b) => /TETRA LEAGUE/i.test(b.title || (b.attributes && b.attributes.title) || ''));
+    assert.ok(busySocial && busySocial.disabled === true, 'FOXMOD PEOPLE button must disable Busy friend');
+    assert.ok(tlSocial && tlSocial.disabled === true, 'FOXMOD PEOPLE button must disable In-TL friend');
+    if (env.context.__TWFOX_INTERNAL__.foxMenuHelpers) {
+      env.context.__TWFOX_INTERNAL__.foxMenuHelpers.closeMultiSession();
+    }
+    env.body.classList.add('inzenith');
+    env.menus.setAttribute('data-menu-type', 'zenith');
+  }
+
+  // Implicit Quick Play exit (#zenithmenu hidden + data-menu-type home) also cleans up Race session
+  raceCard.click();
+  env.tickIntervals();
+  assert.ok(zenRace.getState().session);
+  zMenu.classList.add('hidden');
+  env.body.classList.remove('inzenith');
+  env.menus.setAttribute('data-menu-type', 'home');
+  env.tickIntervals();
+  assert.equal(zenRace.getState().session, null);
+  assert.equal(zenRace.getState().cardSelected, false);
+
+  // Accepting a THE RACE invite while inside other modes (custom room + matchmaking + replay + spectate)
+  // automatically exits them and enters Quick Play -> THE RACE without showing a blocker notice
+  env.body.classList.add('innormalmulti');
+  env.body.classList.add('matchmaking');
+  env.menus.setAttribute('data-menu-type', 'custom');
+  leaveRoomBtn.classList.remove('hidden');
+  exitReplayBtn.classList.remove('hidden');
+  exitSpectateBtn.classList.remove('hidden');
+
+  const joinPromise = zenRace.joinByInviteCode('ABCD');
+  assert.equal(leaveRoomClicked, true, 'Should click #leaveroom when accepting Race invite from official lobby');
+  assert.equal(exitReplayClicked, true, 'Should click #exit_replay when accepting Race invite');
+  assert.equal(exitSpectateClicked, true, 'Should click #exit_spectate when accepting Race invite');
+  assert.equal(mmClicked, true, 'Should cancel matchmaking queue via #enter_matchmaking');
+  assert.equal(multiQpClicked, true, 'Should navigate into Quick Play via #multi_quickplay');
+  assert.equal(zMenu.classList.contains('hidden'), false, 'Quick Play menu should now be open');
+  assert.equal(zenRace.getState().cardSelected, true);
+  assert.equal(zenRace.getState().session.role, 'client');
+
+  const notices = env.body.querySelectorAll('.twfox-orange-notice');
+  assert.equal(notices.some((n) => n.getAttribute('data-fox-notice') === 'EXIT CURRENT GAME FIRST'), false);
+
+  if (zenRace.getState().session) {
+    leaveZenithBtn.click();
+  }
+  await joinPromise.catch(() => {});
+});

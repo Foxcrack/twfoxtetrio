@@ -873,8 +873,7 @@ test('client seamlessly joins via WS relay fallback when WebRTC UDP is blocked o
   host.close();
 });
 
-test('race mode enforces max 4 players, waits for all ready countdown, and finalizes only when last runner dies', async () => {
-  const rtcAuto = createLoopbackRtcFactory();
+function createInMemoryMqttWsFactory() {
   const peers = new Set();
 
   function encodeVarLen(len) {
@@ -932,7 +931,7 @@ test('race mode enforces max 4 players, waits for all ready countdown, and final
     return { type: 'OTHER' };
   }
 
-  function wsFactory() {
+  return function wsFactory() {
     const ws = {
       readyState: 0,
       binaryType: 'arraybuffer',
@@ -972,7 +971,12 @@ test('race mode enforces max 4 players, waits for all ready countdown, and final
       if (ws.onopen) ws.onopen();
     });
     return ws;
-  }
+  };
+}
+
+test('race mode enforces max 4 players, waits for all ready countdown, and finalizes only when last runner dies', async () => {
+  const rtcAuto = createLoopbackRtcFactory();
+  const wsFactory = createInMemoryMqttWsFactory();
 
   const host = p2p.createHostServer({
     hostName: 'Fox1',
@@ -1051,3 +1055,48 @@ test('race mode enforces max 4 players, waits for all ready countdown, and final
   host.close();
 });
 
+
+test('p2p room shares sanitized host and peer avatars and removes disconnected clients immediately on bye/close', async () => {
+  const rtcAuto = createLoopbackRtcFactory();
+  const wsFactory = createInMemoryMqttWsFactory();
+
+  const host = p2p.createHostServer({
+    hostName: 'TWFoxcrack',
+    hostAvatar: 'https://tetr.io/user-content/avatars/host88.jpg?rv=2',
+    gameMode: 'race',
+    maxPlayers: 4,
+    rtcFactory: rtcAuto,
+    wsFactory,
+    brokers: ['wss://mock/mqtt']
+  });
+  const code = host.getSnapshot().room.roomCode;
+  await new Promise((r) => setTimeout(r, 25));
+
+  const client = p2p.createClientPeer({
+    playerName: 'MAEKRIX',
+    avatar: 'https://tetr.io/user-content/avatars/maek99.jpg?rv=4',
+    rtcFactory: rtcAuto,
+    wsFactory,
+    brokers: ['wss://mock/mqtt']
+  });
+  await client.joinByCode(code);
+  await new Promise((r) => setTimeout(r, 35));
+
+  const hostPlayers = host.getSnapshot().players;
+  const clientPlayers = client.getSnapshot().players;
+  assert.equal(hostPlayers.length, 2);
+  assert.equal(hostPlayers[0].avatar, 'https://tetr.io/user-content/avatars/host88.jpg?rv=2');
+  assert.equal(hostPlayers[1].avatar, 'https://tetr.io/user-content/avatars/maek99.jpg?rv=4');
+  assert.equal(clientPlayers[0].avatar, 'https://tetr.io/user-content/avatars/host88.jpg?rv=2');
+  assert.equal(clientPlayers[1].avatar, 'https://tetr.io/user-content/avatars/maek99.jpg?rv=4');
+
+  // Closing client removes peer from host lobby without lingering disconnected slots
+  client.close();
+  await new Promise((r) => setTimeout(r, 35));
+  assert.deepEqual(
+    host.getSnapshot().players.map((p) => p.name),
+    ['TWFoxcrack']
+  );
+
+  host.close();
+});

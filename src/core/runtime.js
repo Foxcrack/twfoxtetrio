@@ -539,6 +539,7 @@
   }
 
   let activeZenWrapper = null;
+  let lastGameWrapper = null;
   let applyingZenMods = false;
   let hookAppliedDuringPull = false;
   let practiceZenRequested = false;
@@ -784,6 +785,9 @@
     function wrappedMapSet(key, value) {
       const result = origMapSet.call(this, key, value);
       if (value !== null && typeof value === 'object') {
+        if (value.self && value.self.gom && typeof value.self.gom.Forfeit === 'function') {
+          lastGameWrapper = value;
+        }
         rosterTracker.observeMapSet(this, key, value);
         attachZenGameWrapper(value);
         attachSoloPracticeWrapper(value);
@@ -1009,7 +1013,7 @@
   }
 
   const api = {
-    version: '0.6.12',
+    version: '0.6.13',
     getState() {
       refreshSelfUsername();
       return {
@@ -1049,6 +1053,22 @@
       if (exitPracticeZenSession(false)) {
         emitState();
       }
+    },
+    abortActiveGameForInvite() {
+      let aborted = false;
+      try {
+        if (lastGameWrapper && lastGameWrapper.self && lastGameWrapper.self.gom && typeof lastGameWrapper.self.gom.Forfeit === 'function') {
+          lastGameWrapper.self.gom.Forfeit();
+          aborted = true;
+        }
+      } catch (_) {}
+      if (exitPracticeZenSession(false)) {
+        aborted = true;
+      }
+      pendingSoloPractice = null;
+      activeSoloPractice = null;
+      if (aborted) emitState();
+      return aborted;
     },
     reapplyZenQpMods() {
       return applyModsToActiveZenWrapper(true);

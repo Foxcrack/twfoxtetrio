@@ -91,15 +91,25 @@
     return normalizeUsername(rest);
   }
 
-  function buildPresencePayload(username, version, nowMs) {
+  function normalizeAvailability(raw) {
+    if (raw === 'tl' || raw === 'busy') return raw;
+    return '';
+  }
+
+  function buildPresencePayload(username, version, nowMs, extra) {
     const norm = normalizeUsername(username);
     if (!norm) return '';
     const ts = Math.floor(Number.isFinite(nowMs) ? nowMs : Date.now());
-    return JSON.stringify({
+    const payload = {
       u: norm,
       v: version ? String(version) : '0.5.0',
       ts
-    });
+    };
+    const st = normalizeAvailability(extra && (extra.availability || extra.st));
+    if (st) {
+      payload.st = st;
+    }
+    return JSON.stringify(payload);
   }
 
   /**
@@ -137,12 +147,17 @@
       if (now - ts > effectiveTtl) {
         return { action: 'remove', username };
       }
-      return {
+      const out = {
         action: 'upsert',
         username,
         ts: Math.floor(ts),
         version: typeof parsed.v === 'string' ? parsed.v.slice(0, 24) : ''
       };
+      const st = normalizeAvailability(parsed.st);
+      if (st) {
+        out.availability = st;
+      }
+      return out;
     } catch (_) {
       return null;
     }
@@ -179,7 +194,7 @@
       return removed;
     }
 
-    function upsert(username, ts, version, nowMs) {
+    function upsert(username, ts, version, nowMs, availability) {
       const norm = normalizeUsername(username);
       if (!norm) return false;
       const now = Number.isFinite(nowMs) ? nowMs : Date.now();
@@ -192,15 +207,30 @@
       if (prev && prev.ts > stamp) {
         return false;
       }
+      const nextAvail = availability !== undefined ? normalizeAvailability(availability) : '';
       const next = {
         username: norm,
         ts: Math.floor(stamp),
-        version: version ? String(version).slice(0, 24) : (prev ? prev.version : '')
+        version: version ? String(version).slice(0, 24) : (prev ? prev.version : ''),
+        availability: nextAvail
       };
       const isNew = !prev;
       entries.set(norm, next);
       if (entries.size > maxEntries) prune(now);
-      return isNew || (prev && prev.version !== next.version);
+      return isNew || (prev && (prev.version !== next.version || prev.availability !== next.availability));
+    }
+
+    function getAvailability(username, nowMs) {
+      const norm = normalizeUsername(username);
+      if (!norm) return '';
+      const rec = entries.get(norm);
+      if (!rec) return '';
+      const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+      if (now - rec.ts > ttlMs) {
+        entries.delete(norm);
+        return '';
+      }
+      return rec.availability || '';
     }
 
     function remove(username) {
@@ -216,7 +246,7 @@
         const deleted = remove(msg.username);
         return { changed: deleted, action: 'remove', username: msg.username };
       }
-      const changed = upsert(msg.username, msg.ts, msg.version, nowMs);
+      const changed = upsert(msg.username, msg.ts, msg.version, nowMs, msg.availability || '');
       return { changed, action: 'upsert', username: msg.username };
     }
 
@@ -277,6 +307,7 @@
 
     return {
       upsert,
+      getAvailability,
       remove,
       applyMessage,
       has,

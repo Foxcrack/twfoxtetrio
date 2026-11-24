@@ -153,3 +153,79 @@ test('mutual friend store extracts server-verified mutual friends and persists p
   assert.equal(reloaded.isMutual('stranger_req'), false);
   assert.equal(reloaded.isMutual('blocked_user'), false);
 });
+
+test('classifyInviteAvailability and extractFromSocialDom block Busy and In-TL friends while capturing avatarUrl', () => {
+  const busyRes = inviteLogic.classifyInviteAvailability({
+    statusText: 'Busy',
+    statusHtml: '<img src="/res/status/busy.png"> Busy'
+  });
+  assert.deepEqual(busyRes, { invitable: false, reason: 'busy', badge: 'BUSY' });
+
+  const tlRes = inviteLogic.classifyInviteAvailability({
+    statusText: 'Playing TETRA LEAGUE',
+    statusHtml: 'In a TETRA LEAGUE game'
+  });
+  assert.deepEqual(tlRes, { invitable: false, reason: 'league', badge: 'IN TL' });
+
+  const queueRes = inviteLogic.classifyInviteAvailability({
+    statusText: 'In TETRA LEAGUE queue'
+  });
+  assert.deepEqual(queueRes, { invitable: false, reason: 'league', badge: 'IN TL' });
+
+  const readyRes = inviteLogic.classifyInviteAvailability({
+    statusText: 'Online',
+    statusHtml: '<img src="/res/status/online.png"> Online'
+  });
+  assert.deepEqual(readyRes, { invitable: true, reason: '', badge: '' });
+
+  function makeFriendRow(name, statusText, statusHtml, avatarSrc, opts) {
+    const o = opts || {};
+    const h1 = { querySelector: () => ({ textContent: name }) };
+    const p = { textContent: statusText, innerHTML: statusHtml || '' };
+    const btn = { classList: { contains: () => Boolean(o.btnHidden) } };
+    const img = avatarSrc ? { src: avatarSrc, getAttribute: (k) => (k === 'src' ? avatarSrc : null) } : null;
+    return {
+      classList: { contains: (cls) => Boolean(o[cls]) },
+      getAttribute: (k) => (k === 'title' ? (o.title || '') : ''),
+      querySelector: (sel) => {
+        if (sel === 'h1') return h1;
+        if (sel === 'p') return p;
+        if (sel === '.social_relationship_button_invite') return btn;
+        if (sel === '.social_relationship_img') return img;
+        return null;
+      }
+    };
+  }
+
+  const fakeDoc = {
+    getElementById: (id) => (id === 'social_relationships' ? {
+      querySelectorAll: (sel) => (sel === '.social_relationship' ? [
+        makeFriendRow('maekrix', 'Online', '', 'https://tetr.io/user-content/avatars/m1.jpg?rv=2'),
+        makeFriendRow('busyfox', 'Busy', '<img src="/res/status/busy.png">', 'https://tetr.io/user-content/avatars/b1.jpg?rv=1', { busy: true }),
+        makeFriendRow('tlchamp', 'In TETRA LEAGUE queue', '', 'https://tetr.io/user-content/avatars/t1.jpg?rv=3')
+      ] : [])
+    } : null),
+    querySelectorAll: () => []
+  };
+
+  const mem = new Map();
+  const storage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => { mem.set(k, String(v)); }
+  };
+  const store = inviteLogic.createMutualFriendStore({ storage, selfUsername: 'twfoxcrack' });
+  const list = store.extractFromSocialDom(fakeDoc, 'twfoxcrack', 5000);
+  assert.equal(list.length, 3);
+
+  const byName = Object.fromEntries(list.map((entry) => [entry.username, entry]));
+  assert.equal(byName.maekrix.invitable, true);
+  assert.equal(byName.maekrix.avatarUrl, 'https://tetr.io/user-content/avatars/m1.jpg?rv=2');
+
+  assert.equal(byName.busyfox.invitable, false);
+  assert.equal(byName.busyfox.busyReason, 'busy');
+  assert.equal(byName.busyfox.avatarUrl, 'https://tetr.io/user-content/avatars/b1.jpg?rv=1');
+
+  assert.equal(byName.tlchamp.invitable, false);
+  assert.equal(byName.tlchamp.busyReason, 'league');
+  assert.equal(byName.tlchamp.avatarUrl, 'https://tetr.io/user-content/avatars/t1.jpg?rv=3');
+});

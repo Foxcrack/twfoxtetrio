@@ -20,6 +20,28 @@
   const USERNAME_RE = /^[a-z0-9_-]{2,24}$/;
   const ROOM_CODE_RE = /^[2-9A-HJ-NP-Z]{4,8}$/;
   const NON_MUTUAL_STATUS_RE = /\b(not a friend|blocked|outgoing request|incoming request|no es amigo|bloqueado|solicitud enviada|solicitud recibida)\b/i;
+  const TETRA_LEAGUE_STATUS_RE = /\b(tetra\s*league|liga\s*tetra|tl_mm)\b/i;
+  const BUSY_STATUS_RE = /\b(busy|ocupado|do not disturb|no molestar)\b/i;
+  const BUSY_ICON_RE = /\/status\/busy\.png/i;
+
+  function classifyInviteAvailability(opts) {
+    const src = opts && typeof opts === 'object' ? opts : {};
+    const statusText = String(src.statusText || '');
+    const statusHtml = String(src.statusHtml || '');
+    const combined = statusText + ' ' + statusHtml + ' ' + String(src.titleText || '');
+    const regAvail = String(src.registryAvailability || '').toLowerCase();
+
+    if (src.isOffline || /\boffline\b/i.test(statusText) || /\/status\/offline\.png/i.test(statusHtml)) {
+      return { invitable: false, reason: 'offline', badge: 'OFFLINE' };
+    }
+    if (regAvail === 'tl' || TETRA_LEAGUE_STATUS_RE.test(combined)) {
+      return { invitable: false, reason: 'league', badge: 'IN TL' };
+    }
+    if (regAvail === 'busy' || src.isBusyClass || BUSY_ICON_RE.test(statusHtml) || BUSY_STATUS_RE.test(statusText)) {
+      return { invitable: false, reason: 'busy', badge: 'BUSY' };
+    }
+    return { invitable: true, reason: '', badge: '' };
+  }
 
   function normalizeUsername(raw) {
     if (typeof raw !== 'string') return '';
@@ -229,7 +251,9 @@
               username: friend,
               updatedAt: Number.isFinite(Number(entry.updatedAt)) ? Number(entry.updatedAt) : 0,
               statusText: sanitizeText(entry.statusText || '', 64),
-              invitable: Boolean(entry.invitable)
+              invitable: Boolean(entry.invitable),
+              busyReason: sanitizeText(entry.busyReason || '', 16),
+              avatarUrl: sanitizeText(entry.avatarUrl || '', 512)
             };
           }
         }
@@ -286,13 +310,22 @@
       const prev = bucket[friend];
       const nextStatus = info.statusText !== undefined ? sanitizeText(info.statusText, 64) : (prev ? prev.statusText : '');
       const nextInvitable = info.invitable !== undefined ? Boolean(info.invitable) : (prev ? prev.invitable : true);
+      const nextBusyReason = info.busyReason !== undefined ? sanitizeText(info.busyReason, 16) : (prev ? (prev.busyReason || '') : '');
+      const nextAvatar = info.avatarUrl !== undefined ? sanitizeText(info.avatarUrl, 512) : (prev ? (prev.avatarUrl || '') : '');
       const now = Number.isFinite(Number(info.nowMs)) ? Number(info.nowMs) : Date.now();
-      const changed = !prev || prev.statusText !== nextStatus || prev.invitable !== nextInvitable;
+      const changed =
+        !prev ||
+        prev.statusText !== nextStatus ||
+        prev.invitable !== nextInvitable ||
+        prev.busyReason !== nextBusyReason ||
+        prev.avatarUrl !== nextAvatar;
       bucket[friend] = {
         username: friend,
         updatedAt: now,
         statusText: nextStatus,
-        invitable: nextInvitable
+        invitable: nextInvitable,
+        busyReason: nextBusyReason,
+        avatarUrl: nextAvatar
       };
       if (changed) save();
       return true;
@@ -329,7 +362,9 @@
           username: item.username,
           updatedAt: item.updatedAt,
           statusText: item.statusText,
-          invitable: item.invitable
+          invitable: item.invitable,
+          busyReason: item.busyReason || '',
+          avatarUrl: item.avatarUrl || ''
         });
       }
       out.sort(function (a, b) {
@@ -364,26 +399,59 @@
 
         const statusEl = row.querySelector('p');
         const statusText = sanitizeText(statusEl && statusEl.textContent ? statusEl.textContent : '', 64);
+        const statusHtml = sanitizeText(statusEl && typeof statusEl.innerHTML === 'string' ? statusEl.innerHTML : '', 256);
+        const titleText = typeof row.getAttribute === 'function' ? sanitizeText(row.getAttribute('title') || '', 128) : '';
         if (NON_MUTUAL_STATUS_RE.test(statusText)) {
           if (removeMutual(uname, owner)) dirty = true;
           continue;
         }
 
         const isOffline = Boolean(row.classList && row.classList.contains('offline'));
+        const isBusyClass = Boolean(row.classList && row.classList.contains('busy'));
         const inviteBtn = row.querySelector('.social_relationship_button_invite');
         const btnVisible = Boolean(inviteBtn && (!inviteBtn.classList || !inviteBtn.classList.contains('hidden')));
+        const imgEl = row.querySelector('.social_relationship_img') || row.querySelector('.avatar');
+        const avatarSrc = sanitizeText(
+          (imgEl && ((typeof imgEl.getAttribute === 'function' && imgEl.getAttribute('src')) || imgEl.src)) || '',
+          512
+        );
+        const avail = classifyInviteAvailability({
+          statusText,
+          statusHtml,
+          titleText,
+          isOffline,
+          isBusyClass
+        });
 
-        if (!isOffline && btnVisible) {
+        if (!isOffline && (btnVisible || avail.reason === 'busy' || avail.reason === 'league')) {
           const bucket = ensureBucket(owner);
           const prev = bucket[uname];
-          if (!prev || prev.statusText !== statusText || !prev.invitable) dirty = true;
+          const finalInvitable = Boolean(btnVisible && avail.invitable);
+          if (
+            !prev ||
+            prev.statusText !== statusText ||
+            prev.invitable !== finalInvitable ||
+            prev.busyReason !== avail.reason ||
+            (avatarSrc && prev.avatarUrl !== avatarSrc)
+          ) {
+            dirty = true;
+          }
           bucket[uname] = {
             username: uname,
             updatedAt: Number.isFinite(nowMs) ? nowMs : Date.now(),
             statusText,
-            invitable: true
+            invitable: finalInvitable,
+            busyReason: avail.reason,
+            avatarUrl: avatarSrc || (prev ? (prev.avatarUrl || '') : '')
           };
           onlineMutual.push(bucket[uname]);
+        } else if (isOffline && bySelf[owner] && bySelf[owner][uname]) {
+          // Clear stale busy/in-league flag once friend goes offline cleanly
+          if (bySelf[owner][uname].busyReason !== 'offline') {
+            bySelf[owner][uname].busyReason = '';
+            bySelf[owner][uname].invitable = true;
+            dirty = true;
+          }
         }
       }
 
@@ -427,6 +495,7 @@
     parseInviteTopic,
     buildInvitePayload,
     parseInviteMessage,
+    classifyInviteAvailability,
     isUserInRoom,
     createInviteTracker,
     createMutualFriendStore
