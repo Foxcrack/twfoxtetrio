@@ -2069,15 +2069,16 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const inOfficialCustomOrTl = Boolean(
         document.body && document.body.classList && document.body.classList.contains('innormalmulti')
       ) || Boolean(rState && rState.inMultiplayer && !(rState && rState.inZenith) && !inZenithBody);
-      const inGameNow = Boolean(
-        (rState && rState.inGame) ||
-        (document.body && document.body.classList && (document.body.classList.contains('ingame') || document.body.classList.contains('ingame_phys')))
-      );
       const inQuickPlayMatch = Boolean(
-        zMenu && zMenu.classList && zMenu.classList.contains('rolledup') && !zMenu.classList.contains('inresults')
+        (document.body && document.body.classList && document.body.classList.contains('ingame_phys')) ||
+        (zMenu && zMenu.classList && zMenu.classList.contains('rolledup') && !zMenu.classList.contains('inresults'))
+      );
+      const inNonZenithGame = !inZenithBody && Boolean(
+        (rState && rState.inGame) ||
+        (document.body && document.body.classList && document.body.classList.contains('ingame'))
       );
 
-      if (!isInQuickPlayLobbyUi() || inOfficialCustomOrTl || inGameNow || inQuickPlayMatch) {
+      if (!isInQuickPlayLobbyUi() || inOfficialCustomOrTl || inQuickPlayMatch || inNonZenithGame) {
         const helpers = internals.foxMenuHelpers;
         if (helpers && typeof helpers.showOrangeNoticeNotification === 'function') {
           helpers.showOrangeNoticeNotification(
@@ -2507,9 +2508,10 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         renderParty();
       }
       const rStateNow = api.getState ? api.getState() : null;
+      const inZenithNow = Boolean(document.body && document.body.classList && document.body.classList.contains('inzenith'));
       const inGameNow = Boolean(
-        (rStateNow && rStateNow.inGame) ||
-        (document.body && document.body.classList && document.body.classList.contains('ingame'))
+        (document.body && document.body.classList && document.body.classList.contains('ingame_phys')) ||
+        (!inZenithNow && ((rStateNow && rStateNow.inGame) || (document.body && document.body.classList && document.body.classList.contains('ingame'))))
       );
       if (!session) {
         hasSeenZenithVisibleForSession = false;

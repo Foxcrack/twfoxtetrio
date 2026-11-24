@@ -142,16 +142,12 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         const bodyEl = document.body;
         const menusEl = document.getElementById('menus');
         const menuType = menusEl && menusEl.getAttribute ? menusEl.getAttribute('data-menu-type') : '';
-        const leagueSelf = document.getElementById('leagueplayer_self');
-        const inLeagueDom = Boolean(
+        const inZenith = Boolean(bodyEl && bodyEl.classList && bodyEl.classList.contains('inzenith'));
+        const inNormalMulti = Boolean(bodyEl && bodyEl.classList && bodyEl.classList.contains('innormalmulti'));
+        const inLeagueDom = !inZenith && !inNormalMulti && Boolean(
           (bodyEl && bodyEl.classList && bodyEl.classList.contains('matchmaking')) ||
           menuType === 'league' ||
-          menuType === 'endleague' ||
-          (bodyEl &&
-            bodyEl.classList &&
-            bodyEl.classList.contains('multiplexed') &&
-            leagueSelf &&
-            (!leagueSelf.classList || !leagueSelf.classList.contains('hidden')))
+          menuType === 'endleague'
         );
         if (inLeagueDom) return 'tl';
 

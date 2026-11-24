@@ -4126,11 +4126,25 @@ test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on Q
   const notices = env.body.querySelectorAll('.twfox-invite-notif');
   assert.equal(notices.some((n) => n.getAttribute('data-fox-notice') === 'ENTER QUICK PLAY FIRST'), true);
 
-  // Once the user is inside Quick Play, accepting a THE RACE invite connects cleanly
+  // Once the user is inside Quick Play (even with TETR.IO's live background multiplexed + ingame + #leagueplayer_self flags),
+  // self presence must NOT report 'tl' and accepting a THE RACE invite connects cleanly
+  const leagueSelfEl = doc.createElement('div');
+  leagueSelfEl.setAttribute('id', 'leagueplayer_self');
+  env.body.appendChild(leagueSelfEl);
+  publishedMqtt.length = 0;
+
   env.body.classList.remove('innormalmulti');
   zMenu.classList.remove('hidden');
   env.body.classList.add('inzenith');
-  env.menus.setAttribute('data-menu-type', 'zenith');
+  env.body.classList.add('multiplexed');
+  env.body.classList.add('ingame');
+  env.menus.setAttribute('data-menu-type', 'multi');
+  env.tickIntervals();
+
+  const qpPresence = publishedMqtt
+    .filter((p) => p.topic === 'twfoxtetrio/v1/foxers/twfoxcrack')
+    .map((p) => JSON.parse(p.text || '{}'));
+  assert.equal(qpPresence.some((p) => p.st === 'tl'), false, 'Quick Play must never publish st=tl');
 
   const joinPromise = zenRace.joinByInviteCode('ABCD');
   assert.equal(zenRace.getState().cardSelected, true);
