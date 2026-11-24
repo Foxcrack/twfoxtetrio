@@ -3505,6 +3505,7 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     }
     return { type: 'OTHER' };
   }
+  const publishedFrames = [];
   class RaceWs {
     constructor() {
       this.readyState = 1;
@@ -3527,6 +3528,7 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
           if (this.onmessage) this.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer });
         });
       } else if (pkt.type === 'PUBLISH') {
+        publishedFrames.push(pkt);
         const frame = buildFrame(pkt.topic, pkt.text);
         for (const sub of relayPeers) {
           if (sub._topics.has(pkt.topic) && sub.readyState === 1 && sub.onmessage) {
@@ -3587,6 +3589,22 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
   const doc = env.context.document;
   const FakeEl = env.elements.get('me_username').constructor;
   env.elements.get('me_username').textContent = 'HostFox';
+
+  // Seed a mutual friend (Runner2) in #social_relationships so Race party shows INVITE pill
+  const socialRels = new FakeEl('div', 'social_relationships', '');
+  const relRow = new FakeEl('div', '', 'social_relationship');
+  const relH1 = new FakeEl('h1', '', '');
+  const relNameSpan = new FakeEl('span', '', '');
+  relNameSpan.textContent = 'Runner2';
+  relH1.appendChild(relNameSpan);
+  const relStatP = new FakeEl('p', '', '');
+  relStatP.textContent = 'Online';
+  const relInvBtn = new FakeEl('div', '', 'social_relationship_button_invite');
+  relRow.appendChild(relH1);
+  relRow.appendChild(relStatP);
+  relRow.appendChild(relInvBtn);
+  socialRels.appendChild(relRow);
+  doc.body.appendChild(socialRels);
 
   const zMenu = env.elements.get('zenithmenu');
   const slides = new FakeEl('div', '', 'menuslide');
@@ -3661,7 +3679,9 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     assert.equal(zMenu.classList.contains('twfox-race-open'), false);
     assert.equal(duoCard.classList.contains('active'), true);
 
-    // Re-open THE RACE for the 4-player match test (THE LOVERS turns off again) and verify spin clears after ~250ms
+    // Re-open THE RACE with body.inzenith active (simulating real Quick Play 80ms emitState polling),
+    // broadcast Runner2 presence, and verify INVITE button stays stable in DOM & sends orange invite
+    env.body.classList.add('inzenith');
     raceCard.click();
     assert.equal(duoCard.classList.contains('active'), false);
     assert.equal(zMenu.classList.contains('duo'), false);
@@ -3670,15 +3690,59 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     assert.equal(raceCard.classList.contains('spin'), false);
     assert.equal(partyEl.classList.contains('is-opening'), false);
 
+    const foxBadge = env.context.__TWFOX_INTERNAL__.foxPawBadge;
+    const foxPawLogic = env.context.__TWFOX_INTERNAL__.foxPawLogic;
+    foxBadge.refreshMutualFriends(doc);
+    // Simulate online presence packet from runner2 over MQTT relay
+    const presTopic = foxPawLogic.buildPresenceTopic('runner2');
+    const presFrame = buildFrame(
+      presTopic,
+      foxPawLogic.buildPresencePayload('runner2', '0.6.12', Date.now())
+    );
+    for (const sub of relayPeers) {
+      if ((sub._topics.has(foxPawLogic.FOX_PAW_WILDCARD) || sub._topics.has(presTopic)) && sub.onmessage) {
+        sub.onmessage({ data: presFrame.buffer });
+      }
+    }
+    await new Promise((r) => setTimeout(r, 40));
+
+    const findInviteBtn = () =>
+      partyEl.querySelectorAll('.twfox-race-btn').find((b) => b.getAttribute('data-race-invite') === 'runner2');
+    const invBtnBefore = findInviteBtn();
+    assert.ok(invBtnBefore, 'Online mutual friend INVITE button must render inside #twfoxtetrio-race-party');
+    assert.equal(invBtnBefore.disabled, false);
+
+    // Wait across multiple 80ms Quick Play runtime emitState() ticks — button MUST remain the exact same DOM node!
+    await new Promise((r) => setTimeout(r, 220));
+    const invBtnAfter = findInviteBtn();
+    assert.equal(invBtnAfter, invBtnBefore, 'Rapid Quick Play emitState ticks must not recreate INVITE button mid-click');
+
+    invBtnBefore.click();
+    assert.equal(invBtnBefore.disabled, true);
+    assert.equal(invBtnBefore.textContent, 'WAIT 30S');
+    assert.ok(
+      env.elements.get('twfoxtetrio-race-invite-note').textContent.includes('RUNNER2'),
+      'Invite confirmation note must be shown immediately'
+    );
+    const sentInvitePkt = publishedFrames.find((p) => p.topic === 'twfoxtetrio/v1/invites/runner2');
+    assert.ok(sentInvitePkt, 'Clicking INVITE must publish MQTT invite packet to friend topic');
+    const sentPayload = JSON.parse(sentInvitePkt.text);
+    assert.equal(sentPayload.gameMode, 'race');
+
     const hostSnap = zenRace.getState().session;
     const roomCode = hostSnap.room.roomCode;
     assert.ok(roomCode);
+    assert.equal(sentPayload.roomCode, roomCode);
 
-    // 3 friends join (reaching 4/4 limit)
+    // First friend joins -> existing INVITE button switches in-place to IN ROOM; remaining 2 fill 4/4
     const f2 = p2pRoom.createClientPeer({ playerName: 'Runner2', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
+    await f2.joinByCode(roomCode);
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(invBtnBefore.textContent, 'IN ROOM');
+    assert.equal(invBtnBefore.disabled, true);
+
     const f3 = p2pRoom.createClientPeer({ playerName: 'Runner3', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
     const f4 = p2pRoom.createClientPeer({ playerName: 'Runner4', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
-    await f2.joinByCode(roomCode);
     await f3.joinByCode(roomCode);
     await f4.joinByCode(roomCode);
     await new Promise((r) => setTimeout(r, 40));
@@ -3778,6 +3842,7 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     f2.close();
     f3.close();
     f4.close();
+    env.body.classList.remove('inzenith');
     env.elements.get('twfoxtetrio-race-leave-btn').click();
   } finally {
     if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {

@@ -116,6 +116,7 @@
 
 #${PARTY_ID} {
   position: relative;
+  z-index: 3;
   text-align: left;
   padding-top: 0.75rem;
   transform-origin: top center;
@@ -188,6 +189,9 @@
   color: rgba(178, 96, 64, 0.75);
 }
 #${PARTY_ID} .twfox-race-btn {
+  position: relative;
+  z-index: 4;
+  pointer-events: auto;
   padding: 2px 8px;
   border-radius: 3px;
   border: 1px solid rgba(184, 58, 27, 0.7);
@@ -299,11 +303,26 @@
   text-shadow: 0 0 6px #ff9c6b;
 }
 #${PARTY_ID} .twfox-race-friends {
+  position: relative;
+  z-index: 4;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 0.55rem;
   align-items: center;
+}
+#${PARTY_ID} .twfox-race-invite-note {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #ffba82;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+#${PARTY_ID} .twfox-race-invite-note.is-err {
+  color: #ff9185;
+}
+#${PARTY_ID} .twfox-race-invite-note.hidden {
+  display: none;
 }
 #${PARTY_ID} .twfox-race-friends:empty {
   display: none;
@@ -723,6 +742,13 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let duoClassObserver = null;
     let observedZMenuForDuo = null;
     let observedDuoCardForClass = null;
+    let presenceUnsub = null;
+    let lastSlotsSignature = '';
+    let lastFriendsListKey = '';
+    let lastRenderedSelfName = '';
+    let inviteNoteText = '';
+    let inviteNoteIsError = false;
+    const inviteBtnsByUser = new Map();
 
     const inviteTracker = foxInviteLogic && typeof foxInviteLogic.createInviteTracker === 'function'
       ? foxInviteLogic.createInviteTracker()
@@ -734,6 +760,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let slotsEl = null;
     let codePillEl = null;
     let friendsEl = null;
+    let inviteNoteEl = null;
     let joinInputEl = null;
     let joinBtnEl = null;
     let readyBtnEl = null;
@@ -934,6 +961,11 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         peekMyResult = false;
         spectatingTargetId = null;
         statusOverride = '';
+        inviteNoteText = '';
+        inviteNoteIsError = false;
+        lastSlotsSignature = '';
+        lastFriendsListKey = '';
+        inviteBtnsByUser.clear();
       }
       syncVisualState();
     }
@@ -1055,11 +1087,15 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     }
 
     function sendRaceInvite(targetUsername) {
-      if (!session || !foxInviteLogic) return false;
-      const snap = session.getSnapshot();
+      if (!foxInviteLogic) return false;
+      const activeSession = session || ensureHostSessionCreated();
+      if (!activeSession) return false;
+      const snap = activeSession.getSnapshot();
       const players = snap.players || [];
       if (players.length >= raceLogic.MAX_RACE_PLAYERS) {
         statusOverride = 'Room is full (max 4 racers).';
+        inviteNoteText = statusOverride;
+        inviteNoteIsError = true;
         renderParty();
         return false;
       }
@@ -1067,6 +1103,8 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const roomCode = (snap.room && snap.room.roomCode) || '';
       if (!roomCode || !foxBadge || typeof foxBadge.sendRoomInvite !== 'function') {
         statusOverride = 'FOXMOD invite relay unavailable.';
+        inviteNoteText = statusOverride;
+        inviteNoteIsError = true;
         renderParty();
         return false;
       }
@@ -1074,6 +1112,8 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (!normTarget) return false;
       if (foxInviteLogic.isUserInRoom(normTarget, players)) {
         statusOverride = `${normTarget.toUpperCase()} is already in the room.`;
+        inviteNoteText = statusOverride;
+        inviteNoteIsError = false;
         renderParty();
         return false;
       }
@@ -1081,6 +1121,8 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (inviteTracker && !inviteTracker.canInvite(normTarget, now, players)) {
         const rem = inviteTracker.getCooldownRemainingSec(normTarget, now);
         statusOverride = `Wait ${rem}s before inviting ${normTarget.toUpperCase()} again.`;
+        inviteNoteText = statusOverride;
+        inviteNoteIsError = true;
         renderParty();
         return false;
       }
@@ -1095,12 +1137,27 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (res && res.ok) {
         if (inviteTracker) inviteTracker.recordSent(normTarget, now);
         statusOverride = `Sent orange FOXMOD invite to ${normTarget.toUpperCase()}! (${30}s cooldown)`;
+        inviteNoteText = `SENT ORANGE INVITE TO ${normTarget.toUpperCase()}!`;
+        inviteNoteIsError = false;
         ensureInviteTicker();
       } else {
         statusOverride = res && res.reason === 'offline' ? 'Relay offline — share #CODE manually.' : 'Could not send invite.';
+        inviteNoteText = statusOverride;
+        inviteNoteIsError = true;
       }
       renderParty();
       return Boolean(res && res.ok);
+    }
+
+    function ensurePresenceWatch() {
+      const foxBadge = getFoxBadge();
+      if (!presenceUnsub && foxBadge && typeof foxBadge.onPresenceUpdate === 'function') {
+        presenceUnsub = foxBadge.onPresenceUpdate(() => {
+          if (cardSelected && partyEl && !partyEl.classList.contains('hidden')) {
+            renderParty();
+          }
+        });
+      }
     }
 
     function ensureInviteTicker() {
@@ -1233,8 +1290,20 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
       const selfAvatarEl = document.getElementById('zenith_party_self_avatar') || document.getElementById('me_avatar');
       const selfAvatarSrc = (selfAvatarEl && selfAvatarEl.src) || '';
+      lastRenderedSelfName = getSelfUsername();
+      ensurePresenceWatch();
 
-      if (slotsEl) {
+      let needsBadgeRescan = false;
+      const slotsKey =
+        roomCode +
+        '|' +
+        selfAvatarSrc +
+        '|' +
+        players.map((p) => `${p.id}:${p.name}:${p.ready ? 1 : 0}:${p.isHost ? 1 : 0}`).join(';');
+
+      if (slotsEl && slotsKey !== lastSlotsSignature) {
+        lastSlotsSignature = slotsKey;
+        needsBadgeRescan = true;
         slotsEl.innerHTML = '';
         for (let i = 0; i < raceLogic.MAX_RACE_PLAYERS; i++) {
           const p = players[i] || null;
@@ -1282,42 +1351,78 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           : (myReady ? 'READY ✓' : 'READY');
       }
 
+      const foxBadge = getFoxBadge();
       if (friendsEl) {
-        friendsEl.innerHTML = '';
-        const foxBadge = getFoxBadge();
         const mutuals = foxBadge && typeof foxBadge.listOnlineMutualFoxers === 'function'
           ? foxBadge.listOnlineMutualFoxers()
           : [];
-        if (mutuals.length > 0 && players.length < raceLogic.MAX_RACE_PLAYERS) {
-          const label = el('span', {
-            style: 'font-size:0.72rem;font-weight:800;color:#b26040;letter-spacing:0.06em;',
-            text: 'INVITE:'
-          });
-          friendsEl.appendChild(label);
-          const now = Date.now();
-          for (const fr of mutuals.slice(0, 6)) {
-            const inRoom = Boolean(foxInviteLogic && foxInviteLogic.isUserInRoom(fr.username, players));
-            const cd = inviteTracker ? inviteTracker.getCooldownRemainingSec(fr.username, now) : 0;
-            const btn = el('button', {
-              className: 'twfox-race-btn',
-              type: 'button',
-              text: inRoom ? 'IN ROOM' : cd > 0 ? `WAIT ${cd}S` : 'INVITE',
-              attrs: { 'data-race-invite': fr.username }
+        const visibleMutuals = (mutuals && players.length < raceLogic.MAX_RACE_PLAYERS) ? mutuals.slice(0, 6) : [];
+        const friendsListKey = visibleMutuals
+          .map((m) => (foxInviteLogic ? foxInviteLogic.normalizeUsername(m.username) : String(m.username || '').toLowerCase()))
+          .join(',');
+
+        if (friendsListKey !== lastFriendsListKey) {
+          lastFriendsListKey = friendsListKey;
+          friendsEl.innerHTML = '';
+          inviteBtnsByUser.clear();
+          if (visibleMutuals.length > 0) {
+            needsBadgeRescan = true;
+            const label = el('span', {
+              style: 'font-size:0.72rem;font-weight:800;color:#b26040;letter-spacing:0.06em;',
+              text: 'INVITE:'
             });
-            btn.disabled = Boolean(inRoom || cd > 0 || !roomCode);
-            btn.addEventListener('click', () => sendRaceInvite(fr.username));
-            friendsEl.appendChild(
-              el('div', { className: 'twfox-race-friend-pill' }, [
-                el('span', {
-                  className: 'twfox-paw-target twfox-player-name',
-                  text: fr.username.toUpperCase(),
-                  attrs: { 'data-username': fr.username }
-                }),
-                btn
-              ])
-            );
+            friendsEl.appendChild(label);
+            for (const fr of visibleMutuals) {
+              const normU = foxInviteLogic
+                ? foxInviteLogic.normalizeUsername(fr.username)
+                : String(fr.username || '').toLowerCase();
+              const btn = el('button', {
+                className: 'twfox-race-btn',
+                type: 'button',
+                text: 'INVITE',
+                attrs: { 'data-race-invite': normU }
+              });
+              btn.addEventListener('click', (ev) => {
+                if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+                if (!btn.disabled) {
+                  sendRaceInvite(normU);
+                }
+              });
+              inviteBtnsByUser.set(normU, btn);
+              friendsEl.appendChild(
+                el('div', { className: 'twfox-race-friend-pill' }, [
+                  el('span', {
+                    className: 'twfox-paw-target twfox-player-name',
+                    text: String(fr.username || '').toUpperCase(),
+                    attrs: { 'data-username': fr.username }
+                  }),
+                  btn
+                ])
+              );
+            }
           }
         }
+
+        const now = Date.now();
+        for (const [normU, btn] of inviteBtnsByUser.entries()) {
+          const inRoom = Boolean(foxInviteLogic && foxInviteLogic.isUserInRoom(normU, players));
+          const cd = inviteTracker ? inviteTracker.getCooldownRemainingSec(normU, now) : 0;
+          const stateKey = inRoom ? 'in_room' : cd > 0 ? `wait:${cd}` : (!roomCode ? 'no_code' : 'ready');
+          const nextDisabled = Boolean(inRoom || cd > 0 || !roomCode);
+          if (btn.disabled !== nextDisabled) {
+            btn.disabled = nextDisabled;
+          }
+          if (btn.__twfoxStateKey !== stateKey) {
+            btn.__twfoxStateKey = stateKey;
+            btn.textContent = inRoom ? 'IN ROOM' : cd > 0 ? `WAIT ${cd}S` : 'INVITE';
+          }
+        }
+      }
+
+      if (inviteNoteEl) {
+        inviteNoteEl.textContent = inviteNoteText || '';
+        setClass(inviteNoteEl, 'is-err', Boolean(inviteNoteIsError));
+        setClass(inviteNoteEl, 'hidden', !inviteNoteText);
       }
 
       if (statusEl) {
@@ -1334,8 +1439,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         }
       }
 
-      const foxBadge = getFoxBadge();
-      if (foxBadge && typeof foxBadge.rescan === 'function') {
+      if (needsBadgeRescan && foxBadge && typeof foxBadge.rescan === 'function') {
         foxBadge.rescan();
       }
     }
@@ -1597,11 +1701,11 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const menusEl = document.getElementById('menus');
       const zMenu = document.getElementById('zenithmenu');
       const qpCard = document.getElementById('sig_quickplay') || document.querySelector('[data-menu="zenith"]');
-      if (zMenu && zMenu.classList && zMenu.classList.contains('hidden') && qpCard && typeof qpCard.click === 'function') {
+      const needOpenQp =
+        (zMenu && zMenu.classList && zMenu.classList.contains('hidden')) ||
+        (menusEl && menusEl.getAttribute && menusEl.getAttribute('data-menu-type') !== 'zenith');
+      if (needOpenQp && qpCard && typeof qpCard.click === 'function') {
         qpCard.click();
-      }
-      if (menusEl && menusEl.getAttribute && menusEl.getAttribute('data-menu-type') !== 'zenith') {
-        if (qpCard && typeof qpCard.click === 'function') qpCard.click();
       }
 
       deactivateDuoCardIfActive();
@@ -1850,6 +1954,11 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
           slotsEl = el('div', { id: 'twfoxtetrio-race-players', className: 'twfox-race-slots' });
           friendsEl = el('div', { className: 'twfox-race-friends' });
+          inviteNoteEl = el('div', {
+            id: 'twfoxtetrio-race-invite-note',
+            className: 'twfox-race-invite-note hidden',
+            text: ''
+          });
 
           joinInputEl = el('input', {
             id: 'twfoxtetrio-race-join-input',
@@ -1910,6 +2019,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
             ]),
             slotsEl,
             friendsEl,
+            inviteNoteEl,
             readyBtnEl
           ]);
 
@@ -1983,6 +2093,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       }
     }
 
+    ensurePresenceWatch();
     ensureZenithDomMounted();
 
     if (typeof root.MutationObserver === 'function' && document.body) {
@@ -1997,7 +2108,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     }
 
     api.subscribe(() => {
-      ensureZenithDomMounted();
+      ensurePresenceWatch();
+      if (!document.getElementById(CARD_ID) || !document.getElementById(PARTY_ID)) {
+        ensureZenithDomMounted();
+      } else if (cardSelected && getSelfUsername() !== lastRenderedSelfName) {
+        renderParty();
+      }
       if (racePhase === 'entering' || racePhase === 'alive') {
         sampleAndBroadcastLocalRun();
       } else if (racePhase === 'dead') {
