@@ -2807,3 +2807,179 @@ test('foxmod_multi handles host_closed kick, host_migrate_self UI promotion, and
     env.context.fetch = origFetch;
   }
 });
+
+test('auto-updater shows orange notification, triggers IPC update & manual fallback, and global i18n switches EN <-> ES cleanly', async () => {
+  const ipcCalls = [];
+  let manualMode = false;
+  const mockIpc = {
+    async invoke(channel, arg) {
+      ipcCalls.push({ channel, arg });
+      if (channel === 'twfoxtetrio-fetch') {
+        if (String(arg).endsWith('/package.json')) {
+          return {
+            ok: true,
+            status: 200,
+            contentType: 'application/json',
+            base64: Buffer.from(JSON.stringify({ name: 'twfoxtetrio', version: '9.8.0' }), 'utf8').toString('base64')
+          };
+        }
+        return { ok: false, status: 404, contentType: 'text/plain', base64: '' };
+      }
+      if (channel === 'twfoxtetrio-get-update-info') {
+        return {
+          ok: true,
+          platform: 'win32',
+          writable: !manualMode,
+          canAutoUpdate: !manualMode,
+          manualCommand: 'git pull && install.bat'
+        };
+      }
+      if (channel === 'twfoxtetrio-self-update-apply') {
+        if (manualMode) {
+          return {
+            ok: false,
+            needsManual: true,
+            command: 'git pull && install.bat',
+            error: 'Write permission denied'
+          };
+        }
+        return { ok: true, version: '9.8.0', restarting: true };
+      }
+      throw new Error('Unhandled IPC: ' + channel);
+    }
+  };
+
+  const env = createFakeDomEnvironment('https:', {
+    IPC: mockIpc,
+    __TWFOX_UPDATE_CHECK_DELAY_MS__: 5
+  });
+  const doc = env.context.document;
+  const FakeEl = env.elements.get('me_username').constructor;
+  const notifications = new FakeEl('div', 'notifications', '');
+  doc.body.appendChild(notifications);
+
+  // Native TETR.IO home cards & social relationship fixture to verify global translation
+  const multiTitle = new FakeEl('h1', '', '');
+  multiTitle.textContent = 'MULTIPLAYER';
+  const multiDesc = new FakeEl('p', '', '');
+  multiDesc.textContent = 'play online with friends and foes';
+  const multiCard = new FakeEl('div', 'sig_multi', 'scroller_item scroller_item_giant');
+  multiCard.appendChild(multiTitle);
+  multiCard.appendChild(multiDesc);
+
+  const soloTitle = new FakeEl('h1', '', '');
+  soloTitle.textContent = 'SOLO';
+  const soloCard = new FakeEl('div', 'sig_solo', 'scroller_item scroller_item_giant');
+  soloCard.appendChild(soloTitle);
+
+  const configTitle = new FakeEl('h1', '', '');
+  configTitle.textContent = 'CONFIG';
+  env.sigConfig.appendChild(configTitle);
+
+  env.homeMenu.appendChild(multiCard);
+  env.homeMenu.appendChild(soloCard);
+
+  const friendCard = new FakeEl('div', '', 'social_relationship');
+  const friendName = new FakeEl('h1', '', '');
+  friendName.textContent = 'PLAYERONE';
+  const friendStatus = new FakeEl('p', '', '');
+  friendStatus.textContent = 'Playing QUICK PLAY';
+  friendCard.appendChild(friendName);
+  friendCard.appendChild(friendStatus);
+  doc.body.appendChild(friendCard);
+
+  env.meUsername.textContent = 'TWFOXCRACK';
+  doc.body.appendChild(env.meUsername);
+  doc.body.appendChild(env.pbBlitz);
+
+  const modUpdater = env.context.__TWFOX_INTERNAL__.modUpdater;
+  const i18nGlobal = env.context.__TWFOX_INTERNAL__.i18nGlobal;
+
+  try {
+    env.triggerDOMContentLoaded();
+    let toast = null;
+    for (let i = 0; i < 25 && !toast; i++) {
+      await new Promise((r) => setTimeout(r, 12));
+      toast = doc.getElementById('twfoxtetrio-update-toast');
+    }
+
+    // Startup update check displays orange notification toast
+    assert.ok(
+      toast,
+      'Orange FOXMOD UPDATE AVAILABLE notification should appear when remote version is newer (state=' +
+        JSON.stringify(modUpdater.getState()) +
+        ')'
+    );
+    assert.equal(toast.classList.contains('twfox-invite-notif'), true);
+    assert.ok(toast.querySelector('h1').textContent.includes('FOXMOD UPDATE AVAILABLE'));
+    assert.ok(toast.querySelector('p').textContent.includes('v9.8.0'));
+
+    // Open FOXMOD -> CONFIG and verify toggle count invariant + language & updater widgets
+    env.elements.get('twfoxtetrio-home-foxmod').click();
+    env.elements.get('twfoxtetrio-card-config').click();
+    const configPane = env.elements.get('twfoxtetrio-pane-config');
+    assert.equal(configPane.querySelectorAll('.twfox-toggle-input').length, 11);
+
+    const enBtn = doc.getElementById('twfoxtetrio-lang-en-btn');
+    const esBtn = doc.getElementById('twfoxtetrio-lang-es-btn');
+    const applyBtn = doc.getElementById('twfoxtetrio-apply-update-btn');
+    assert.ok(enBtn && esBtn && applyBtn);
+    assert.equal(enBtn.classList.contains('is-active'), true);
+    assert.equal(applyBtn.classList.contains('hidden'), false);
+
+    // Switch language globally to Español
+    esBtn.click();
+    assert.equal(env.context.__TWFOX_TETRIO__.getConfig().language.locale, 'es');
+    assert.equal(esBtn.classList.contains('is-active'), true);
+    assert.equal(enBtn.classList.contains('is-active'), false);
+    assert.equal(doc.body.getAttribute('data-twfox-lang'), 'es');
+
+    // Both native TETR.IO UI and FOXMOD UI (including active update toast) are translated
+    assert.equal(multiTitle.textContent, 'MULTIJUGADOR');
+    assert.equal(multiDesc.textContent, 'juega en línea con amigos y rivales');
+    assert.equal(soloTitle.textContent, 'SOLITARIO');
+    assert.equal(configTitle.textContent, 'AJUSTES');
+    assert.equal(friendStatus.textContent, 'Jugando PARTIDA RÁPIDA');
+    assert.equal(toast.querySelector('h1').textContent, 'ACTUALIZACIÓN FOXMOD DISPONIBLE');
+    assert.equal(doc.getElementById('twfoxtetrio-toast-update-btn').textContent, 'ACTUALIZAR AHORA');
+
+    // Dynamic native text updates while in Spanish also get translated automatically
+    env.headerText.textContent = '40 LINES';
+    assert.equal(env.headerText.textContent, '40 LÍNEAS');
+
+    // Usernames and PB digits remain untouched
+    assert.equal(env.meUsername.textContent, 'TWFOXCRACK');
+    assert.equal(friendName.textContent, 'PLAYERONE');
+    assert.equal(env.pbBlitz.textContent, '100,000');
+    assert.equal(doc.getElementById('twfoxtetrio-updater-cmd').textContent, 'git pull && install.bat');
+
+    // Manual permission-denied fallback reveals command panel instead of crashing
+    manualMode = true;
+    applyBtn.click();
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(modUpdater.getState().status, 'manual_required');
+    assert.equal(doc.getElementById('twfoxtetrio-updater-cmd-wrap').classList.contains('hidden'), false);
+
+    // Full writable mode invokes twfoxtetrio-self-update-apply and enters applied/restarting state
+    manualMode = false;
+    await modUpdater.checkForUpdates({ force: true, notify: false });
+    assert.equal(applyBtn.classList.contains('hidden'), false);
+    applyBtn.click();
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(modUpdater.getState().status, 'applied');
+    assert.ok(ipcCalls.some((c) => c.channel === 'twfoxtetrio-self-update-apply'));
+
+    // Switching back to English restores original TETR.IO & FOXMOD strings verbatim
+    enBtn.click();
+    assert.equal(env.context.__TWFOX_TETRIO__.getConfig().language.locale, 'en');
+    assert.equal(multiTitle.textContent, 'MULTIPLAYER');
+    assert.equal(multiDesc.textContent, 'play online with friends and foes');
+    assert.equal(soloTitle.textContent, 'SOLO');
+    assert.equal(configTitle.textContent, 'CONFIG');
+    assert.equal(friendStatus.textContent, 'Playing QUICK PLAY');
+    assert.equal(env.headerText.textContent, '40 LINES');
+  } finally {
+    if (modUpdater) modUpdater.destroy();
+    if (i18nGlobal) i18nGlobal.destroy();
+  }
+});

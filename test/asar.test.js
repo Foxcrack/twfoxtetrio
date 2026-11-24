@@ -140,16 +140,114 @@ test('install.js parseArgs supports flags and positional paths (drag-and-drop)',
   );
 });
 
-test('injectModIntoMain adds allowlisted twfoxtetrio-fetch IPC and stripMainMod removes it cleanly', () => {
+test('injectModIntoMain adds allowlisted IPC + self-updater and stripMainMod removes it cleanly', () => {
   const { injectModIntoMain, stripMainMod } = require('../scripts/install');
   const origMain = "const { app, ipcMain } = require('electron');\nipcMain.handle('get-systeminfo', () => ({}));\n";
   const patchedMain = injectModIntoMain(origMain);
   assert.ok(patchedMain.includes('twfoxtetrio-fetch'));
-  assert.ok(patchedMain.includes("parsed.hostname !== 'you.have.fail'"));
+  assert.ok(patchedMain.includes('twfoxtetrio-get-update-info'));
+  assert.ok(patchedMain.includes('twfoxtetrio-self-update-apply'));
+  assert.ok(patchedMain.includes("u.hostname === 'you.have.fail'"));
+  assert.ok(patchedMain.includes('/Foxcrack/twfoxtetrio/'));
 
   // Idempotent on re-injection and clean strip back to original content
   assert.equal(injectModIntoMain(patchedMain), patchedMain);
   assert.equal(stripMainMod(patchedMain), origMain);
+});
+
+test('registerTwfoxMainIpc stages & applies synthetic ASAR self-updates and blocks disallowed domains', async () => {
+  const { PassThrough } = require('node:stream');
+  const crypto = require('node:crypto');
+  const { registerTwfoxMainIpc, injectModIntoMain } = require('../scripts/install');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'twfox-selfupd-'));
+  const asarPath = path.join(tmpDir, 'app.asar');
+  const seedPath = path.join(tmpDir, 'seed.asar');
+  try {
+    createSyntheticAsar(seedPath);
+    const baseMain = injectModIntoMain(readAsarFile(seedPath, 'main.js').toString('utf8'));
+    const basePreload =
+      readAsarFile(seedPath, 'preload.js').toString('utf8') +
+      "\n// === TWFOXTETRIO MOD START ===\nconsole.log('old');\n// === TWFOXTETRIO MOD END ===\n";
+    writePatchedAsar(
+      seedPath,
+      {
+        'preload.js': Buffer.from(basePreload, 'utf8'),
+        'main.js': Buffer.from(baseMain, 'utf8')
+      },
+      asarPath
+    );
+
+    const handlers = new Map();
+    const mockIpcMain = {
+      handle(ch, fn) {
+        handlers.set(ch, fn);
+      }
+    };
+    const remoteRoutes = {
+      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json': '{"name":"twfoxtetrio","version":"9.9.9"}',
+      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/scripts/build.js':
+        "const SOURCE_FILES = [\n  'src/core/runtime.js'\n];\n",
+      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/src/core/runtime.js':
+        "/* updated runtime 9.9.9 */ window.__TWFOX_UPDATED_999__ = true;\n"
+    };
+    const mockHttps = {
+      get(url, _opts, cb) {
+        const res = new PassThrough();
+        res.statusCode = Object.prototype.hasOwnProperty.call(remoteRoutes, url) ? 200 : 404;
+        res.headers = { 'content-type': 'text/plain' };
+        queueMicrotask(() => {
+          cb(res);
+          res.end(Buffer.from(remoteRoutes[url] || 'not found', 'utf8'));
+        });
+        return { on() {}, setTimeout() {} };
+      }
+    };
+
+    registerTwfoxMainIpc({
+      ipcMain: mockIpcMain,
+      app: { quit() {}, relaunch() {}, exit() {} },
+      https: mockHttps,
+      fs,
+      path,
+      crypto,
+      cp: null,
+      asarPath,
+      forceInPlaceSwap: true,
+      skipRelaunch: true,
+      skipSpawn: true,
+      processRef: { platform: 'linux', pid: process.pid, env: {}, resourcesPath: tmpDir, execPath: '/bin/tetrio' }
+    });
+
+    const info = await handlers.get('twfoxtetrio-get-update-info')();
+    assert.equal(info.ok, true);
+    assert.equal(info.writable, true);
+
+    await assert.rejects(
+      () => handlers.get('twfoxtetrio-fetch')(null, 'https://evil.example/data.json'),
+      /Disallowed domain/
+    );
+
+    const fetched = await handlers.get('twfoxtetrio-fetch')(
+      null,
+      'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/package.json'
+    );
+    assert.equal(fetched.ok, true);
+    assert.ok(Buffer.from(fetched.base64, 'base64').toString('utf8').includes('9.9.9'));
+
+    const applyRes = await handlers.get('twfoxtetrio-self-update-apply')();
+    assert.equal(applyRes.ok, true);
+    assert.equal(applyRes.version, '9.9.9');
+    assert.equal(verifyAsar(asarPath).ok, true);
+
+    const newPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
+    assert.ok(newPreload.includes('window.IS_ELECTRON = true;'));
+    assert.ok(newPreload.includes('// twfoxtetrio v9.9.9'));
+    assert.ok(newPreload.includes('window.__TWFOX_UPDATED_999__ = true;'));
+    assert.equal(newPreload.includes("console.log('old');"), false);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test('Linux installer resolves distro, wrapper script, Flatpak, extracted AppImage, and process detection paths', () => {

@@ -19,7 +19,7 @@
   const MUTUAL_FRIENDS_STORAGE_KEY = 'twfoxtetrio_mutual_friends_v1';
   const USERNAME_RE = /^[a-z0-9_-]{2,24}$/;
   const ROOM_CODE_RE = /^[2-9A-HJ-NP-Z]{4,8}$/;
-  const NON_MUTUAL_STATUS_RE = /\b(not a friend|blocked|outgoing request|incoming request)\b/i;
+  const NON_MUTUAL_STATUS_RE = /\b(not a friend|blocked|outgoing request|incoming request|no es amigo|bloqueado|solicitud enviada|solicitud recibida)\b/i;
 
   function normalizeUsername(raw) {
     if (typeof raw !== 'string') return '';

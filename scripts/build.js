@@ -21,6 +21,8 @@ const SOURCE_FILES = [
   'src/features/solo-lobby-logic.js',
   'src/features/fox-paw-logic.js',
   'src/features/fox-invite-logic.js',
+  'src/features/mod-updater-logic.js',
+  'src/features/i18n-logic.js',
   'src/core/top-hud.js',
   'src/core/runtime.js',
   'src/features/blitz-pb-tracker.js',
@@ -32,7 +34,9 @@ const SOURCE_FILES = [
   'src/features/foxmod-canvas.js',
   'src/features/foxmod-menu.js',
   'src/features/zen-qp-mods.js',
-  'src/features/fox-paw-badge.js'
+  'src/features/fox-paw-badge.js',
+  'src/features/mod-updater.js',
+  'src/features/i18n-global.js'
 ];
 
 /**
@@ -70,8 +74,8 @@ function stripModSnippet(preloadText) {
     return preloadText;
   }
   const startIdx = preloadText.indexOf(MOD_START_MARKER);
-  const endIdx = preloadText.indexOf(MOD_END_MARKER, startIdx);
-  if (startIdx === -1 || endIdx === -1) {
+  const endIdx = preloadText.lastIndexOf(MOD_END_MARKER);
+  if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
     return preloadText;
   }
   const before = preloadText.slice(0, startIdx).replace(/\s+$/, '');

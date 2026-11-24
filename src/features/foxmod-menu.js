@@ -173,7 +173,7 @@
       cardId: 'twfoxtetrio-card-config',
       icon: ICONS.config,
       title: 'CONFIG',
-      subtitle: 'skins, tablero, SFX, fondos animados & ajustes HUD',
+      subtitle: 'skins, board, SFX, language, updates & HUD settings',
       bg: '#1c263e',
       top: '#1d3164',
       left: '#1e2a48',
@@ -2442,6 +2442,51 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
   margin-left: auto;
   text-transform: uppercase;
 }
+.twfox-lang-upd-block {
+  border-top-color: #FF7B1C !important;
+}
+.twfox-lang-pills,
+.twfox-updater-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.twfox-lang-pill.is-active {
+  border-color: #FF7B1C !important;
+  background: linear-gradient(180deg, rgba(255, 123, 28, 0.38) 0%, rgba(168, 66, 8, 0.56) 100%) !important;
+  color: #fff3e8 !important;
+  box-shadow: 0 0 12px rgba(255, 123, 28, 0.28);
+}
+.twfox-updater-status.is-avail {
+  border-color: rgba(255, 123, 28, 0.65);
+  background: rgba(255, 123, 28, 0.22);
+  color: #ffcca1;
+}
+.twfox-updater-status.is-ok {
+  border-color: rgba(66, 232, 138, 0.55);
+  background: rgba(66, 232, 138, 0.14);
+  color: #a6ffd0;
+}
+.twfox-updater-cmd-wrap {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 123, 28, 0.35);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.twfox-updater-cmd {
+  font-family: Consolas, monospace;
+  font-size: 0.88em;
+  color: #ffd3ad;
+  user-select: all;
+  word-break: break-all;
+}
 `;
 
   function setClass(el, className, active) {
@@ -2663,6 +2708,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
     const scrollerMap = new Map();
     const toggleControls = [];
     const rangeControls = [];
+    const langControls = [];
 
     // Practice Pentominoes stage
     let practiceGame = null;
@@ -2775,6 +2821,14 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const clamped = clampNumber(raw, item.min, item.max);
         item.input.value = String(clamped);
         item.valueEl.textContent = String(clamped);
+      }
+      const activeLocale = cfg && cfg.language && cfg.language.locale === 'es' ? 'es' : 'en';
+      for (const lc of langControls) {
+        const active = lc.locale === activeLocale;
+        setClass(lc.btn, 'is-active', active);
+        if (typeof lc.btn.setAttribute === 'function') {
+          lc.btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        }
       }
     }
 
@@ -6183,10 +6237,160 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         ]);
       }
 
-      const blocks = [buildAssetsStudioBlock()].concat(CONFIG_SECTIONS.map(buildConfigSection));
+      function buildLangAndUpdaterBlock() {
+        const enBtn = createEl('button', {
+          id: 'twfoxtetrio-lang-en-btn',
+          className: 'twfox-btn is-sm twfox-lang-pill',
+          text: 'ENGLISH',
+          type: 'button',
+          attrs: { 'data-twfox-no-i18n': '1', 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        const esBtn = createEl('button', {
+          id: 'twfoxtetrio-lang-es-btn',
+          className: 'twfox-btn is-sm twfox-lang-pill',
+          text: 'ESPAÑOL',
+          type: 'button',
+          attrs: { 'data-twfox-no-i18n': '1', 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        langControls.push({ locale: 'en', btn: enBtn });
+        langControls.push({ locale: 'es', btn: esBtn });
+
+        function selectLocale(nextLoc) {
+          const nextCfg = runtimeApi.updateConfig({ language: { locale: nextLoc } });
+          syncConfigControls(nextCfg);
+          if (statusEl) statusEl.textContent = 'SETTINGS SAVED';
+        }
+        enBtn.addEventListener('click', function () {
+          selectLocale('en');
+        });
+        esBtn.addEventListener('click', function () {
+          selectLocale('es');
+        });
+
+        const updStatusEl = createEl('span', {
+          id: 'twfoxtetrio-updater-status',
+          className: 'twfox-badge twfox-updater-status',
+          text: `Up to date (v${runtimeApi.version})`
+        });
+        const checkBtn = createEl('button', {
+          id: 'twfoxtetrio-check-update-btn',
+          className: 'twfox-btn is-sm',
+          text: 'CHECK UPDATES',
+          type: 'button',
+          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        const applyBtn = createEl('button', {
+          id: 'twfoxtetrio-apply-update-btn',
+          className: 'twfox-btn is-sm is-pri hidden',
+          text: 'UPDATE & RESTART',
+          type: 'button',
+          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        const cmdCodeEl = createEl('code', {
+          id: 'twfoxtetrio-updater-cmd',
+          className: 'twfox-updater-cmd',
+          text: 'git pull && install.bat',
+          attrs: { 'data-twfox-no-i18n': '1' }
+        });
+        const copyCmdBtn = createEl('button', {
+          id: 'twfoxtetrio-updater-copy-btn',
+          className: 'twfox-btn is-sm',
+          text: 'COPY COMMAND',
+          type: 'button',
+          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        const cmdWrap = createEl('div', { id: 'twfoxtetrio-updater-cmd-wrap', className: 'twfox-updater-cmd-wrap hidden' }, [
+          cmdCodeEl,
+          copyCmdBtn
+        ]);
+
+        function getUpdater() {
+          const bag = root.__TWFOX_INTERNAL__ || internals;
+          return (bag && bag.modUpdater) || null;
+        }
+
+        function syncUpdaterUi(st) {
+          if (!st) return;
+          setClass(updStatusEl, 'is-avail', Boolean(st.updateAvailable));
+          setClass(updStatusEl, 'is-ok', st.status === 'up_to_date' || st.status === 'applied');
+          if (st.checking) {
+            updStatusEl.textContent = 'Checking for updates...';
+          } else if (st.updating) {
+            updStatusEl.textContent = 'Downloading and installing update...';
+          } else if (st.status === 'available' && st.remoteVersion) {
+            updStatusEl.textContent = `Update available: v${st.remoteVersion} (installed v${st.installedVersion})`;
+          } else if (st.status === 'applied') {
+            updStatusEl.textContent = 'Update installed! Restarting TETR.IO...';
+          } else if (st.status === 'manual_required') {
+            updStatusEl.textContent = 'Manual update required';
+          } else if (st.status === 'error' && st.error) {
+            updStatusEl.textContent = String(st.error);
+          } else if (st.status === 'up_to_date') {
+            updStatusEl.textContent = `Up to date (v${st.installedVersion})`;
+          } else {
+            updStatusEl.textContent = `Up to date (v${st.installedVersion})`;
+          }
+
+          checkBtn.disabled = Boolean(st.checking || st.updating);
+          const showApply = Boolean(st.updateAvailable || st.updating || st.status === 'applied');
+          setClass(applyBtn, 'hidden', !showApply);
+          applyBtn.disabled = Boolean(st.updating || st.status === 'applied');
+          applyBtn.textContent = st.updating ? 'UPDATING...' : st.status === 'applied' ? 'RESTARTING...' : 'UPDATE & RESTART';
+
+          cmdCodeEl.textContent = st.manualCommand || 'git pull && install.bat';
+          setClass(cmdWrap, 'hidden', st.status !== 'manual_required');
+        }
+
+        checkBtn.addEventListener('click', function () {
+          const upd = getUpdater();
+          if (upd && typeof upd.checkForUpdates === 'function') {
+            upd.checkForUpdates({ force: true, notify: true });
+          }
+        });
+        applyBtn.addEventListener('click', function () {
+          const upd = getUpdater();
+          if (upd && typeof upd.applyUpdate === 'function') {
+            upd.applyUpdate();
+          }
+        });
+        copyCmdBtn.addEventListener('click', function () {
+          copyToClipboard(cmdCodeEl.textContent || '');
+          if (statusEl) statusEl.textContent = 'SETTINGS SAVED';
+        });
+
+        const updApi = getUpdater();
+        if (updApi && typeof updApi.subscribe === 'function') {
+          updApi.subscribe(syncUpdaterUi);
+        }
+
+        return createEl('div', { id: 'twfoxtetrio-lang-updater-block', className: 'scroller_block twfox-lang-upd-block' }, [
+          createEl('h1', { style: 'color:#ffb070', text: 'LANGUAGE & UPDATES' }),
+          createEl('div', { className: 'twfox-native-row' }, [
+            createEl('div', {}, [
+              createEl('span', { className: 'twfox-native-label', text: 'Interface Language (Global)' }),
+              createEl('span', {
+                className: 'twfox-native-desc',
+                text: 'Applies Spanish or English across both FOXMOD and TETR.IO menus.'
+              })
+            ]),
+            createEl('div', { className: 'twfox-lang-pills' }, [enBtn, esBtn])
+          ]),
+          createEl('div', { className: 'twfox-native-row' }, [
+            createEl('div', {}, [
+              createEl('span', { className: 'twfox-native-label', text: 'FOXMOD Version & Auto-Updater' }),
+              updStatusEl
+            ]),
+            createEl('div', { className: 'twfox-updater-actions' }, [checkBtn, applyBtn])
+          ]),
+          cmdWrap
+        ]);
+      }
+
+      const blocks = [buildLangAndUpdaterBlock(), buildAssetsStudioBlock()].concat(CONFIG_SECTIONS.map(buildConfigSection));
       blocks.push(
         createEl('div', { className: 'scroller_block twfox-scroller-header' }, [statusEl, resetBtn])
       );
+      syncConfigControls(runtimeApi.getConfig());
 
       return createEl(
         'div',

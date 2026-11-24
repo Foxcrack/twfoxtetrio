@@ -62,6 +62,9 @@
     zenQuickPlayMods: { ...DEFAULT_ZEN_QP_MODS },
     foxPawBadge: {
       enabled: true
+    },
+    language: {
+      locale: 'en'
     }
   };
 
@@ -72,7 +75,8 @@
       quickPlayTracker: { ...DEFAULT_CONFIG.quickPlayTracker },
       multiplayerLeaderboard: { ...DEFAULT_CONFIG.multiplayerLeaderboard },
       zenQuickPlayMods: zenQpLogic ? zenQpLogic.createEmptySelection() : { ...DEFAULT_ZEN_QP_MODS },
-      foxPawBadge: { ...DEFAULT_CONFIG.foxPawBadge }
+      foxPawBadge: { ...DEFAULT_CONFIG.foxPawBadge },
+      language: { ...DEFAULT_CONFIG.language }
     };
   }
 
@@ -265,7 +269,7 @@
     if (endedMode === 'blitz') {
       const pbEl = document.getElementById('pbdisplay_blitz_inner');
       if (pbEl && !pbEl.classList.contains('hidden')) return;
-      if (!/FINAL SCORE/i.test(headerText)) return;
+      if (!/FINAL SCORE|PUNTUACIÓN FINAL/i.test(headerText)) return;
 
       const finalScore = blitzLogic.parseScoreText(resultEl.textContent);
       const prevAnonPB = readPbValue('pbdisplay_blitz_inner', ANON_BLITZ_PB_KEY, blitzLogic.parseScoreText);
@@ -283,7 +287,7 @@
     if (endedMode === '40l') {
       const pbEl = document.getElementById('pbdisplay_40l_inner');
       if (pbEl && !pbEl.classList.contains('hidden')) return;
-      if (!/FINAL TIME/i.test(headerText)) return;
+      if (!/FINAL TIME|TIEMPO FINAL/i.test(headerText)) return;
 
       const finalMs = fortyLinesLogic.parseTimeText(resultEl.textContent);
       const prevAnonPB = readPbValue('pbdisplay_40l_inner', ANON_40L_PB_KEY, fortyLinesLogic.parseTimeText);
@@ -580,11 +584,11 @@
       const resultEl = document.getElementById('result_result');
       if (headerEl && resultEl) {
         const headerText = headerEl.textContent || '';
-        if (/FINAL SCORE/i.test(headerText)) {
+        if (/FINAL SCORE|PUNTUACIÓN FINAL/i.test(headerText)) {
           const parsedScore = blitzLogic.parseScoreText(resultEl.textContent);
           if (parsedScore > score) score = parsedScore;
           if (activeSoloPractice.modeKey === 'marathon') completed = true;
-        } else if (/FINAL TIME/i.test(headerText)) {
+        } else if (/FINAL TIME|TIEMPO FINAL/i.test(headerText)) {
           const parsedTime = fortyLinesLogic.parseTimeText(resultEl.textContent);
           if (parsedTime > 0) timeMs = parsedTime;
           if (activeSoloPractice.modeKey === 'marathon') {
@@ -1005,7 +1009,7 @@
   }
 
   const api = {
-    version: '0.5.0',
+    version: '0.6.0',
     getState() {
       refreshSelfUsername();
       return {
@@ -1020,7 +1024,8 @@
         quickPlayTracker: { ...config.quickPlayTracker },
         multiplayerLeaderboard: { ...config.multiplayerLeaderboard },
         zenQuickPlayMods: { ...config.zenQuickPlayMods },
-        foxPawBadge: { ...config.foxPawBadge }
+        foxPawBadge: { ...config.foxPawBadge },
+        language: { ...config.language }
       };
     },
     enterPracticeZen() {

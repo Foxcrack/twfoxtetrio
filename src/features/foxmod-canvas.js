@@ -6,6 +6,20 @@
     return;
   }
 
+  function trHud(label) {
+    try {
+      const api = root.__TWFOX_TETRIO__;
+      const internals = root.__TWFOX_INTERNAL__ || {};
+      const i18n = internals.i18nLogic || root.TWFOX_I18N_LOGIC;
+      if (!api || !i18n || typeof api.getConfig !== 'function') return label;
+      const cfg = api.getConfig();
+      const loc = i18n.normalizeLocale(cfg && cfg.language && cfg.language.locale);
+      return i18n.translateText(label, loc);
+    } catch (_) {
+      return label;
+    }
+  }
+
   const SKIN_COORDS = {
     z: [0, 0],
     l: [1, 0],
@@ -434,12 +448,12 @@
 
     // HOLD left wing attached flush to board
     const holdX = boardX - wingW;
-    drawWingHeaderBox(ctx, holdX, boardY, wingW, 88, 'HOLD', false);
+    drawWingHeaderBox(ctx, holdX, boardY, wingW, 88, trHud('HOLD'), false);
     drawWingPiece(ctx, snap.holdKey, holdX + 4, boardY + 24, wingW - 8, 58, !snap.canHold);
 
     // NEXT right wing attached flush to board
     const nextX = boardX + boardW;
-    drawWingHeaderBox(ctx, nextX, boardY, wingW, 316, 'NEXT', true);
+    drawWingHeaderBox(ctx, nextX, boardY, wingW, 316, trHud('NEXT'), true);
     for (let i = 0; i < Math.min(5, snap.nextKeys.length); i++) {
       drawWingPiece(ctx, snap.nextKeys[i], nextX + 4, boardY + 26 + i * 56, wingW - 8, 52, false);
     }
@@ -519,7 +533,7 @@
     if (isBlitz) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
       ctx.font = '700 12px HUN, Segoe UI, sans-serif';
-      ctx.fillText('SCORE', statRightX, statsBaseY);
+      ctx.fillText(trHud('SCORE'), statRightX, statsBaseY);
       ctx.fillStyle = '#ffffff';
       ctx.font = '800 22px HUN, Segoe UI, sans-serif';
       ctx.fillText(Math.round(snap.score || 0).toLocaleString('en-US'), statRightX, statsBaseY + 22);
@@ -528,7 +542,7 @@
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
-    ctx.fillText('PIECES', statRightX, statsBaseY + statOffset);
+    ctx.fillText(trHud('PIECES'), statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 22px HUN, Segoe UI, sans-serif';
     ctx.fillText(`${snap.pieces}, ${snap.pps.toFixed(2)}/S`, statRightX, statsBaseY + statOffset + 22);
@@ -536,7 +550,7 @@
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
-    ctx.fillText(snap.mode === '40l' ? 'LINES LEFT' : 'LINES', statRightX, statsBaseY + statOffset);
+    ctx.fillText(snap.mode === '40l' ? trHud('LINES LEFT') : trHud('LINES'), statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 22px HUN, Segoe UI, sans-serif';
     ctx.fillText(
@@ -548,7 +562,7 @@
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.68)';
     ctx.font = '700 12px HUN, Segoe UI, sans-serif';
-    ctx.fillText(snap.mode === 'vs' ? 'ATTACK' : 'TIME', statRightX, statsBaseY + statOffset);
+    ctx.fillText(snap.mode === 'vs' ? trHud('ATTACK') : trHud('TIME'), statRightX, statsBaseY + statOffset);
     ctx.fillStyle = '#ffffff';
     ctx.font = '800 22px HUN, Segoe UI, sans-serif';
     ctx.fillText(
@@ -600,10 +614,10 @@
       ctx.font = '900 22px HUN, Segoe UI, sans-serif';
       const msg =
         snap.winReason === '40l_complete'
-          ? 'FINISH!'
+          ? trHud('FINISH!')
           : snap.winReason === 'time_up'
-            ? 'TIME UP!'
-            : 'TOP OUT';
+            ? trHud('TIME UP!')
+            : trHud('TOP OUT');
       ctx.fillText(msg, boardX + boardW / 2, boardY + boardH / 2);
     }
   }

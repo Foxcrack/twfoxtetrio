@@ -341,52 +341,529 @@ function printHelp() {
 const MAIN_MOD_START_MARKER = '// === TWFOXTETRIO MAIN MOD START ===';
 const MAIN_MOD_END_MARKER = '// === TWFOXTETRIO MAIN MOD END ===';
 
+function registerTwfoxMainIpc(deps) {
+  const d = deps || {};
+  const ipcMain = d.ipcMain;
+  const app = d.app;
+  const https = d.https;
+  const fs = d.fs;
+  const path = d.path;
+  const crypto = d.crypto;
+  const cp = d.cp;
+  const processRef = d.processRef || process;
+  if (!ipcMain || !https || !fs || !path || !crypto) return;
+
+  const BLOCK_SIZE = 4 * 1024 * 1024;
+  const MOD_START = '// === TWFOXTETRIO ' + 'MOD START ===';
+  const MOD_END = '// === TWFOXTETRIO ' + 'MOD END ===';
+  const MAIN_START = '// === TWFOXTETRIO MAIN ' + 'MOD START ===';
+  const MAIN_END = '// === TWFOXTETRIO MAIN ' + 'MOD END ===';
+  const RAW_BASE = 'https://raw.githubusercontent.com/Foxcrack/twfoxtetrio/main/';
+
+  function isAllowedUrl(rawUrl) {
+    try {
+      const u = new URL(String(rawUrl || ''));
+      if (u.protocol !== 'https:') return false;
+      if (u.hostname === 'you.have.fail') return true;
+      if (u.hostname === 'raw.githubusercontent.com' && u.pathname.startsWith('/Foxcrack/twfoxtetrio/')) {
+        return true;
+      }
+      if (u.hostname === 'api.github.com' && u.pathname.startsWith('/repos/Foxcrack/twfoxtetrio/')) {
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function fetchAllowedHttps(targetUrl, depth) {
+    return new Promise((resolve, reject) => {
+      try {
+        const parsed = new URL(String(targetUrl || ''));
+        if (!isAllowedUrl(parsed.toString())) {
+          reject(new Error('Disallowed domain for twfoxtetrio-fetch'));
+          return;
+        }
+        if ((depth || 0) > 5) {
+          reject(new Error('Too many redirects'));
+          return;
+        }
+        const req = https.get(
+          parsed.toString(),
+          { headers: { 'User-Agent': 'twfoxtetrio-desktop', 'Cache-Control': 'no-cache' } },
+          (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              res.resume();
+              const nextUrl = new URL(res.headers.location, parsed).toString();
+              if (!isAllowedUrl(nextUrl)) {
+                reject(new Error('Disallowed redirect domain'));
+                return;
+              }
+              fetchAllowedHttps(nextUrl, (depth || 0) + 1).then(resolve, reject);
+              return;
+            }
+            const chunks = [];
+            res.on('data', (c) => chunks.push(c));
+            res.on('end', () => {
+              resolve({
+                ok: res.statusCode >= 200 && res.statusCode < 300,
+                status: res.statusCode || 0,
+                contentType: String(res.headers['content-type'] || 'application/octet-stream'),
+                buffer: Buffer.concat(chunks)
+              });
+            });
+          }
+        );
+        req.on('error', reject);
+        req.setTimeout(30000, () => {
+          req.destroy(new Error('Request timeout'));
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  function computeIntegrity(buffer) {
+    const fullHash = crypto.createHash('sha256').update(buffer).digest('hex');
+    const blocks = [];
+    if (buffer.length === 0) {
+      blocks.push(fullHash);
+    } else {
+      for (let off = 0; off < buffer.length; off += BLOCK_SIZE) {
+        const end = Math.min(off + BLOCK_SIZE, buffer.length);
+        blocks.push(crypto.createHash('sha256').update(buffer.subarray(off, end)).digest('hex'));
+      }
+    }
+    return { algorithm: 'SHA256', hash: fullHash, blockSize: BLOCK_SIZE, blocks };
+  }
+
+  function parseAsar(asarPath) {
+    const stat = fs.statSync(asarPath);
+    const fd = fs.openSync(asarPath, 'r');
+    try {
+      if (stat.size < 16) throw new Error('Invalid ASAR file');
+      const pickle = Buffer.alloc(16);
+      fs.readSync(fd, pickle, 0, 16, 0);
+      const headerSizeField = pickle.readUInt32LE(0);
+      const headerPayloadSize = pickle.readUInt32LE(4);
+      const stringAlignedSize = pickle.readUInt32LE(8);
+      const stringLength = pickle.readUInt32LE(12);
+      if (headerSizeField !== 4 || stringLength > stringAlignedSize - 4 || headerPayloadSize < stringAlignedSize + 4) {
+        throw new Error('Corrupt ASAR pickle header');
+      }
+      const dataBase = 8 + headerPayloadSize;
+      if (dataBase > stat.size) throw new Error('Corrupt ASAR header exceeds file size');
+      const jsonBuf = Buffer.alloc(stringLength);
+      fs.readSync(fd, jsonBuf, 0, stringLength, 16);
+      const header = JSON.parse(jsonBuf.toString('utf8'));
+      if (!header || typeof header !== 'object' || !header.files) {
+        throw new Error('Invalid ASAR header JSON');
+      }
+      return { asarPath, fileSize: stat.size, dataBase, header };
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+
+  function findEntry(header, posixPath) {
+    const parts = posixPath.split('/').filter(Boolean);
+    let node = header;
+    for (const part of parts) {
+      if (!node || !node.files || !Object.prototype.hasOwnProperty.call(node.files, part)) return null;
+      node = node.files[part];
+    }
+    return node;
+  }
+
+  function readAsarFile(asarPath, entryPath) {
+    const parsed = parseAsar(asarPath);
+    const entry = findEntry(parsed.header, entryPath);
+    if (!entry || entry.files || entry.unpacked) {
+      throw new Error('File not found in ASAR: ' + entryPath);
+    }
+    const out = Buffer.alloc(entry.size);
+    const fd = fs.openSync(asarPath, 'r');
+    try {
+      const readBytes = fs.readSync(fd, out, 0, entry.size, parsed.dataBase + Number(entry.offset));
+      if (readBytes !== entry.size) throw new Error('Short read for ' + entryPath);
+      return out;
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+
+  function collectPackedEntries(node, prefix, list) {
+    if (!node || !node.files) return;
+    for (const [name, child] of Object.entries(node.files)) {
+      const rel = prefix ? prefix + '/' + name : name;
+      if (child.files) collectPackedEntries(child, rel, list);
+      else if (!child.unpacked && child.offset !== undefined) {
+        list.push({ path: rel, entry: child, origOffset: Number(child.offset) });
+      }
+    }
+  }
+
+  function writePatchedAsar(srcAsarPath, replacements, destAsarPath) {
+    const parsed = parseAsar(srcAsarPath);
+    const nextHeader = JSON.parse(JSON.stringify(parsed.header));
+    for (const [relPath, buf] of Object.entries(replacements)) {
+      const parts = relPath.split('/').filter(Boolean);
+      let curr = nextHeader;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!curr.files[parts[i]]) curr.files[parts[i]] = { files: {} };
+        curr = curr.files[parts[i]];
+      }
+      const fname = parts[parts.length - 1];
+      const existing = curr.files[fname] || {};
+      curr.files[fname] = Object.assign({}, existing, {
+        size: buf.length,
+        offset: existing.offset !== undefined ? existing.offset : '999999999999',
+        integrity: computeIntegrity(buf)
+      });
+      delete curr.files[fname].unpacked;
+    }
+
+    const packedEntries = [];
+    collectPackedEntries(nextHeader, '', packedEntries);
+    packedEntries.sort((a, b) => a.origOffset - b.origOffset);
+
+    let nextOffset = 0;
+    for (const item of packedEntries) {
+      const repBuf = replacements[item.path];
+      item.newOffset = nextOffset;
+      item.newSize = repBuf ? repBuf.length : item.entry.size;
+      item.entry.offset = String(nextOffset);
+      item.entry.size = item.newSize;
+      nextOffset += item.newSize;
+    }
+
+    const jsonBuf = Buffer.from(JSON.stringify(nextHeader), 'utf8');
+    const alignedLen = Math.ceil(jsonBuf.length / 4) * 4;
+    const padLen = alignedLen - jsonBuf.length;
+    const pickle = Buffer.alloc(16);
+    pickle.writeUInt32LE(4, 0);
+    pickle.writeUInt32LE(alignedLen + 8, 4);
+    pickle.writeUInt32LE(alignedLen + 4, 8);
+    pickle.writeUInt32LE(jsonBuf.length, 12);
+
+    const srcFd = fs.openSync(srcAsarPath, 'r');
+    const destFd = fs.openSync(destAsarPath, 'w');
+    try {
+      fs.writeSync(destFd, pickle);
+      fs.writeSync(destFd, jsonBuf);
+      if (padLen > 0) fs.writeSync(destFd, Buffer.alloc(padLen, 0));
+      const copyChunk = Buffer.allocUnsafe(64 * 1024);
+      for (const item of packedEntries) {
+        const repBuf = replacements[item.path];
+        if (repBuf) {
+          fs.writeSync(destFd, repBuf);
+          continue;
+        }
+        let remaining = item.newSize;
+        let readPos = parsed.dataBase + item.origOffset;
+        while (remaining > 0) {
+          const toRead = Math.min(remaining, copyChunk.length);
+          const bytesRead = fs.readSync(srcFd, copyChunk, 0, toRead, readPos);
+          if (bytesRead !== toRead) throw new Error('Unexpected EOF copying ' + item.path);
+          fs.writeSync(destFd, copyChunk, 0, bytesRead);
+          readPos += bytesRead;
+          remaining -= bytesRead;
+        }
+      }
+    } finally {
+      fs.closeSync(srcFd);
+      fs.closeSync(destFd);
+    }
+  }
+
+  function verifyAsar(asarPath) {
+    const parsed = parseAsar(asarPath);
+    const packedEntries = [];
+    collectPackedEntries(parsed.header, '', packedEntries);
+    packedEntries.sort((a, b) => a.origOffset - b.origOffset);
+    const fd = fs.openSync(asarPath, 'r');
+    try {
+      let expectedOffset = 0;
+      for (const item of packedEntries) {
+        if (item.origOffset !== expectedOffset) throw new Error('Offset mismatch for ' + item.path);
+        const buf = Buffer.alloc(item.entry.size);
+        const readBytes = fs.readSync(fd, buf, 0, item.entry.size, parsed.dataBase + item.origOffset);
+        if (readBytes !== item.entry.size) throw new Error('Truncated file ' + item.path);
+        if (item.entry.integrity && item.entry.integrity.algorithm === 'SHA256') {
+          if (computeIntegrity(buf).hash !== item.entry.integrity.hash) {
+            throw new Error('SHA-256 mismatch for ' + item.path);
+          }
+        }
+        expectedOffset += item.entry.size;
+      }
+      if (parsed.dataBase + expectedOffset !== parsed.fileSize) throw new Error('ASAR size mismatch');
+      return { ok: true, fileCount: packedEntries.length, totalPackedBytes: expectedOffset };
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+
+  function stripMarkerBlock(content, startMarker, endMarker) {
+    const sIdx = content.indexOf(startMarker);
+    const eIdx = content.indexOf(endMarker);
+    if (sIdx === -1 || eIdx === -1 || eIdx < sIdx) return content;
+    const before = content.slice(0, sIdx).replace(/\n+$/, '');
+    const after = content.slice(eIdx + endMarker.length).replace(/^\n+/, '');
+    return before + (after ? '\n' + after : '\n');
+  }
+
+  function extractMarkerBlock(content, startMarker, endMarker) {
+    const sIdx = content.indexOf(startMarker);
+    const eIdx = content.indexOf(endMarker);
+    if (sIdx === -1 || eIdx === -1 || eIdx < sIdx) return '';
+    return content.slice(sIdx, eIdx + endMarker.length);
+  }
+
+  function resolveAsarPath() {
+    if (d.asarPath) return d.asarPath;
+    if (processRef && processRef.resourcesPath) return path.join(processRef.resourcesPath, 'app.asar');
+    return '';
+  }
+
+  function buildManualCommand(platform) {
+    if (platform === 'linux' || platform === 'darwin') {
+      return 'bash <(curl -fsSL ' + RAW_BASE + 'install.sh)';
+    }
+    return 'git pull && install.bat';
+  }
+
+  function canWriteDir(dirPath) {
+    try {
+      const probe = path.join(dirPath, '.twfox-write-probe-' + processRef.pid + '-' + Date.now());
+      fs.writeFileSync(probe, 'ok');
+      fs.unlinkSync(probe);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  ipcMain.handle('twfoxtetrio-fetch', (_ev, targetUrl) =>
+    fetchAllowedHttps(targetUrl, 0).then((r) => ({
+      ok: r.ok,
+      status: r.status,
+      contentType: r.contentType,
+      base64: r.buffer.toString('base64')
+    }))
+  );
+
+  ipcMain.handle('twfoxtetrio-get-update-info', async () => {
+    const platform = processRef.platform;
+    const asarPath = resolveAsarPath();
+    const exists = Boolean(asarPath && fs.existsSync(asarPath));
+    const writable = exists ? canWriteDir(path.dirname(asarPath)) : false;
+    return {
+      ok: true,
+      platform,
+      asarPath,
+      exists,
+      writable,
+      canAutoUpdate: writable,
+      manualCommand: buildManualCommand(platform)
+    };
+  });
+
+  ipcMain.handle('twfoxtetrio-self-update-apply', async () => {
+    const platform = processRef.platform;
+    const asarPath = resolveAsarPath();
+    if (!asarPath || !fs.existsSync(asarPath)) {
+      return { ok: false, needsManual: true, command: buildManualCommand(platform), error: 'Could not locate app.asar' };
+    }
+    if (!canWriteDir(path.dirname(asarPath))) {
+      return {
+        ok: false,
+        needsManual: true,
+        command: buildManualCommand(platform),
+        error: 'Write permission denied in ' + path.dirname(asarPath)
+      };
+    }
+
+    const tmpUpdPath = asarPath + '.update.tmp';
+    const updPath = asarPath + '.update';
+    try {
+      const pkgRes = await fetchAllowedHttps(RAW_BASE + 'package.json', 0);
+      if (!pkgRes.ok) throw new Error('HTTP ' + pkgRes.status + ' reading remote package.json');
+      const pkg = JSON.parse(pkgRes.buffer.toString('utf8'));
+      const remoteVer = String((pkg && pkg.version) || '').trim().replace(/^v/i, '');
+      if (!/^\d+\.\d+\.\d+$/.test(remoteVer)) throw new Error('Invalid remote semver version');
+
+      const buildRes = await fetchAllowedHttps(RAW_BASE + 'scripts/build.js', 0);
+      if (!buildRes.ok) throw new Error('HTTP ' + buildRes.status + ' reading remote build.js');
+      const buildText = buildRes.buffer.toString('utf8');
+      const manifestMatch = buildText.match(/const\s+SOURCE_FILES\s*=\s*(\[[\s\S]*?\])\s*;/);
+      if (!manifestMatch) throw new Error('Could not parse SOURCE_FILES from remote build.js');
+
+      const sourcePaths = [];
+      const strRe = /(['"])((?:\\.|(?!\1)[^\\])*)\1/g;
+      let sm;
+      while ((sm = strRe.exec(manifestMatch[1])) !== null) {
+        const candidate = sm[2].trim();
+        if (!/^src\/[a-zA-Z0-9_/-]+\.js$/.test(candidate) || candidate.includes('..')) {
+          throw new Error('Unsafe source path in manifest: ' + candidate);
+        }
+        sourcePaths.push(candidate);
+      }
+      if (sourcePaths.length === 0) throw new Error('Empty SOURCE_FILES manifest');
+
+      const fetchedChunks = [];
+      for (const relPath of sourcePaths) {
+        const srcRes = await fetchAllowedHttps(RAW_BASE + relPath, 0);
+        if (!srcRes.ok) throw new Error('HTTP ' + srcRes.status + ' fetching ' + relPath);
+        fetchedChunks.push('// --- ' + relPath + ' ---\n' + srcRes.buffer.toString('utf8').trim());
+      }
+
+      const modSnippet = [
+        MOD_START,
+        '// twfoxtetrio v' + remoteVer + ' | https://github.com/Foxcrack/twfoxtetrio',
+        ';(function (module, exports) {',
+        "  'use strict';",
+        fetchedChunks.join('\n\n'),
+        '})(undefined, undefined);',
+        MOD_END
+      ].join('\n');
+
+      const origMode = fs.statSync(asarPath).mode;
+      const backupPath = asarPath + '.bak';
+      if (!fs.existsSync(backupPath)) {
+        fs.copyFileSync(asarPath, backupPath);
+        try {
+          if (platform !== 'win32') fs.chmodSync(backupPath, (origMode || 0o644) | 0o644);
+        } catch (_) {}
+      }
+
+      let sourceAsar = asarPath;
+      if (fs.existsSync(backupPath)) {
+        try {
+          const bakPreload = readAsarFile(backupPath, 'preload.js').toString('utf8');
+          if (!bakPreload.includes(MOD_START)) sourceAsar = backupPath;
+        } catch (_) {}
+      }
+
+      const basePreload = stripMarkerBlock(readAsarFile(sourceAsar, 'preload.js').toString('utf8'), MOD_START, MOD_END);
+      const nextPreload = basePreload.replace(/\s*$/, '') + '\n\n' + modSnippet + '\n';
+      const replacements = { 'preload.js': Buffer.from(nextPreload, 'utf8') };
+
+      try {
+        const currentMain = readAsarFile(asarPath, 'main.js').toString('utf8');
+        const mainBlock = extractMarkerBlock(currentMain, MAIN_START, MAIN_END);
+        if (mainBlock) {
+          const baseMain = stripMarkerBlock(readAsarFile(sourceAsar, 'main.js').toString('utf8'), MAIN_START, MAIN_END);
+          replacements['main.js'] = Buffer.from(baseMain.replace(/\s*$/, '') + '\n\n' + mainBlock + '\n', 'utf8');
+        }
+      } catch (_) {}
+
+      writePatchedAsar(sourceAsar, replacements, tmpUpdPath);
+      if (!verifyAsar(tmpUpdPath).ok) throw new Error('Verification failed on staged app.asar');
+      if (fs.existsSync(updPath)) {
+        try {
+          fs.unlinkSync(updPath);
+        } catch (_) {}
+      }
+      fs.renameSync(tmpUpdPath, updPath);
+
+      if (platform === 'win32' && !d.forceInPlaceSwap) {
+        if (!d.skipSpawn && cp && typeof cp.spawn === 'function') {
+          const psScript = [
+            "$ErrorActionPreference = 'Stop'",
+            '$asar = $env:TWFOX_ASAR',
+            '$upd = $env:TWFOX_UPDATE',
+            '$exe = $env:TWFOX_EXE',
+            'for ($i = 0; $i -lt 120; $i++) {',
+            '  try {',
+            "    $s = [System.IO.File]::Open($asar, 'Open', 'ReadWrite', 'None')",
+            '    $s.Close()',
+            '    Move-Item -LiteralPath $upd -Destination $asar -Force',
+            '    if ($exe -and (Test-Path -LiteralPath $exe)) { Start-Process -FilePath $exe }',
+            '    exit 0',
+            '  } catch {',
+            '    Start-Sleep -Milliseconds 250',
+            '  }',
+            '}'
+          ].join('; ');
+          const child = cp.spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', psScript], {
+            env: Object.assign({}, processRef.env, {
+              TWFOX_ASAR: asarPath,
+              TWFOX_UPDATE: updPath,
+              TWFOX_EXE: d.execPath || processRef.execPath || ''
+            }),
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+          });
+          if (child && typeof child.unref === 'function') child.unref();
+        }
+        if (!d.skipRelaunch && app && typeof app.quit === 'function') {
+          setTimeout(() => {
+            try {
+              app.quit();
+            } catch (_) {}
+          }, 150);
+        }
+        return { ok: true, version: remoteVer, restarting: true, stagedPath: updPath };
+      }
+
+      if (platform !== 'win32') {
+        try {
+          fs.chmodSync(updPath, (origMode || 0o644) | 0o644);
+        } catch (_) {}
+      }
+      fs.renameSync(updPath, asarPath);
+      verifyAsar(asarPath);
+      if (!d.skipRelaunch && app) {
+        setTimeout(() => {
+          try {
+            if (typeof app.relaunch === 'function') app.relaunch();
+            if (typeof app.exit === 'function') app.exit(0);
+          } catch (_) {}
+        }, 150);
+      }
+      return { ok: true, version: remoteVer, restarting: true, stagedPath: asarPath };
+    } catch (err) {
+      try {
+        if (fs.existsSync(tmpUpdPath)) fs.unlinkSync(tmpUpdPath);
+      } catch (_) {}
+      const code = err && err.code;
+      if (code === 'EACCES' || code === 'EPERM' || code === 'EROFS') {
+        return {
+          ok: false,
+          needsManual: true,
+          command: buildManualCommand(platform),
+          error: err.message || String(err)
+        };
+      }
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  });
+}
+
 function buildMainSnippet() {
   return [
     MAIN_MOD_START_MARKER,
     '(function(){',
     '  try {',
-    "    if (global.__TWFOX_MAIN_IPC_READY__) return;",
+    '    if (global.__TWFOX_MAIN_IPC_READY__) return;',
     '    global.__TWFOX_MAIN_IPC_READY__ = true;',
-    "    const { ipcMain } = require('electron');",
-    "    const https = require('https');",
-    "    ipcMain.handle('twfoxtetrio-fetch', (_ev, targetUrl) => new Promise((resolve, reject) => {",
-    '      try {',
-    "        const parsed = new URL(String(targetUrl || ''));",
-    "        if (parsed.protocol !== 'https:' || parsed.hostname !== 'you.have.fail') {",
-    "          reject(new Error('Disallowed domain for twfoxtetrio-fetch'));",
-    '          return;',
-    '        }',
-    '        const fetchUrl = (u, depth) => {',
-    "          if (depth > 5) return reject(new Error('Too many redirects'));",
-    "          const p = new URL(u);",
-    "          if (p.protocol !== 'https:') return reject(new Error('Disallowed redirect protocol'));",
-    "          const req = https.get(p.toString(), { headers: { 'User-Agent': 'twfoxtetrio-desktop' } }, (res) => {",
-    '            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {',
-    '              res.resume();',
-    '              fetchUrl(new URL(res.headers.location, p).toString(), depth + 1);',
-    '              return;',
-    '            }',
-    '            const chunks = [];',
-    "            res.on('data', (c) => chunks.push(c));",
-    "            res.on('end', () => {",
-    '              const buf = Buffer.concat(chunks);',
-    '              resolve({',
-    '                ok: res.statusCode >= 200 && res.statusCode < 300,',
-    '                status: res.statusCode || 0,',
-    "                contentType: String(res.headers['content-type'] || 'application/octet-stream'),",
-    "                base64: buf.toString('base64')",
-    '              });',
-    '            });',
-    '          });',
-    "          req.on('error', reject);",
-    "          req.setTimeout(30000, () => { req.destroy(new Error('Request timeout')); });",
-    '        };',
-    '        fetchUrl(parsed.toString(), 0);',
-    '      } catch (err) {',
-    '        reject(err);',
-    '      }',
-    '    }));',
+    "    const { ipcMain, app } = require('electron');",
+    '    let origFs;',
+    "    try { origFs = require('original-fs'); } catch (_) { origFs = require('fs'); }",
+    '    ' + registerTwfoxMainIpc.toString(),
+    '    registerTwfoxMainIpc({',
+    '      ipcMain,',
+    '      app,',
+    "      https: require('https'),",
+    '      fs: origFs,',
+    "      path: require('path'),",
+    "      crypto: require('crypto'),",
+    "      cp: require('child_process'),",
+    '      processRef: process',
+    '    });',
     '  } catch (_) {}',
     '})();',
     MAIN_MOD_END_MARKER
@@ -395,8 +872,8 @@ function buildMainSnippet() {
 
 function stripMainMod(content) {
   const startIdx = content.indexOf(MAIN_MOD_START_MARKER);
-  const endIdx = content.indexOf(MAIN_MOD_END_MARKER);
-  if (startIdx === -1 || endIdx === -1) return content;
+  const endIdx = content.lastIndexOf(MAIN_MOD_END_MARKER);
+  if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) return content;
   const before = content.slice(0, startIdx).replace(/\n+$/, '');
   const after = content.slice(endIdx + MAIN_MOD_END_MARKER.length).replace(/^\n+/, '');
   return before + (after ? '\n' + after : '\n');
@@ -568,5 +1045,6 @@ module.exports = {
   uninstallMod,
   showStatus,
   injectModIntoMain,
-  stripMainMod
+  stripMainMod,
+  registerTwfoxMainIpc
 };
