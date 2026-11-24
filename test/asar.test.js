@@ -250,7 +250,7 @@ test('registerTwfoxMainIpc stages & applies synthetic ASAR self-updates and bloc
   }
 });
 
-test('registerTwfoxMainIpc win32 detached cmd swapper waits for lock release, swaps app.asar, relaunches, and cleans up', async () => {
+test('registerTwfoxMainIpc win32 detached wscript.exe swapper waits for lock release, swaps app.asar, relaunches, and cleans up', async () => {
   const { PassThrough } = require('node:stream');
   const crypto = require('node:crypto');
   const cp = require('node:child_process');
@@ -301,7 +301,7 @@ test('registerTwfoxMainIpc win32 detached cmd swapper waits for lock release, sw
 
     let lockerChild = null;
     if (process.platform === 'win32') {
-      // Hold an open handle on asarPath briefly so move /Y sees sharing violation first, then releases on quit
+      // Hold an open handle on asarPath briefly so MoveFile sees sharing violation first, then releases on quit
       lockerChild = cp.spawn(
         process.execPath,
         [
@@ -313,9 +313,10 @@ test('registerTwfoxMainIpc win32 detached cmd swapper waits for lock release, sw
     }
 
     let quitCalled = false;
+    let exitCalled = false;
     registerTwfoxMainIpc({
       ipcMain: { handle: (ch, fn) => handlers.set(ch, fn) },
-      app: { quit() { quitCalled = true; }, exit() {} },
+      app: { quit() { quitCalled = true; }, exit() { exitCalled = true; } },
       https: mockHttps,
       fs,
       path,
@@ -331,16 +332,16 @@ test('registerTwfoxMainIpc win32 detached cmd swapper waits for lock release, sw
     const applyRes = await handlers.get('twfoxtetrio-self-update-apply')();
     assert.equal(applyRes.ok, true);
     assert.equal(applyRes.version, '9.9.9');
-    assert.ok(applyRes.swapCmdPath && applyRes.swapCmdPath.endsWith('.cmd'));
+    assert.ok(applyRes.swapScriptPath && applyRes.swapScriptPath.endsWith('.js'));
 
     if (process.platform === 'win32') {
-      // Wait for lockerChild exit + cmd loop swap + relaunch + cmd self-delete (max 8s)
+      // Wait for lockerChild exit + wscript loop swap + relaunch + self-delete (max 8s)
       const deadline = Date.now() + 8000;
       let swapped = false;
       while (Date.now() < deadline) {
         if (
           !fs.existsSync(asarPath + '.update') &&
-          !fs.existsSync(applyRes.swapCmdPath) &&
+          !fs.existsSync(applyRes.swapScriptPath) &&
           fs.existsSync(markerFile)
         ) {
           swapped = true;
@@ -351,13 +352,14 @@ test('registerTwfoxMainIpc win32 detached cmd swapper waits for lock release, sw
       if (lockerChild && lockerChild.exitCode === null) {
         try { lockerChild.kill(); } catch (_) {}
       }
-      assert.equal(swapped, true, 'Detached cmd swapper should swap app.asar, launch exe, and self-delete .cmd');
+      assert.equal(swapped, true, 'Detached wscript swapper should swap app.asar, launch exe, and self-delete .js');
       assert.equal(verifyAsar(asarPath).ok, true);
       const nextPreload = readAsarFile(asarPath, 'preload.js').toString('utf8');
       assert.ok(nextPreload.includes('window.__TWFOX_WIN_SWAP__ = true;'));
       assert.ok(fs.readFileSync(markerFile, 'utf8').includes('RELAUNCHED_OK'));
       await new Promise((r) => setTimeout(r, 250));
       assert.equal(quitCalled, true);
+      assert.equal(exitCalled, true);
     } else {
       assert.equal(fs.existsSync(asarPath + '.update'), true);
     }

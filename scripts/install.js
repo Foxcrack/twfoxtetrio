@@ -775,28 +775,60 @@ function registerTwfoxMainIpc(deps) {
             (processRef && processRef.env && (processRef.env.TEMP || processRef.env.TMP)) ||
             path.dirname(asarPath)
         ).trim();
-        const swapCmdPath = path.join(tempDir, 'twfox-swap-' + (processRef.pid || Date.now()) + '-' + Date.now() + '.cmd');
+        const swapScriptPath = path.join(
+          tempDir,
+          'twfox-swap-' + (processRef.pid || Date.now()) + '-' + Date.now() + '.js'
+        );
         if (!d.skipSpawn && cp && typeof cp.spawn === 'function') {
-          // NOTE: Do NOT spawn powershell.exe directly with detached:true on Windows — PowerShell exits 0
-          // immediately without running when detached from a console. cmd.exe /d /c + detached:true survives
-          // parent exit reliably, swaps via atomic same-volume move, waits briefly for SingleInstanceLock,
-          // relaunches TETR.IO, and self-deletes.
-          const cmdBody = [
-            '@echo off',
-            'for /L %%i in (1,1,45) do (',
-            '  move /Y "%TWFOX_UPDATE%" "%TWFOX_ASAR%" >nul 2>&1',
-            '  if not errorlevel 1 goto :relaunch',
-            '  ping -n 2 127.0.0.1 >nul',
-            ')',
-            'goto :cleanup',
-            ':relaunch',
-            'ping -n 2 127.0.0.1 >nul',
-            'if defined TWFOX_EXE if exist "%TWFOX_EXE%" start "" "%TWFOX_EXE%"',
-            ':cleanup',
-            '(goto) 2>nul & del "%~f0"'
+          const sysRoot = String((processRef && processRef.env && processRef.env.SystemRoot) || '').trim();
+          const sysWscript = sysRoot ? path.join(sysRoot, 'System32', 'wscript.exe') : '';
+          const wscriptBin = sysWscript && fs.existsSync(sysWscript) ? sysWscript : 'wscript.exe';
+          // NOTE: Use GUI-subsystem wscript.exe (never powershell.exe detached or cmd.exe + ping.exe,
+          // which flashes/loops CMD windows from GUI Electron). JScript WScript.Sleep avoids spawning
+          // child console processes, performs an atomic FileSystemObject move + rollback once all
+          // parent handles unlock, waits for SingleInstanceLock, relaunches TETR.IO, and self-deletes.
+          const jscriptBody = [
+            'var sh = WScript.CreateObject("WScript.Shell");',
+            'var fso = WScript.CreateObject("Scripting.FileSystemObject");',
+            'var env = sh.Environment("PROCESS");',
+            'var asar = env("TWFOX_ASAR");',
+            'var upd = env("TWFOX_UPDATE");',
+            'var exe = env("TWFOX_EXE");',
+            'var tmp = asar + ".old." + String(new Date().getTime());',
+            'var swapped = false;',
+            'for (var i = 0; i < 120; i++) {',
+            '  if (!fso.FileExists(upd)) break;',
+            '  try {',
+            '    if (fso.FileExists(tmp)) {',
+            '      try { fso.DeleteFile(tmp, true); } catch (_) {}',
+            '    }',
+            '    if (fso.FileExists(asar)) {',
+            '      fso.MoveFile(asar, tmp);',
+            '    }',
+            '    try {',
+            '      fso.MoveFile(upd, asar);',
+            '      swapped = true;',
+            '      if (fso.FileExists(tmp)) {',
+            '        try { fso.DeleteFile(tmp, true); } catch (_) {}',
+            '      }',
+            '      break;',
+            '    } catch (moveNewErr) {',
+            '      if (!fso.FileExists(asar) && fso.FileExists(tmp)) {',
+            '        try { fso.MoveFile(tmp, asar); } catch (_) {}',
+            '      }',
+            '    }',
+            '  } catch (e) {}',
+            '  WScript.Sleep(250);',
+            '}',
+            'if (swapped && exe && fso.FileExists(exe)) {',
+            '  WScript.Sleep(900);',
+            '  var st = /\\.(cmd|bat)$/i.test(exe) ? 0 : 1;',
+            '  try { sh.Run(\'"\' + exe + \'"\', st, false); } catch (_) {}',
+            '}',
+            'try { fso.DeleteFile(WScript.ScriptFullName, true); } catch (_) {}'
           ].join('\r\n');
-          fs.writeFileSync(swapCmdPath, cmdBody, 'utf8');
-          const child = cp.spawn('cmd.exe', ['/d', '/c', swapCmdPath], {
+          fs.writeFileSync(swapScriptPath, jscriptBody, 'utf8');
+          const child = cp.spawn(wscriptBin, ['//B', '//Nologo', swapScriptPath], {
             env: Object.assign({}, processRef.env, {
               TWFOX_ASAR: asarPath,
               TWFOX_UPDATE: updPath,
@@ -813,17 +845,14 @@ function registerTwfoxMainIpc(deps) {
             try {
               if (typeof app.quit === 'function') app.quit();
             } catch (_) {}
-            const forceExitTimer = setTimeout(() => {
+            setTimeout(() => {
               try {
                 if (typeof app.exit === 'function') app.exit(0);
               } catch (_) {}
-            }, 600);
-            if (forceExitTimer && typeof forceExitTimer.unref === 'function') {
-              forceExitTimer.unref();
-            }
+            }, 550);
           }, 150);
         }
-        return { ok: true, version: remoteVer, restarting: true, stagedPath: updPath, swapCmdPath };
+        return { ok: true, version: remoteVer, restarting: true, stagedPath: updPath, swapScriptPath };
       }
 
       if (platform !== 'win32') {
