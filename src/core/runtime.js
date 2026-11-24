@@ -1009,13 +1009,17 @@
   }
 
   const api = {
-    version: '0.6.7',
+    version: '0.6.8',
     getState() {
       refreshSelfUsername();
       return {
         ...state,
         leaderboard: state.leaderboard.slice()
       };
+    },
+    getSelfZenithSnapshot() {
+      refreshSelfUsername();
+      return rosterTracker.getSelfZenithSnapshot(state.selfUsername);
     },
     getConfig() {
       return {

@@ -80,7 +80,10 @@ body[data-twfox-lang='es'] .twfox-invite-notif {
     'pbdisplay_zenithex_inner',
     'zenith_result',
     'zenith_pb_result',
-    'twfoxtetrio-updater-cmd'
+    'twfoxtetrio-updater-cmd',
+    'twfoxtetrio-race-room-code',
+    'twfoxtetrio-race-spectate-target',
+    'twfoxtetrio-race-winner-name'
   ]);
   const SKIP_CLASSES = [
     'scroller_player',

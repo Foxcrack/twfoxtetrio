@@ -512,8 +512,30 @@
     'no online mutual foxmod friends detected yet. open people once to sync mutual friends.': 'aún no se detectaron amigos mutuos online con FOXMOD. abre AMIGOS una vez para sincronizarlos.',
     'create or join a room before inviting friends.': 'crea o únete a una sala antes de invitar amigos.',
     'direct p2p blocked — connecting via foxmod relay...': 'p2p directo bloqueado — conectando vía relay FOXMOD...',
+    'sent orange foxmod invite to': 'invitación naranja enviada',
     'leave official room first': 'sal de la sala oficial primero',
-    'exit current game first': 'sal de la partida actual primero'
+    'exit current game first': 'sal de la partida actual primero',
+    'the race': 'la carrera',
+    'the race (4p)': 'la carrera (4j)',
+    '4-player visual tower race — climb side-by-side at your own pace': 'carrera visual hasta 4 jugadores — escalen juntos a su ritmo',
+    'race party (max 4 players)': 'grupo de carrera (máx. 4 jugadores)',
+    'waiting for everyone to click ready': 'esperando a que todos pulsen listo',
+    'need at least 2 racers (max 4)': 'se necesitan al menos 2 corredores (máx. 4)',
+    'join race by #code': 'unirse por #código',
+    'enter #code': 'ingresa #código',
+    'join': 'unirse',
+    'leave race': 'salir de carrera',
+    'unready': 'quitar listo',
+    'the race · live': 'la carrera · en vivo',
+    'spectating runner': 'espectando corredor',
+    'click a runner to switch view': 'clic en un jugador para cambiar vista',
+    'peek my result': 'ver mi resultado',
+    'back to spectator': 'volver al espectador',
+    'race complete · final standings': 'carrera terminada · clasificación final',
+    'all runners finished!': '¡todos los corredores terminaron!',
+    'highest altitude': 'mayor altitud',
+    'floor': 'piso',
+    'waiting for runners...': 'esperando a los demás corredores...'
   };
 
   function applyCasePattern(source, translated) {
@@ -648,6 +670,30 @@
     }
     if ((m = trimmed.match(/^Sent orange FOXMOD invite to (.+?)! \((\d+)s cooldown\)$/i))) {
       return `¡Invitación naranja enviada a ${m[1]}! (espera ${m[2]}s)`;
+    }
+    if ((m = trimmed.match(/^STARTING IN (\d+)\.\.\.$/i))) {
+      return `INICIANDO EN ${m[1]}...`;
+    }
+    if ((m = trimmed.match(/^NEED AT LEAST 2 RACERS \((\d+)\/(\d+)\)$/i))) {
+      return `SE NECESITAN AL MENOS 2 CORREDORES (${m[1]}/${m[2]})`;
+    }
+    if ((m = trimmed.match(/^WAITING FOR EVERYONE TO CLICK READY \((\d+)\/(\d+)\)$/i))) {
+      return `ESPERANDO A QUE TODOS PULSEN LISTO (${m[1]}/${m[2]})`;
+    }
+    if ((m = trimmed.match(/^SLOT (\d+\/\d+) · INVITE FRIEND$/i))) {
+      return `ESPACIO ${m[1]} · INVITA A UN AMIGO`;
+    }
+    if ((m = trimmed.match(/^THE RACE · LIVE \(([^)]+)\)$/i))) {
+      return `LA CARRERA · EN VIVO (${m[1]})`;
+    }
+    if ((m = trimmed.match(/^Live · F(\d+) (.+)$/i))) {
+      return `En vivo · P${m[1]} ${m[2]}`;
+    }
+    if ((m = trimmed.match(/^SPECTATING (.+)$/i))) {
+      return `ESPECTANDO A ${m[1]}`;
+    }
+    if ((m = trimmed.match(/^WATCHING: (.+)$/i))) {
+      return `VIENDO A: ${m[1]}`;
     }
     if ((m = trimmed.match(/^Wait (\d+)s before inviting (.+?) again\.$/i))) {
       return `Espera ${m[1]}s antes de invitar de nuevo a ${m[2]}.`;

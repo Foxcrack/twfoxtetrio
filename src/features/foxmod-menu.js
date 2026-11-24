@@ -5333,8 +5333,10 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         const toastKey = `${invite.from}:${invite.roomCode}`;
         removeInviteToast(toastKey);
 
-        const modeStr = invite.gameMode === 'blitz' ? 'BLITZ' : 'VS';
-        const setStr = invite.pieceSet === 'pentomino' ? 'PENTOMINOS' : invite.pieceSet === 'chaos' ? 'CAOS MIX' : 'NORMAL';
+        const modeStr = invite.gameMode === 'blitz' ? 'BLITZ' : invite.gameMode === 'race' ? 'THE RACE' : 'VS';
+        const setStr = invite.gameMode === 'race'
+          ? 'ZENITH TOWER'
+          : (invite.pieceSet === 'pentomino' ? 'PENTOMINOS' : invite.pieceSet === 'chaos' ? 'CAOS MIX' : 'NORMAL');
 
         const ignoreBtn = createEl('div', {
           className: 'notification_button flex-item',
@@ -5377,6 +5379,13 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
         });
         acceptBtn.addEventListener('click', function () {
           removeInviteToast(toastKey);
+          if (invite.gameMode === 'race') {
+            const raceMod = root.__TWFOX_INTERNAL__ && root.__TWFOX_INTERNAL__.zenRace;
+            if (raceMod && typeof raceMod.joinByInviteCode === 'function') {
+              raceMod.joinByInviteCode(invite.roomCode);
+              return;
+            }
+          }
           if (typeof joinRoomByInviteCode === 'function') {
             joinRoomByInviteCode(invite.roomCode);
           }
@@ -6822,6 +6831,11 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
       ensureHomeButton();
       ensureNativeScrollers();
       wireInviteSystems();
+      root.__TWFOX_INTERNAL__ = root.__TWFOX_INTERNAL__ || {};
+      root.__TWFOX_INTERNAL__.foxMenuHelpers = {
+        showOrangeNoticeNotification,
+        hideFoxmodScrollersImmediately
+      };
       if (state && state.inGame && state.mode && state.mode !== 'Custom Solo') {
         pendingPracticeReturn = false;
         practiceRunEntered = false;

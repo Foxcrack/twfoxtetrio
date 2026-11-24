@@ -18,6 +18,7 @@ const SOURCE_FILES = [
   'src/features/quickplay-logic.js',
   'src/features/multiplayer-logic.js',
   'src/features/zen-qp-logic.js',
+  'src/features/race-logic.js',
   'src/features/solo-lobby-logic.js',
   'src/features/fox-paw-logic.js',
   'src/features/fox-invite-logic.js',
@@ -34,6 +35,7 @@ const SOURCE_FILES = [
   'src/features/foxmod-canvas.js',
   'src/features/foxmod-menu.js',
   'src/features/zen-qp-mods.js',
+  'src/features/zen-race.js',
   'src/features/fox-paw-badge.js',
   'src/features/mod-updater.js',
   'src/features/i18n-global.js'

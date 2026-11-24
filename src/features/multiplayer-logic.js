@@ -262,6 +262,132 @@
         }
 
         return { found: false, altitude: 0, isExpert: false, alive: false };
+      },
+
+      /**
+       * Passively captures the local player's live Zenith state and compact 20x10 board
+       * without mutating any TETR.IO state objects or interfering with gameplay.
+       */
+      getSelfZenithSnapshot(selfUsername) {
+        const normalizedSelf = typeof selfUsername === 'string' ? selfUsername.toLowerCase() : '';
+        if (!activeGamesMap) {
+          return {
+            found: false,
+            alive: false,
+            altitude: 0,
+            floor: 1,
+            isExpert: false,
+            score: 0,
+            lines: 0,
+            pieces: 0,
+            pps: 0,
+            apm: 0,
+            elapsedMs: 0,
+            board: null,
+            falling: null,
+            bufferHeight: 20
+          };
+        }
+
+        let selfWrapper = activeGamesMap.self || null;
+        if (!selfWrapper && normalizedSelf) {
+          for (const [, gameWrapper] of activeGamesMap.entries()) {
+            if (!isGameWrapper(gameWrapper)) continue;
+            let owner = '';
+            try {
+              owner = gameWrapper.getOwner() || '';
+            } catch (_) {}
+            if (owner && owner.toLowerCase() === normalizedSelf) {
+              selfWrapper = gameWrapper;
+              break;
+            }
+          }
+        }
+
+        if (!isGameWrapper(selfWrapper)) {
+          const fallback = this.getSelfZenithState(selfUsername);
+          return {
+            ...fallback,
+            floor: 1,
+            score: 0,
+            lines: 0,
+            pieces: 0,
+            pps: 0,
+            apm: 0,
+            elapsedMs: 0,
+            board: null,
+            falling: null,
+            bufferHeight: 20
+          };
+        }
+
+        const gState = selfWrapper.state || {};
+        const stats = gState.stats || {};
+        const zStats = stats.zenith || {};
+        let alt = NaN;
+        if (typeof selfWrapper.getZenithAltitude === 'function') {
+          alt = Number(selfWrapper.getZenithAltitude());
+        } else if (typeof zStats.altitude === 'number') {
+          alt = Number(zStats.altitude);
+        }
+        const safeAlt = Number.isFinite(alt) && alt >= 0 ? Math.round(alt * 10) / 10 : 0;
+        const floor = Math.max(1, Math.min(10, Math.floor(Number(zStats.floor) || 1)));
+        const setOpts = gState.setoptions || {};
+        const isExpert = Boolean(
+          setOpts.zenith_expert ||
+          (Array.isArray(setOpts.zenith_mods) && setOpts.zenith_mods.includes('expert'))
+        );
+        const alive = typeof selfWrapper.isPlaying === 'function'
+          ? Boolean(selfWrapper.isPlaying())
+          : Boolean(gState.playing !== false);
+
+        let rawBoard = Array.isArray(gState.board) ? gState.board : null;
+        if (!rawBoard && typeof selfWrapper.ejectBoardState === 'function') {
+          try {
+            rawBoard = selfWrapper.ejectBoardState();
+          } catch (_) {}
+        }
+
+        const falling = gState.falling && typeof gState.falling === 'object'
+          ? {
+              type: gState.falling.type || '',
+              x: Number(gState.falling.x) || 0,
+              y: Number(gState.falling.y) || 0,
+              r: Number(gState.falling.r) || 0
+            }
+          : null;
+
+        let currentFrame = 0;
+        try {
+          currentFrame = Number(selfWrapper.getFrame()) || 0;
+        } catch (_) {}
+        const frameOffset = Number(gState.time && gState.time.frameoffset) || 0;
+        const elapsedFrames = Math.max(0, currentFrame - frameOffset);
+        const elapsedSec = elapsedFrames / 60;
+        const pieces = Number(stats.piecesplaced) || 0;
+        const attack = (stats.garbage && Number(stats.garbage.attack)) || 0;
+        const pps = elapsedSec > 0 ? pieces / elapsedSec : 0;
+        const apm = elapsedSec > 0 ? (attack * 60) / elapsedSec : 0;
+        const bufferHeight = Number.isFinite(Number(setOpts.boardbuffer))
+          ? Number(setOpts.boardbuffer)
+          : (Array.isArray(gState.board) ? Math.max(0, gState.board.length - (Number(setOpts.boardheight) || 20)) : 0);
+
+        return {
+          found: Number.isFinite(alt),
+          alive,
+          altitude: safeAlt,
+          floor,
+          isExpert,
+          score: Number(stats.score) || 0,
+          lines: Number(stats.lines) || 0,
+          pieces,
+          pps: Number.isFinite(pps) ? pps : 0,
+          apm: Number.isFinite(apm) ? apm : 0,
+          elapsedMs: Math.round(elapsedFrames * (1000 / 60)),
+          board: rawBoard,
+          falling,
+          bufferHeight
+        };
       }
     };
   }

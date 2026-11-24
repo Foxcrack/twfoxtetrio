@@ -3464,3 +3464,295 @@ test('Accepting orange FOXMOD invite unhides #menus, connects via relay fallback
     }
   }
 });
+
+test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live visual boards, spectator switch, and Final Leaderboard NEXT', async () => {
+  const relayPeers = new Set();
+  function buildFrame(topic, text) {
+    const t = Buffer.from(topic, 'utf8');
+    const p = Buffer.from(text, 'utf8');
+    const bl = 2 + t.length + p.length;
+    const vh = [];
+    let v = bl;
+    do {
+      let b = v % 128;
+      v = Math.floor(v / 128);
+      if (v > 0) b |= 128;
+      vh.push(b);
+    } while (v > 0);
+    const out = new Uint8Array(1 + vh.length + bl);
+    out[0] = 0x30;
+    out.set(vh, 1);
+    out[1 + vh.length] = (t.length >> 8) & 0xff;
+    out[2 + vh.length] = t.length & 0xff;
+    out.set(t, 3 + vh.length);
+    out.set(p, 3 + vh.length + t.length);
+    return out;
+  }
+  function parseFrame(bytes) {
+    const u8 = new Uint8Array(bytes);
+    const type = u8[0] & 0xf0;
+    let i = 1;
+    let mul = 1;
+    let len = 0;
+    let b;
+    do {
+      b = u8[i++];
+      len += (b & 127) * mul;
+      mul *= 128;
+    } while ((b & 128) !== 0);
+    if (type === 0x10) return { type: 'CONNECT' };
+    if (type === 0x80) {
+      const sl = (u8[i + 2] << 8) | u8[i + 3];
+      return { type: 'SUBSCRIBE', topic: Buffer.from(u8.slice(i + 4, i + 4 + sl)).toString('utf8') };
+    }
+    if (type === 0x30) {
+      const tl = (u8[i] << 8) | u8[i + 1];
+      return {
+        type: 'PUBLISH',
+        topic: Buffer.from(u8.slice(i + 2, i + 2 + tl)).toString('utf8'),
+        text: Buffer.from(u8.slice(i + 2 + tl, i + len)).toString('utf8')
+      };
+    }
+    return { type: 'OTHER' };
+  }
+  class RaceWs {
+    constructor() {
+      this.readyState = 1;
+      this.binaryType = 'arraybuffer';
+      this._topics = new Set();
+      queueMicrotask(() => {
+        if (this.onopen) this.onopen();
+      });
+    }
+    send(bytes) {
+      const pkt = parseFrame(bytes);
+      if (pkt.type === 'CONNECT') {
+        queueMicrotask(() => {
+          if (this.onmessage) this.onmessage({ data: Uint8Array.from([0x20, 0x02, 0x00, 0x00]).buffer });
+        });
+      } else if (pkt.type === 'SUBSCRIBE') {
+        this._topics.add(pkt.topic);
+        relayPeers.add(this);
+        queueMicrotask(() => {
+          if (this.onmessage) this.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer });
+        });
+      } else if (pkt.type === 'PUBLISH') {
+        const frame = buildFrame(pkt.topic, pkt.text);
+        for (const sub of relayPeers) {
+          if (sub._topics.has(pkt.topic) && sub.readyState === 1 && sub.onmessage) {
+            queueMicrotask(() => sub.onmessage({ data: frame.buffer }));
+          }
+        }
+      }
+    }
+    close() {
+      this.readyState = 3;
+      relayPeers.delete(this);
+    }
+  }
+  const rtcMap = new Map();
+  let rtcSeq = 1;
+  class RaceRtc {
+    constructor() {
+      this.id = 'r-' + rtcSeq++;
+      rtcMap.set(this.id, this);
+      this.iceGatheringState = 'complete';
+      this.localDescription = null;
+      this.remoteDescription = null;
+      this.connectionState = 'connected';
+      this.iceConnectionState = 'connected';
+      this.ondatachannel = null;
+    }
+    createDataChannel(label) {
+      const ch = { label, _placeholder: true, readyState: 'connecting', onopen: null, onmessage: null, onclose: null };
+      this._pending = ch;
+      return ch;
+    }
+    async createOffer() { return { type: 'offer', sdp: 'v=0\r\nfrom=' + this.id }; }
+    async createAnswer() { return { type: 'answer', sdp: 'v=0\r\nfrom=' + this.id }; }
+    async setLocalDescription(d) { this.localDescription = d; }
+    async setRemoteDescription(d) {
+      this.remoteDescription = d;
+      if (d.type === 'answer') {
+        const remote = rtcMap.get(d.sdp.split('from=')[1]);
+        const chA = this._pending;
+        const chB = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+        chA.readyState = 'open';
+        chA.send = (data) => { if (chB.onmessage) queueMicrotask(() => chB.onmessage({ data })); };
+        chB.send = (data) => { if (chA.onmessage) queueMicrotask(() => chA.onmessage({ data })); };
+        chA.close = () => { chA.readyState = 'closed'; chB.readyState = 'closed'; if (chA.onclose) chA.onclose(); if (chB.onclose) chB.onclose(); };
+        chB.close = chA.close;
+        if (remote && remote.ondatachannel) remote.ondatachannel({ channel: chB });
+        if (chA.onopen) queueMicrotask(() => chA.onopen());
+        if (chB.onopen) queueMicrotask(() => chB.onopen());
+      }
+    }
+    close() {}
+  }
+
+  const env = createFakeDomEnvironment('https:', {
+    WebSocket: RaceWs,
+    RTCPeerConnection: RaceRtc
+  });
+  const doc = env.context.document;
+  const FakeEl = env.elements.get('me_username').constructor;
+  env.elements.get('me_username').textContent = 'HostFox';
+
+  const zMenu = env.elements.get('zenithmenu');
+  const slides = new FakeEl('div', '', 'menuslide');
+  const startZenith = new FakeEl('div', 'start_zenith', 'scroller_block');
+  let startZenithClicks = 0;
+  startZenith.addEventListener('click', () => {
+    startZenithClicks += 1;
+    env.body.classList.add('inzenith', 'ingame_phys');
+    zMenu.classList.add('rolledup', 'hidden');
+    zMenu.classList.remove('inresults');
+  });
+  const deckBlock = new FakeEl('div', 'zenith_deck_block', 'scroller_block');
+  const deckCards = new FakeEl('div', 'zenith_deck_cards', '');
+  const duoCard = new FakeEl('div', 'zenith-duo-card', 'zenith_card rg_zenith_card');
+  duoCard.setAttribute('data-card', 'duo');
+  deckCards.appendChild(duoCard);
+  const deckInfos = new FakeEl('div', 'zenith_deck_infos', '');
+  slides.appendChild(startZenith);
+  deckBlock.appendChild(deckCards);
+  deckBlock.appendChild(deckInfos);
+  slides.appendChild(deckBlock);
+  zMenu.appendChild(slides);
+  doc.body.appendChild(zMenu);
+
+  env.triggerDOMContentLoaded();
+  try {
+    const zenRace = env.context.__TWFOX_INTERNAL__.zenRace;
+    const raceLogic = env.context.__TWFOX_INTERNAL__.raceLogic;
+    const p2pRoom = env.context.__TWFOX_INTERNAL__.p2pRoom;
+    raceLogic.RACE_COUNTDOWN_MS = 45;
+    zenRace.refresh();
+
+    const raceCard = env.elements.get('twfoxtetrio-zenith-race-card');
+    const raceInfo = env.elements.get('twfoxtetrio-zenith-race-info');
+    assert.ok(raceCard, 'THE RACE tarot card should mount inside #zenith_deck_cards');
+    assert.ok(raceInfo, 'data-for="race" info block should mount inside #zenith_deck_infos');
+
+    // Selecting the card MUST NOT set TETR.IO's .active server-mod class
+    raceCard.click();
+    assert.equal(raceCard.classList.contains('active'), false);
+    assert.equal(raceCard.classList.contains('is-race-selected'), true);
+    const partyEl = env.elements.get('twfoxtetrio-race-party');
+    assert.equal(partyEl.classList.contains('hidden'), false);
+
+    const hostSnap = zenRace.getState().session;
+    const roomCode = hostSnap.room.roomCode;
+    assert.ok(roomCode);
+
+    // 3 friends join (reaching 4/4 limit)
+    const f2 = p2pRoom.createClientPeer({ playerName: 'Runner2', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
+    const f3 = p2pRoom.createClientPeer({ playerName: 'Runner3', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
+    const f4 = p2pRoom.createClientPeer({ playerName: 'Runner4', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
+    await f2.joinByCode(roomCode);
+    await f3.joinByCode(roomCode);
+    await f4.joinByCode(roomCode);
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(zenRace.getState().session.players.length, 4);
+
+    // All 4 click READY -> countdown launches Quick Play simultaneously
+    env.elements.get('twfoxtetrio-race-ready-btn').click();
+    f2.setReady(true);
+    f3.setReady(true);
+    f4.setReady(true);
+    const launchDeadline = Date.now() + 1000;
+    while (Date.now() < launchDeadline && startZenithClicks === 0) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.equal(startZenithClicks, 1, 'All 4 ready should trigger synchronized #start_zenith click');
+
+    // Simulate active Quick Play gameWrapper + rivals streaming boards & altitudes side by side
+    const selfBoard = Array.from({ length: 20 }, () => new Array(10).fill(null));
+    selfBoard[19][0] = 't';
+    let selfAlive = true;
+    let selfAlt = 145.6;
+    const selfGame = {
+      id: 'g-self',
+      getOwner: () => 'HostFox',
+      getFrame: () => 600,
+      getZenithAltitude: () => selfAlt,
+      isPlaying: () => selfAlive,
+      state: {
+        board: selfBoard,
+        setoptions: { boardwidth: 10, boardheight: 20, boardbuffer: 0 },
+        stats: { score: 8200, lines: 12, piecesplaced: 40, garbage: { attack: 4 }, zenith: { altitude: selfAlt, floor: 2 } },
+        time: { frameoffset: 0, zero: false }
+      }
+    };
+    vm.runInContext(
+      `
+        const raceGamesMap = new Map();
+        raceGamesMap.self = raceSelfRef;
+        raceGamesMap.set('g-self', raceSelfRef);
+      `,
+      Object.assign(env.context, { raceSelfRef: selfGame })
+    );
+
+    f2.updateSelfBoard({ compactBoard: selfBoard, altitude: 290.4, floor: 4, pps: 2.1, score: 21000 });
+    f3.updateSelfBoard({ compactBoard: selfBoard, altitude: 210.0, floor: 3, pps: 1.8, score: 15000 });
+    f4.updateSelfBoard({ compactBoard: selfBoard, altitude: 95.0, floor: 2, pps: 1.2, score: 6000 });
+    await new Promise((r) => setTimeout(r, 140));
+
+    const dockEl = env.elements.get('twfoxtetrio-race-dock');
+    assert.equal(dockEl.classList.contains('is-visible'), true, 'Side-by-side Race boards dock should be visible while alive');
+    assert.equal(dockEl.querySelectorAll('.twfox-race-board-card').length, 3, 'Should show the 3 rival boards side-by-side');
+
+    // Local player dies while Runner2, Runner3, Runner4 keep climbing -> enters Spectator mode automatically
+    selfAlive = false;
+    env.body.classList.remove('ingame_phys');
+    zMenu.classList.remove('rolledup', 'hidden');
+    zMenu.classList.add('inresults');
+    env.elements.get('zenith_result').textContent = '145.6';
+    await new Promise((r) => setTimeout(r, 150));
+
+    const specEl = env.elements.get('twfoxtetrio-race-spectator');
+    const resultsEl = env.elements.get('twfoxtetrio-race-results');
+    assert.equal(env.body.classList.contains('twfox-race-spectating'), true);
+    assert.equal(specEl.classList.contains('hidden'), false);
+    assert.equal(resultsEl.classList.contains('hidden'), true, 'Final leaderboard must stay hidden while other runners are alive');
+    assert.ok(env.elements.get('twfoxtetrio-race-spectate-target').textContent.includes('RUNNER2'));
+
+    // Switch spectator view to Runner3 by clicking Runner3 card directly in DOM
+    const r3Id = f3.getSnapshot().selfId;
+    assert.ok(r3Id, 'Client f3 must receive welcome selfId over WebRTC');
+    const r3Row = specEl.querySelectorAll('.twfox-spec-runner').find((n) => n.getAttribute('data-spec-player-id') === r3Id);
+    assert.ok(r3Row, 'Spectator list must render clickable row for Runner3');
+    r3Row.click();
+    assert.ok(env.elements.get('twfoxtetrio-race-spectate-target').textContent.includes('RUNNER3'));
+
+    // Remaining runners finish -> once the LAST runner dies, Final Leaderboard opens with NEXT button
+    f2.reportSelfKo({ altitude: 340.5, floor: 4, score: 29000 });
+    f3.reportSelfKo({ altitude: 210.0, floor: 3, score: 15000 });
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(resultsEl.classList.contains('hidden'), true, 'Must still wait for Runner4 (the last survivor)');
+
+    f4.reportSelfKo({ altitude: 110.0, floor: 2, score: 7000 });
+    await new Promise((r) => setTimeout(r, 50));
+
+    assert.equal(env.body.classList.contains('twfox-race-spectating'), false);
+    assert.equal(specEl.classList.contains('hidden'), true);
+    assert.equal(resultsEl.classList.contains('hidden'), false, 'Final Leaderboard must appear once the last runner dies');
+    const rows = resultsEl.querySelectorAll('.twfox-res-item');
+    assert.equal(rows.length, 4);
+    assert.ok(env.elements.get('twfoxtetrio-race-winner-name').textContent.includes('Runner2'));
+
+    // Clicking NEXT closes Final Leaderboard cleanly and leaves party intact
+    env.elements.get('twfoxtetrio-race-next-btn').click();
+    assert.equal(resultsEl.classList.contains('hidden'), true);
+    assert.equal(env.elements.get('twfoxtetrio-race-party').classList.contains('hidden'), false);
+
+    f2.close();
+    f3.close();
+    f4.close();
+    env.elements.get('twfoxtetrio-race-leave-btn').click();
+  } finally {
+    if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {
+      env.context.__TWFOX_INTERNAL__.foxPawBadge.destroy();
+    }
+  }
+});

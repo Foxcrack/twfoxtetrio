@@ -872,3 +872,182 @@ test('client seamlessly joins via WS relay fallback when WebRTC UDP is blocked o
   client.close();
   host.close();
 });
+
+test('race mode enforces max 4 players, waits for all ready countdown, and finalizes only when last runner dies', async () => {
+  const rtcAuto = createLoopbackRtcFactory();
+  const peers = new Set();
+
+  function encodeVarLen(len) {
+    const out = [];
+    let v = len;
+    do {
+      let b = v % 128;
+      v = Math.floor(v / 128);
+      if (v > 0) b |= 128;
+      out.push(b);
+    } while (v > 0);
+    return Uint8Array.from(out);
+  }
+  function encodeUtf(text) {
+    return new Uint8Array(Buffer.from(text, 'utf8'));
+  }
+  function buildPub(topic, text) {
+    const t = encodeUtf(topic);
+    const p = encodeUtf(text);
+    const bodyLen = 2 + t.length + p.length;
+    const vh = encodeVarLen(bodyLen);
+    const frame = new Uint8Array(1 + vh.length + bodyLen);
+    frame[0] = 0x30;
+    frame.set(vh, 1);
+    frame[1 + vh.length] = (t.length >> 8) & 0xff;
+    frame[2 + vh.length] = t.length & 0xff;
+    frame.set(t, 3 + vh.length);
+    frame.set(p, 3 + vh.length + t.length);
+    return frame;
+  }
+  function parsePacket(bytes) {
+    const type = bytes[0] & 0xf0;
+    let idx = 1;
+    let mul = 1;
+    let len = 0;
+    let b;
+    do {
+      b = bytes[idx++];
+      len += (b & 127) * mul;
+      mul *= 128;
+    } while ((b & 128) !== 0);
+    if (type === 0x10) return { type: 'CONNECT' };
+    if (type === 0x80) {
+      const sl = (bytes[idx + 2] << 8) | bytes[idx + 3];
+      return { type: 'SUBSCRIBE', topic: Buffer.from(bytes.slice(idx + 4, idx + 4 + sl)).toString('utf8') };
+    }
+    if (type === 0x30) {
+      const tl = (bytes[idx] << 8) | bytes[idx + 1];
+      return {
+        type: 'PUBLISH',
+        topic: Buffer.from(bytes.slice(idx + 2, idx + 2 + tl)).toString('utf8'),
+        text: Buffer.from(bytes.slice(idx + 2 + tl, idx + len)).toString('utf8')
+      };
+    }
+    return { type: 'OTHER' };
+  }
+
+  function wsFactory() {
+    const ws = {
+      readyState: 0,
+      binaryType: 'arraybuffer',
+      topics: new Set(),
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+      send(bytes) {
+        const pkt = parsePacket(bytes);
+        if (pkt.type === 'CONNECT') {
+          queueMicrotask(() => {
+            if (ws.onmessage) ws.onmessage({ data: Uint8Array.from([0x20, 0x02, 0x00, 0x00]).buffer });
+          });
+        } else if (pkt.type === 'SUBSCRIBE') {
+          ws.topics.add(pkt.topic);
+          peers.add(ws);
+          queueMicrotask(() => {
+            if (ws.onmessage) ws.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer });
+          });
+        } else if (pkt.type === 'PUBLISH') {
+          const frame = buildPub(pkt.topic, pkt.text);
+          for (const sub of peers) {
+            if (sub.topics.has(pkt.topic) && sub.readyState === 1 && sub.onmessage) {
+              queueMicrotask(() => sub.onmessage({ data: frame.buffer }));
+            }
+          }
+        }
+      },
+      close() {
+        ws.readyState = 3;
+        peers.delete(ws);
+      }
+    };
+    queueMicrotask(() => {
+      ws.readyState = 1;
+      if (ws.onopen) ws.onopen();
+    });
+    return ws;
+  }
+
+  const host = p2p.createHostServer({
+    hostName: 'Fox1',
+    gameMode: 'race',
+    maxPlayers: 4,
+    countdownMs: 60,
+    rtcFactory: rtcAuto,
+    wsFactory,
+    brokers: ['wss://mock/mqtt']
+  });
+  const code = host.getSnapshot().room.roomCode;
+  await new Promise((r) => setTimeout(r, 25));
+
+  const c2 = p2p.createClientPeer({ playerName: 'Fox2', rtcFactory: rtcAuto, wsFactory, brokers: ['wss://mock/mqtt'] });
+  const c3 = p2p.createClientPeer({ playerName: 'Fox3', rtcFactory: rtcAuto, wsFactory, brokers: ['wss://mock/mqtt'] });
+  const c4 = p2p.createClientPeer({ playerName: 'Fox4', rtcFactory: rtcAuto, wsFactory, brokers: ['wss://mock/mqtt'] });
+  await c2.joinByCode(code);
+  await c3.joinByCode(code);
+  await c4.joinByCode(code);
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(host.getSnapshot().players.length, 4);
+
+  // 5th player must be rejected because maxPlayers = 4
+  const c5 = p2p.createClientPeer({
+    playerName: 'Fox5Extra',
+    rtcFactory: rtcAuto,
+    wsFactory,
+    brokers: ['wss://mock/mqtt'],
+    joinTimeoutMs: 400
+  });
+  await assert.rejects(() => c5.joinByCode(code), /full/i);
+  c5.close();
+
+  // In race mode, players start unready -> all 4 click ready -> countdown -> playing
+  assert.equal(host.getSnapshot().room.status, 'lobby');
+  host.setReady(true);
+  c2.setReady(true);
+  c3.setReady(true);
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(host.getSnapshot().room.status, 'lobby', 'Should not launch until 4th player clicks ready');
+
+  c4.setReady(true);
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline && host.getSnapshot().room.status !== 'playing') {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.equal(host.getSnapshot().room.status, 'playing', 'All 4 ready should trigger synchronized launch');
+
+  // 3 players top out -> Race MUST stay active until the 4th (last) runner finishes
+  host.reportSelfKo({ altitude: 215.4, floor: 3, score: 12000 });
+  c2.reportSelfKo({ altitude: 492.8, floor: 5, score: 38000 });
+  c3.reportSelfKo({ altitude: 112.0, floor: 2, score: 5000 });
+  await new Promise((r) => setTimeout(r, 35));
+  assert.equal(host.getSnapshot().room.status, 'playing', 'Race must continue while Fox4 is still alive');
+
+  // Last runner dies -> Final standings rank by highest Altitude M
+  c4.reportSelfKo({ altitude: 310.2, floor: 4, score: 25000 });
+  await new Promise((r) => setTimeout(r, 35));
+  const endSnap = host.getSnapshot();
+  assert.equal(endSnap.room.status, 'results');
+  assert.equal(endSnap.room.winner, 'Fox2');
+  assert.deepEqual(
+    endSnap.room.lastResults.map((r) => `${r.placement}:${r.name}:${r.altitude}`),
+    ['1:Fox2:492.8', '2:Fox4:310.2', '3:Fox1:215.4', '4:Fox3:112']
+  );
+
+  // resetLobby clears readiness for another race while keeping all 4 connected
+  host.resetLobby();
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(host.getSnapshot().room.status, 'lobby');
+  assert.equal(host.getSnapshot().players.every((p) => p.ready === false), true);
+
+  c2.close();
+  c3.close();
+  c4.close();
+  host.close();
+});
+

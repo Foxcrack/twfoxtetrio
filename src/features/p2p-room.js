@@ -69,6 +69,21 @@
       .concat(Array.isArray(disconnectedList) ? disconnectedList : []);
 
     const sorted = combined.slice().sort((a, b) => {
+      if (gameMode === 'race') {
+        const altA = Math.max(Number(a.peakAltitude) || 0, Number(a.altitude) || 0);
+        const altB = Math.max(Number(b.peakAltitude) || 0, Number(b.altitude) || 0);
+        if (altB !== altA) return altB - altA;
+        if ((Number(b.floor) || 1) !== (Number(a.floor) || 1)) {
+          return (Number(b.floor) || 1) - (Number(a.floor) || 1);
+        }
+        if ((Number(b.score) || 0) !== (Number(a.score) || 0)) {
+          return (Number(b.score) || 0) - (Number(a.score) || 0);
+        }
+        if (Boolean(a.disconnected) !== Boolean(b.disconnected)) {
+          return a.disconnected ? 1 : -1;
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      }
       if (gameMode === 'blitz') {
         return (
           ((Number(b.score) || 0) - (Number(a.score) || 0)) ||
@@ -89,6 +104,8 @@
 
     return sorted.map((p, idx) => {
       const stopTs = p.eliminatedAt && p.eliminatedAt > startTs ? p.eliminatedAt : endTs;
+      const explicitDuration = Number(p.durationMs);
+      const peakAlt = Math.max(Number(p.peakAltitude) || 0, Number(p.altitude) || 0);
       return {
         id: p.id,
         name: p.name,
@@ -97,6 +114,8 @@
         alive: Boolean(p.alive),
         disconnected: Boolean(p.disconnected),
         koOrder: p.koOrder || null,
+        altitude: Math.round(peakAlt * 10) / 10,
+        floor: Math.max(1, Math.floor(Number(p.floor) || 1)),
         score: Number(p.score) || 0,
         lines: Number(p.lines) || 0,
         attack: Number(p.attack) || 0,
@@ -104,7 +123,9 @@
         pps: Number(p.pps) || 0,
         apm: Number(p.apm) || 0,
         wins: Number(p.wins) || 0,
-        durationMs: startTs > 0 ? Math.max(0, stopTs - startTs) : 0
+        durationMs: Number.isFinite(explicitDuration) && explicitDuration > 0
+          ? explicitDuration
+          : (startTs > 0 ? Math.max(0, stopTs - startTs) : 0)
       };
     });
   }
@@ -694,7 +715,12 @@
       opts.pieceSet === 'pentomino' || opts.pieceSet === 'tetromino' || opts.pieceSet === 'chaos'
         ? opts.pieceSet
         : 'tetromino';
-    const initMode = opts.gameMode === 'blitz' ? 'blitz' : 'vs';
+    const initMode = opts.gameMode === 'blitz' ? 'blitz' : opts.gameMode === 'race' ? 'race' : 'vs';
+    const maxPlayers = opts.maxPlayers !== undefined && opts.maxPlayers !== null
+      ? Math.max(2, Math.floor(Number(opts.maxPlayers) || 4))
+      : (initMode === 'race' ? 4 : Infinity);
+    const countdownMs = Math.max(0, Number.isFinite(Number(opts.countdownMs)) ? Number(opts.countdownMs) : 2800);
+    const defaultReadyState = initMode !== 'race';
     const initMult = Number.isFinite(Number(opts.garbageMultiplier))
       ? Math.max(0, Math.min(4, Number(opts.garbageMultiplier)))
       : 1;
@@ -708,6 +734,8 @@
       roomName: String(opts.roomName || (hostName + "'S FOXROOM")).slice(0, 32),
       pieceSet: initSet,
       gameMode: initMode,
+      maxPlayers: Number.isFinite(maxPlayers) ? maxPlayers : null,
+      countdownMs,
       blitzDurationMs: Math.max(5000, Number(opts.blitzDurationMs) || 120000),
       garbageMultiplier: initMult,
       gravityLevel: initGrav,
@@ -722,13 +750,17 @@
       id: 'host',
       name: hostName,
       isHost: true,
-      ready: true,
+      ready: defaultReadyState,
       spectator: false,
       alive: true,
       finished: false,
       koOrder: null,
       placement: null,
       eliminatedAt: null,
+      altitude: 0,
+      peakAltitude: 0,
+      floor: 1,
+      durationMs: 0,
       score: 0,
       lines: 0,
       attack: 0,
@@ -766,6 +798,7 @@
     let signalBus = null;
     let pollTimer = null;
     let blitzTimer = null;
+    let raceCountdownTimer = null;
     let heartbeatTimer = null;
     let closed = false;
 
@@ -834,16 +867,56 @@
       }
     }
 
+    function clearRaceCountdown() {
+      if (raceCountdownTimer) {
+        clearTimeout(raceCountdownTimer);
+        raceCountdownTimer = null;
+      }
+    }
+
+    function checkRaceReadyLaunch() {
+      if (room.gameMode !== 'race') return;
+      if (room.status !== 'lobby' && room.status !== 'countdown') return;
+      const activePlayers = Array.from(players.values()).filter((p) => !p.spectator && !p.disconnected);
+      const canRun =
+        activePlayers.length >= 2 &&
+        activePlayers.length <= maxPlayers &&
+        activePlayers.every((p) => Boolean(p.ready));
+
+      if (room.status === 'lobby' && canRun) {
+        room.status = 'countdown';
+        const packet = {
+          type: 'race_countdown',
+          round: room.round + 1,
+          countdownMs
+        };
+        broadcastRoomState();
+        broadcast(packet);
+        notify('race_countdown', packet);
+        if (countdownMs <= 0) {
+          startMatch();
+        } else {
+          raceCountdownTimer = unrefIfPossible(setTimeout(() => {
+            raceCountdownTimer = null;
+            if (!closed && room.status === 'countdown') {
+              startMatch();
+            }
+          }, countdownMs));
+        }
+      } else if (room.status === 'countdown' && !canRun) {
+        clearRaceCountdown();
+        room.status = 'lobby';
+        broadcast({ type: 'race_countdown_cancel' });
+        broadcastRoomState();
+        notify('race_countdown_cancel');
+      }
+    }
+
     function finalizeRound(winnerPlayer, chatMessage) {
       if (room.status !== 'playing') return;
       clearBlitzTimer();
+      clearRaceCountdown();
       const endTs = Date.now();
-      if (winnerPlayer) {
-        winnerPlayer.wins += 1;
-        room.winner = winnerPlayer.name;
-      } else {
-        room.winner = 'DRAW';
-      }
       const activeRoster = Array.from(players.values()).filter((p) => !p.spectator);
       const standings = buildRoundStandings(
         activeRoster,
@@ -852,6 +925,15 @@
         roundStartAt,
         endTs
       );
+      const effectiveWinner = winnerPlayer || (room.gameMode === 'race' && standings[0] ? players.get(standings[0].id) || null : null);
+      if (effectiveWinner) {
+        effectiveWinner.wins += 1;
+        room.winner = effectiveWinner.name;
+      } else if (room.gameMode === 'race' && standings[0]) {
+        room.winner = standings[0].name;
+      } else {
+        room.winner = 'DRAW';
+      }
       for (const item of standings) {
         const p = players.get(item.id);
         if (p) p.placement = item.placement;
@@ -881,9 +963,34 @@
       return ranked[0] || null;
     }
 
+    function pickRaceWinner() {
+      const pool = Array.from(players.values())
+        .filter((p) => !p.spectator)
+        .concat(roundDisconnected.filter((p) => p && !p.spectator));
+      pool.sort((a, b) => {
+        const altA = Math.max(Number(a.peakAltitude) || 0, Number(a.altitude) || 0);
+        const altB = Math.max(Number(b.peakAltitude) || 0, Number(b.altitude) || 0);
+        if (altB !== altA) return altB - altA;
+        if ((Number(b.floor) || 1) !== (Number(a.floor) || 1)) return (Number(b.floor) || 1) - (Number(a.floor) || 1);
+        return (Number(b.score) || 0) - (Number(a.score) || 0);
+      });
+      const top = pool[0];
+      return top && players.has(top.id) ? players.get(top.id) : (top || null);
+    }
+
     function markPlayerEliminated(player, extraStats) {
       if (!player || player.spectator || !player.alive || room.status !== 'playing') return false;
       if (extraStats && typeof extraStats === 'object') {
+        if (extraStats.altitude !== undefined) {
+          const nextAlt = Math.max(0, Number(extraStats.altitude) || 0);
+          player.altitude = nextAlt;
+          player.peakAltitude = Math.max(Number(player.peakAltitude) || 0, nextAlt);
+        }
+        if (extraStats.peakAltitude !== undefined) {
+          player.peakAltitude = Math.max(Number(player.peakAltitude) || 0, Number(extraStats.peakAltitude) || 0);
+        }
+        if (extraStats.floor !== undefined) player.floor = Math.max(1, Math.floor(Number(extraStats.floor) || 1));
+        if (extraStats.durationMs !== undefined) player.durationMs = Math.max(0, Number(extraStats.durationMs) || 0);
         if (extraStats.score !== undefined) player.score = Number(extraStats.score) || 0;
         if (extraStats.lines !== undefined) player.lines = Number(extraStats.lines) || 0;
         if (extraStats.attack !== undefined) player.attack = Number(extraStats.attack) || 0;
@@ -904,6 +1011,17 @@
     function evaluateRoundEnd() {
       if (room.status !== 'playing') return;
       const activePlayers = Array.from(players.values()).filter((p) => !p.spectator);
+      if (room.gameMode === 'race') {
+        const everyoneDone = activePlayers.every((p) => !p.alive || p.finished);
+        if (everyoneDone) {
+          const top = pickRaceWinner();
+          const altStr = top
+            ? (Math.max(Number(top.peakAltitude) || 0, Number(top.altitude) || 0)).toFixed(1)
+            : '0.0';
+          finalizeRound(top, `RACE COMPLETE! ${top ? top.name : 'DRAW'} wins (${altStr} M)!`);
+        }
+        return;
+      }
       if (room.gameMode === 'blitz') {
         const everyoneDone = activePlayers.every((p) => !p.alive || p.finished);
         if (everyoneDone) {
@@ -974,6 +1092,7 @@
         case 'ready':
           player.ready = Boolean(msg.ready);
           broadcastRoomState();
+          checkRaceReadyLaunch();
           break;
         case 'spectator':
           player.spectator = Boolean(msg.spectator);
@@ -983,12 +1102,23 @@
           }
           broadcastRoomState();
           if (room.status === 'playing') evaluateRoundEnd();
+          else checkRaceReadyLaunch();
           break;
         case 'chat':
           pushChat(player.name, msg.text, false);
           break;
         case 'board_state':
           player.board = Array.isArray(msg.board) ? msg.board : null;
+          if (msg.altitude !== undefined) {
+            const nextAlt = Math.max(0, Number(msg.altitude) || 0);
+            player.altitude = nextAlt;
+            player.peakAltitude = Math.max(Number(player.peakAltitude) || 0, nextAlt);
+          }
+          if (msg.peakAltitude !== undefined) {
+            player.peakAltitude = Math.max(Number(player.peakAltitude) || 0, Number(msg.peakAltitude) || 0);
+          }
+          if (msg.floor !== undefined) player.floor = Math.max(1, Math.floor(Number(msg.floor) || 1));
+          if (msg.durationMs !== undefined) player.durationMs = Math.max(0, Number(msg.durationMs) || 0);
           player.score = Number(msg.score) || 0;
           player.lines = Number(msg.lines) || 0;
           player.attack = Number(msg.attack) || 0;
@@ -999,6 +1129,10 @@
             type: 'peer_board',
             id: peerId,
             board: player.board,
+            altitude: player.altitude,
+            peakAltitude: player.peakAltitude,
+            floor: player.floor,
+            durationMs: player.durationMs,
             score: player.score,
             lines: player.lines,
             attack: player.attack,
@@ -1111,6 +1245,7 @@
         broadcastRoomState();
       }
       evaluateRoundEnd();
+      checkRaceReadyLaunch();
     }
 
     function attachPeerChannel(peerId, pc, channel, initialName) {
@@ -1142,13 +1277,17 @@
             id: peerId,
             name: slotName,
             isHost: false,
-            ready: true,
+            ready: defaultReadyState,
             spectator: false,
             alive: room.status !== 'playing',
             finished: false,
             koOrder: null,
             placement: null,
             eliminatedAt: null,
+            altitude: 0,
+            peakAltitude: 0,
+            floor: 1,
+            durationMs: 0,
             score: 0,
             lines: 0,
             attack: 0,
@@ -1162,6 +1301,9 @@
         sendToPeer(peerId, { type: 'welcome', id: peerId, autoSignaling: shouldAutoSignal });
         broadcastRoomState();
         ensureHostHeartbeat();
+        if (room.status === 'countdown') {
+          checkRaceReadyLaunch();
+        }
       };
       channel.onmessage = (ev) => handlePeerMessage(peerId, ev && ev.data);
       channel.onclose = () => {
@@ -1195,6 +1337,9 @@
     }
 
     async function acceptAnswer(peerId, answerCode) {
+      if (players.size >= maxPlayers) {
+        throw new Error('Room is full (max ' + maxPlayers + ' players).');
+      }
       let explicitPeerId = peerId;
       let rawCode = answerCode;
       if (rawCode === undefined) {
@@ -1238,7 +1383,7 @@
       if (patch.pieceSet === 'pentomino' || patch.pieceSet === 'tetromino' || patch.pieceSet === 'chaos') {
         room.pieceSet = patch.pieceSet;
       }
-      if (patch.gameMode === 'vs' || patch.gameMode === 'blitz') {
+      if (patch.gameMode === 'vs' || patch.gameMode === 'blitz' || patch.gameMode === 'race') {
         room.gameMode = patch.gameMode;
       }
       if (patch.garbageMultiplier !== undefined) {
@@ -1259,6 +1404,7 @@
         return null;
       }
       clearBlitzTimer();
+      clearRaceCountdown();
       room.round += 1;
       room.status = 'playing';
       room.winner = null;
@@ -1277,6 +1423,10 @@
         p.koOrder = null;
         p.placement = null;
         p.eliminatedAt = null;
+        p.altitude = 0;
+        p.peakAltitude = 0;
+        p.floor = 1;
+        p.durationMs = 0;
         p.score = 0;
         p.lines = 0;
         p.attack = 0;
@@ -1299,6 +1449,7 @@
         config: {
           pieceSet: room.pieceSet,
           gameMode: room.gameMode,
+          maxPlayers: room.maxPlayers,
           blitzDurationMs: room.blitzDurationMs,
           garbageMultiplier: room.garbageMultiplier,
           gravityLevel: room.gravityLevel
@@ -1313,7 +1464,21 @@
     function updateSelfBoard(snapshot) {
       const self = players.get('host');
       if (!self || !snapshot) return;
-      self.board = snapshot.compactBoard;
+      self.board = snapshot.compactBoard !== undefined ? snapshot.compactBoard : self.board;
+      if (snapshot.altitude !== undefined) {
+        const nextAlt = Math.max(0, Number(snapshot.altitude) || 0);
+        self.altitude = nextAlt;
+        self.peakAltitude = Math.max(Number(self.peakAltitude) || 0, nextAlt);
+      }
+      if (snapshot.peakAltitude !== undefined) {
+        self.peakAltitude = Math.max(Number(self.peakAltitude) || 0, Number(snapshot.peakAltitude) || 0);
+      }
+      if (snapshot.floor !== undefined) {
+        self.floor = Math.max(1, Math.floor(Number(snapshot.floor) || 1));
+      }
+      if (snapshot.durationMs !== undefined) {
+        self.durationMs = Math.max(0, Number(snapshot.durationMs) || 0);
+      }
       self.score = Number(snapshot.score) || 0;
       self.lines = snapshot.lines || 0;
       self.attack = snapshot.attackSent || 0;
@@ -1324,6 +1489,10 @@
         type: 'peer_board',
         id: 'host',
         board: self.board,
+        altitude: self.altitude,
+        peakAltitude: self.peakAltitude,
+        floor: self.floor,
+        durationMs: self.durationMs,
         score: self.score,
         lines: self.lines,
         attack: self.attack,
@@ -1343,6 +1512,13 @@
       const self = players.get('host');
       if (!self) return;
       self.finished = true;
+      if (snapshot && snapshot.altitude !== undefined) {
+        const nextAlt = Math.max(0, Number(snapshot.altitude) || 0);
+        self.altitude = nextAlt;
+        self.peakAltitude = Math.max(Number(self.peakAltitude) || 0, nextAlt);
+      }
+      if (snapshot && snapshot.floor !== undefined) self.floor = Math.max(1, Math.floor(Number(snapshot.floor) || 1));
+      if (snapshot && snapshot.durationMs !== undefined) self.durationMs = Math.max(0, Number(snapshot.durationMs) || 0);
       if (snapshot && snapshot.score !== undefined) self.score = Number(snapshot.score) || 0;
       if (snapshot && snapshot.lines !== undefined) self.lines = Number(snapshot.lines) || 0;
       if (snapshot && snapshot.attackSent !== undefined) self.attack = Number(snapshot.attackSent) || 0;
@@ -1350,7 +1526,7 @@
       if (snapshot && snapshot.pps !== undefined) self.pps = Number(snapshot.pps) || 0;
       if (snapshot && snapshot.apm !== undefined) self.apm = Number(snapshot.apm) || 0;
       broadcastRoomState();
-      if (room.gameMode === 'blitz') {
+      if (room.gameMode === 'blitz' || room.gameMode === 'race') {
         evaluateRoundEnd();
       }
     }
@@ -1359,6 +1535,10 @@
       const self = players.get('host');
       const extra = snapshot
         ? {
+            altitude: snapshot.altitude,
+            peakAltitude: snapshot.peakAltitude,
+            floor: snapshot.floor,
+            durationMs: snapshot.durationMs,
             score: snapshot.score,
             lines: snapshot.lines,
             attack: snapshot.attackSent !== undefined ? snapshot.attackSent : snapshot.attack,
@@ -1383,6 +1563,15 @@
           if (cached && (!existingConn || !existingConn.openedAt)) {
             await replyFn(cached);
           }
+          return;
+        }
+        if (players.size >= maxPlayers) {
+          await replyFn({
+            kind: 'room_full',
+            roomCode: room.roomCode,
+            to: msg.clientId,
+            maxPlayers
+          });
           return;
         }
         if (seenClientReqs.has(msg.clientId)) return;
@@ -1451,6 +1640,15 @@
             roomCode: room.roomCode,
             peerId: targetPeerId,
             to: msg.clientId
+          });
+          return;
+        }
+        if (!players.has(targetPeerId) && players.size >= maxPlayers) {
+          await replyFn({
+            kind: 'room_full',
+            roomCode: room.roomCode,
+            to: msg.clientId,
+            maxPlayers
           });
           return;
         }
@@ -1612,6 +1810,7 @@
       }
       closed = true;
       clearBlitzTimer();
+      clearRaceCountdown();
       stopHostHeartbeat();
       const busToClose = signalBus;
       signalBus = null;
@@ -1665,7 +1864,40 @@
       notify('self_spectator', { spectator: self.spectator });
       broadcastRoomState();
       if (room.status === 'playing') evaluateRoundEnd();
+      else checkRaceReadyLaunch();
       return self.spectator;
+    }
+
+    function setReady(val) {
+      const self = players.get('host');
+      if (!self) return false;
+      self.ready = Boolean(val);
+      broadcastRoomState();
+      checkRaceReadyLaunch();
+      return self.ready;
+    }
+
+    function resetLobby() {
+      clearBlitzTimer();
+      clearRaceCountdown();
+      room.status = 'lobby';
+      room.winner = null;
+      for (const p of players.values()) {
+        p.ready = defaultReadyState;
+        p.alive = !p.spectator;
+        p.finished = false;
+        p.koOrder = null;
+        p.placement = null;
+        p.eliminatedAt = null;
+        p.altitude = 0;
+        p.peakAltitude = 0;
+        p.floor = 1;
+        p.durationMs = 0;
+        p.board = null;
+      }
+      broadcast({ type: 'lobby_reset' });
+      broadcastRoomState();
+      notify('lobby_reset');
     }
 
     return {
@@ -1679,6 +1911,8 @@
       acceptAnswer,
       updateSettings,
       setSelfSpectator,
+      setReady,
+      resetLobby,
       startMatch,
       sendChat(text) {
         pushChat(hostName, text, false);
@@ -1878,15 +2112,40 @@
           if (Array.isArray(msg.players)) {
             players = msg.players;
             const me = selfId ? players.find((p) => p.id === selfId) : null;
-            if (me) spectator = Boolean(me.spectator);
+            if (me) {
+              spectator = Boolean(me.spectator);
+              ready = Boolean(me.ready);
+            }
           }
           if (Array.isArray(msg.chat)) chat = msg.chat;
           notify('room_state');
+          break;
+        case 'race_countdown':
+          room.status = 'countdown';
+          notify('race_countdown', msg);
+          break;
+        case 'race_countdown_cancel':
+          room.status = 'lobby';
+          notify('race_countdown_cancel', msg);
+          break;
+        case 'lobby_reset':
+          room.status = 'lobby';
+          notify('lobby_reset', msg);
           break;
         case 'peer_board': {
           const target = players.find((p) => p.id === msg.id);
           if (target) {
             target.board = msg.board;
+            if (msg.altitude !== undefined) {
+              const nextAlt = Math.max(0, Number(msg.altitude) || 0);
+              target.altitude = nextAlt;
+              target.peakAltitude = Math.max(Number(target.peakAltitude) || 0, nextAlt);
+            }
+            if (msg.peakAltitude !== undefined) {
+              target.peakAltitude = Math.max(Number(target.peakAltitude) || 0, Number(msg.peakAltitude) || 0);
+            }
+            if (msg.floor !== undefined) target.floor = Math.max(1, Math.floor(Number(msg.floor) || 1));
+            if (msg.durationMs !== undefined) target.durationMs = Math.max(0, Number(msg.durationMs) || 0);
             if (msg.score !== undefined) target.score = Number(msg.score) || 0;
             target.lines = msg.lines;
             target.attack = msg.attack;
@@ -2134,7 +2393,9 @@
         },
         onMessage(msg) {
           if (!msg || typeof msg !== 'object') return;
-          if (msg.kind === 'offer' && msg.to === clientId && msg.offer) {
+          if (msg.kind === 'room_full' && msg.to === clientId) {
+            finishOffer(offerReject, new Error(`Room #${code} is full (max ${msg.maxPlayers || 4} players).`));
+          } else if (msg.kind === 'offer' && msg.to === clientId && msg.offer) {
             finishOffer(offerResolve, msg);
           } else if (msg.kind === 'offer_relay' && msg.to === clientId) {
             finishOffer(offerResolve, msg);
@@ -2447,6 +2708,13 @@
         if (!snapshot) return;
         const selfPlayer = selfId ? players.find((p) => p.id === selfId) : null;
         if (selfPlayer) {
+          if (snapshot.altitude !== undefined) {
+            const nextAlt = Math.max(0, Number(snapshot.altitude) || 0);
+            selfPlayer.altitude = nextAlt;
+            selfPlayer.peakAltitude = Math.max(Number(selfPlayer.peakAltitude) || 0, nextAlt);
+          }
+          if (snapshot.floor !== undefined) selfPlayer.floor = Math.max(1, Math.floor(Number(snapshot.floor) || 1));
+          if (snapshot.durationMs !== undefined) selfPlayer.durationMs = Math.max(0, Number(snapshot.durationMs) || 0);
           selfPlayer.score = Number(snapshot.score) || 0;
           selfPlayer.lines = snapshot.lines || 0;
           selfPlayer.attack = snapshot.attackSent || 0;
@@ -2457,6 +2725,10 @@
         send({
           type: 'board_state',
           board: snapshot.compactBoard,
+          altitude: snapshot.altitude !== undefined ? Number(snapshot.altitude) || 0 : undefined,
+          peakAltitude: snapshot.peakAltitude !== undefined ? Number(snapshot.peakAltitude) || 0 : undefined,
+          floor: snapshot.floor !== undefined ? Math.max(1, Math.floor(Number(snapshot.floor) || 1)) : undefined,
+          durationMs: snapshot.durationMs !== undefined ? Math.max(0, Number(snapshot.durationMs) || 0) : undefined,
           score: Number(snapshot.score) || 0,
           lines: snapshot.lines || 0,
           attack: snapshot.attackSent || 0,
@@ -2472,6 +2744,10 @@
       reportSelfFinish(snapshot) {
         send({
           type: 'finish_match',
+          altitude: snapshot && snapshot.altitude !== undefined ? Number(snapshot.altitude) || 0 : undefined,
+          peakAltitude: snapshot && snapshot.peakAltitude !== undefined ? Number(snapshot.peakAltitude) || 0 : undefined,
+          floor: snapshot && snapshot.floor !== undefined ? Math.max(1, Math.floor(Number(snapshot.floor) || 1)) : undefined,
+          durationMs: snapshot && snapshot.durationMs !== undefined ? Math.max(0, Number(snapshot.durationMs) || 0) : undefined,
           score: Number(snapshot && snapshot.score) || 0,
           lines: Number(snapshot && snapshot.lines) || 0,
           attack: Number(snapshot && (snapshot.attackSent !== undefined ? snapshot.attackSent : snapshot.attack)) || 0,
@@ -2483,6 +2759,10 @@
       reportSelfKo(snapshot) {
         const extra = snapshot
           ? {
+              altitude: snapshot.altitude !== undefined ? Number(snapshot.altitude) || 0 : undefined,
+              peakAltitude: snapshot.peakAltitude !== undefined ? Number(snapshot.peakAltitude) || 0 : undefined,
+              floor: snapshot.floor !== undefined ? Math.max(1, Math.floor(Number(snapshot.floor) || 1)) : undefined,
+              durationMs: snapshot.durationMs !== undefined ? Math.max(0, Number(snapshot.durationMs) || 0) : undefined,
               score: Number(snapshot.score) || 0,
               lines: Number(snapshot.lines) || 0,
               attack: Number(snapshot.attackSent !== undefined ? snapshot.attackSent : snapshot.attack) || 0,
