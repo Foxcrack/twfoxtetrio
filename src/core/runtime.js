@@ -868,10 +868,13 @@
 
   function attachLocalBoardTransformHook(value) {
     if (!value || typeof value !== 'object') return;
-    if (!value.self || !value.self.iom || typeof value.self.iom.IsLocal !== 'function' || !value.self.iom.IsLocal()) {
+    const isLocalWrapper = Boolean(
+      (value.source && typeof value.source.IsKeyboard === 'function' && value.source.IsKeyboard()) ||
+      (value.self && value.self.iom && typeof value.self.iom.IsLocal === 'function' && value.self.iom.IsLocal())
+    );
+    if (!isLocalWrapper || typeof value.location !== 'function') {
       return;
     }
-    if (typeof value.location !== 'function') return;
 
     lastLocalGameWrapper = value;
 
@@ -1148,7 +1151,7 @@
   }
 
   const api = {
-    version: '0.6.18',
+    version: '0.6.19',
     getState() {
       refreshSelfUsername();
       return {

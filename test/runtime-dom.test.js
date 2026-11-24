@@ -3771,10 +3771,8 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     const recordedLocations = [];
     const selfGame = {
       id: 'g-self',
-      self: {
-        iom: { IsLocal: () => true },
-        hm: { H: { holderstate: { oy: 0 } } }
-      },
+      source: { IsKeyboard: () => true },
+      getHolderData: () => ({ holderstate: { oy: 0 } }),
       location(ox, oy, os, instant) {
         recordedLocations.push({ ox, oy, os, instant });
       },
@@ -3806,12 +3804,16 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     // Simulate TETR.IO _TickGame_Primary attempting to re-center at (0, 0, 1) -> runtime shifts/scales left
     vm.runInContext(`raceSelfRef.location(0, 0, 1, false);`, env.context);
     const liveLoc = recordedLocations[recordedLocations.length - 1];
-    assert.ok(liveLoc && liveLoc.ox < -0.4 && liveLoc.os < 0.7, 'Local PIXI board must shift left and scale down for side-by-side Race stage');
+    assert.ok(liveLoc && liveLoc.ox < -0.25 && liveLoc.os < 0.7, 'Local PIXI board must position cleanly between left rival and 2 right rivals in 4P Race');
 
+    const dockLeftEl = env.elements.get('twfoxtetrio-race-dock-left');
     const dockEl = env.elements.get('twfoxtetrio-race-dock');
-    assert.equal(dockEl.classList.contains('is-visible'), true, 'Side-by-side Race boards dock should be visible while alive');
-    assert.ok(parseInt(dockEl.style.left, 10) > 200, 'Rivals panel must position horizontally beside shifted local board');
-    assert.equal(dockEl.querySelectorAll('.twfox-race-board-card').length, 3, 'Should show the 3 rival boards side-by-side');
+    assert.ok(dockLeftEl, 'Left rival dock must exist for 3P/4P Race');
+    assert.equal(dockLeftEl.classList.contains('is-visible'), true, 'Left rival dock must be visible in 4P Race');
+    assert.equal(dockEl.classList.contains('is-visible'), true, 'Right rivals dock must be visible while alive');
+    assert.equal(dockLeftEl.querySelectorAll('.twfox-race-board-card').length, 1, '4P Race puts 1 rival on the left');
+    assert.equal(dockEl.querySelectorAll('.twfox-race-board-card').length, 2, '4P Race puts 2 rivals side-by-side on the right');
+    assert.ok(parseInt(dockLeftEl.style.left, 10) < parseInt(dockEl.style.left, 10), 'Left dock must sit cleanly to the left of right dock');
 
     // Local player dies while Runner2, Runner3, Runner4 keep climbing -> enters Spectator mode automatically
     selfAlive = false;

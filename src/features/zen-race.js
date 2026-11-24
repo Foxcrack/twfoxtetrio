@@ -17,6 +17,7 @@
   const INFO_ID = 'twfoxtetrio-zenith-race-info';
   const PARTY_ID = 'twfoxtetrio-race-party';
   const DOCK_ID = 'twfoxtetrio-race-dock';
+  const DOCK_LEFT_ID = 'twfoxtetrio-race-dock-left';
   const SPECTATOR_ID = 'twfoxtetrio-race-spectator';
   const RESULTS_ID = 'twfoxtetrio-race-results';
 
@@ -411,7 +412,8 @@
   display: none !important;
 }
 
-#${DOCK_ID} {
+#${DOCK_ID},
+#${DOCK_LEFT_ID} {
   position: fixed;
   top: 50%;
   left: 50vw;
@@ -427,11 +429,18 @@
   transform: translateY(-50%) scale(0.97);
   transition: opacity 180ms ease, transform 180ms ease;
 }
-#${DOCK_ID}.is-visible {
+#${DOCK_ID}:not(.is-visible),
+#${DOCK_LEFT_ID}:not(.is-visible) {
+  visibility: hidden;
+}
+#${DOCK_ID}.is-visible,
+#${DOCK_LEFT_ID}.is-visible {
   opacity: 1;
+  visibility: visible;
   transform: translateY(-50%) scale(1);
 }
-#${DOCK_ID} .twfox-race-dock-hdr {
+#${DOCK_ID} .twfox-race-dock-hdr,
+#${DOCK_LEFT_ID} .twfox-race-dock-hdr {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -446,7 +455,8 @@
   font-weight: 900;
   letter-spacing: 0.08em;
 }
-#${DOCK_ID} .twfox-race-boards-row {
+#${DOCK_ID} .twfox-race-boards-row,
+#${DOCK_LEFT_ID} .twfox-race-boards-row {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -459,7 +469,8 @@
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.72);
   overflow: hidden;
 }
-#${DOCK_ID} .twfox-race-board-card {
+#${DOCK_ID} .twfox-race-board-card,
+#${DOCK_LEFT_ID} .twfox-race-board-card {
   width: var(--twfox-dock-card-w, 200px);
   flex: 0 0 var(--twfox-dock-card-w, 200px);
   padding: 6px 6px 7px;
@@ -471,14 +482,17 @@
   background: rgba(18, 9, 13, 0.86);
   box-sizing: border-box;
 }
-#${DOCK_ID} .twfox-race-board-card + .twfox-race-board-card {
+#${DOCK_ID} .twfox-race-board-card + .twfox-race-board-card,
+#${DOCK_LEFT_ID} .twfox-race-board-card + .twfox-race-board-card {
   border-left: 1.5px solid rgba(245, 146, 76, 0.45);
 }
-#${DOCK_ID} .twfox-race-board-card.is-ko {
+#${DOCK_ID} .twfox-race-board-card.is-ko,
+#${DOCK_LEFT_ID} .twfox-race-board-card.is-ko {
   background: rgba(28, 10, 16, 0.84);
   opacity: 0.82;
 }
-#${DOCK_ID} .twfox-race-board-name {
+#${DOCK_ID} .twfox-race-board-name,
+#${DOCK_LEFT_ID} .twfox-race-board-name {
   width: 100%;
   display: flex;
   align-items: center;
@@ -492,12 +506,14 @@
   white-space: nowrap;
   overflow: hidden;
 }
-#${DOCK_ID} .twfox-race-board-name .twfox-player-name {
+#${DOCK_ID} .twfox-race-board-name .twfox-player-name,
+#${DOCK_LEFT_ID} .twfox-race-board-name .twfox-player-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#${DOCK_ID} .twfox-race-board-rank {
+#${DOCK_ID} .twfox-race-board-rank,
+#${DOCK_LEFT_ID} .twfox-race-board-rank {
   flex: 0 0 auto;
   padding: 1px 5px;
   border-radius: 3px;
@@ -507,7 +523,8 @@
   font-size: 0.68rem;
   font-weight: 900;
 }
-#${DOCK_ID} .twfox-race-board-foot {
+#${DOCK_ID} .twfox-race-board-foot,
+#${DOCK_LEFT_ID} .twfox-race-board-foot {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -516,13 +533,15 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   width: 100%;
 }
-#${DOCK_ID} .twfox-race-board-alt {
+#${DOCK_ID} .twfox-race-board-alt,
+#${DOCK_LEFT_ID} .twfox-race-board-alt {
   font-size: 0.92rem;
   font-weight: 900;
   color: #ffd37d;
   font-variant-numeric: tabular-nums;
 }
-#${DOCK_ID} .twfox-race-board-meta {
+#${DOCK_ID} .twfox-race-board-meta,
+#${DOCK_LEFT_ID} .twfox-race-board-meta {
   font-size: 0.66rem;
   font-weight: 800;
   color: rgba(255, 224, 194, 0.82);
@@ -879,6 +898,9 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let dockEl = null;
     let dockBoardsEl = null;
     let dockHeaderEl = null;
+    let dockLeftEl = null;
+    let dockLeftBoardsEl = null;
+    let dockLeftHeaderEl = null;
     let specEl = null;
     let specHeaderEl = null;
     let specCanvasEl = null;
@@ -1806,78 +1828,49 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const stageUnitPx = Math.min(vw, vh * 2) / 1600;
       const stageCenterX = vw / 2;
 
+      // Symmetry:
+      // - 2 players (1 rival): [You (left)] [Rival 1 (right)]
+      // - 3 players (2 rivals): [Rival 1 (left)] [You (center)] [Rival 2 (right)]
+      // - 4 players (3 rivals): [Rival 1 (left)] [You (mid-left)] [Rival 2 | Rival 3 (right)]
       const presets = {
-        1: { ox: -0.38, os: 0.78 },
-        2: { ox: -0.47, os: 0.64 },
-        3: { ox: -0.53, os: 0.55 }
+        1: { ox: -0.34, os: 0.78, leftCount: 0, rightCount: 1 },
+        2: { ox: -0.15, os: 0.62, leftCount: 1, rightCount: 1 },
+        3: { ox: -0.34, os: 0.54, leftCount: 1, rightCount: 2 }
       };
       const preset = presets[count] || presets[3];
-      const boardRightPx = stageCenterX + (preset.ox * 800 + 332 * preset.os) * stageUnitPx;
-      const leaderboardLeftPx = stageCenterX + 394 * stageUnitPx;
-      const dockLeftPx = Math.round(boardRightPx + 12 * stageUnitPx);
-      const availWidthPx = Math.max(190, Math.floor(leaderboardLeftPx - dockLeftPx));
+      const halfBoardPx = 332 * preset.os * stageUnitPx;
+      const gapPx = Math.round(12 * stageUnitPx);
+      const boardCenterPx = stageCenterX + preset.ox * 800 * stageUnitPx;
+      const boardLeftPx = boardCenterPx - halfBoardPx;
+      const boardRightPx = boardCenterPx + halfBoardPx;
+
+      const leftLimitPx = stageCenterX - 670 * stageUnitPx;
+      const leaderboardLeftPx = stageCenterX + 390 * stageUnitPx;
+
+      const rightDockLeftPx = Math.round(boardRightPx + gapPx);
+      const availRightPx = Math.max(120, Math.floor(leaderboardLeftPx - rightDockLeftPx));
+      const availLeftPx = Math.max(120, Math.floor(boardLeftPx - gapPx - leftLimitPx));
       const idealCardW = Math.round((460 * preset.os * stageUnitPx) / 1.44);
-      const maxCardW = Math.floor((availWidthPx - 6) / count);
-      const cardW = Math.max(96, Math.min(idealCardW, maxCardW, 250));
+
+      const maxPerRightSlot = Math.floor((availRightPx - (preset.rightCount > 1 ? 8 : 4)) / Math.max(1, preset.rightCount));
+      const maxPerLeftSlot = preset.leftCount > 0 ? (availLeftPx - 4) : 9999;
+      const cardW = Math.max(90, Math.min(idealCardW, maxPerRightSlot, maxPerLeftSlot, 240));
+      const leftDockLeftPx = Math.round(boardLeftPx - gapPx - (preset.leftCount * cardW + 6));
 
       return {
         ox: preset.ox,
         os: preset.os,
-        dockLeftPx,
+        leftCount: preset.leftCount,
+        rightCount: preset.rightCount,
+        leftDockLeftPx,
+        rightDockLeftPx,
         cardW
       };
     }
 
-    function renderDock() {
-      if (!dockEl || !dockBoardsEl) return;
-      const bodyEl = document.body;
-      const inZenith = Boolean(bodyEl && bodyEl.classList && bodyEl.classList.contains('inzenith'));
-      const showDock = Boolean(session && racePhase === 'alive' && inZenith);
-      setClass(dockEl, 'is-visible', showDock);
-      if (!showDock) {
-        if (typeof api.setRaceBoardTransform === 'function') {
-          api.setRaceBoardTransform(null);
-        }
-        return;
-      }
-
-      const snap = session.getSnapshot();
-      const isHost = snap.role === 'host';
-      const selfId = isHost ? 'host' : snap.selfId;
-      const activePool = (snap.players || []).filter((p) => !p.spectator).slice(0, raceLogic.MAX_RACE_PLAYERS);
-      const ranked = raceLogic.computeRaceStandings(activePool, [], 0, 0);
-      const myRank = ranked.find((r) => r.id === selfId);
-
-      const rivals = activePool.filter((p) => p.id !== selfId);
-      const displayList = rivals.length > 0 ? rivals : activePool;
-      if (rivals.length > 0) {
-        const layout = computeLiveRaceArenaLayout(rivals.length);
-        if (typeof api.setRaceBoardTransform === 'function') {
-          api.setRaceBoardTransform({ ox: layout.ox, os: layout.os });
-        }
-        if (dockEl.style) {
-          dockEl.style.left = `${layout.dockLeftPx}px`;
-          if (typeof dockEl.style.setProperty === 'function') {
-            dockEl.style.setProperty('--twfox-dock-card-w', `${layout.cardW}px`);
-          }
-        }
-      } else if (typeof api.setRaceBoardTransform === 'function') {
-        api.setRaceBoardTransform(null);
-      }
-
-      if (dockHeaderEl) {
-        dockHeaderEl.textContent = `THE RACE · LIVE (${myRank ? `Nº${myRank.placement}/${ranked.length}` : `${ranked.length}/4`})`;
-      }
-
-      // Position rivals side-by-side cleanly beside the shifted local PIXI board (The Lovers-style stage)
-      dockBoardsEl.innerHTML = '';
-      const activeDockIds = new Set(displayList.map((p) => p.id));
-      for (const oldId of Array.from(rivalCanvases.keys())) {
-        if (!activeDockIds.has(oldId)) rivalCanvases.delete(oldId);
-      }
-
-      const useCompactWings = displayList.length >= 3;
-      for (const pl of displayList) {
+    function renderDockCardGroup(containerEl, list, ranked, useCompactWings) {
+      containerEl.innerHTML = '';
+      for (const pl of list) {
         const rankInfo = ranked.find((r) => r.id === pl.id);
         const rankNum = rankInfo ? rankInfo.placement : '-';
         const peakAlt = Math.max(Number(pl.peakAltitude) || 0, Number(pl.altitude) || 0);
@@ -1892,7 +1885,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         }
         drawPlayerRaceBoard(c, pl, pl.alive === false ? rankNum : null, useCompactWings);
         const cardClasses = ['twfox-race-board-card', pl.alive === false ? 'is-ko' : ''].filter(Boolean).join(' ');
-        dockBoardsEl.appendChild(
+        containerEl.appendChild(
           el('div', { className: cardClasses, attrs: { 'data-race-player': pl.id } }, [
             el('div', { className: 'twfox-race-board-name' }, [
               el('span', { className: 'twfox-player-name', text: pl.name }),
@@ -1905,6 +1898,90 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
             ])
           ])
         );
+      }
+    }
+
+    function renderDock() {
+      if (!dockEl || !dockBoardsEl) return;
+      const bodyEl = document.body;
+      const inZenith = Boolean(bodyEl && bodyEl.classList && bodyEl.classList.contains('inzenith'));
+      const showDock = Boolean(session && racePhase === 'alive' && inZenith);
+      if (!showDock) {
+        setClass(dockEl, 'is-visible', false);
+        if (dockLeftEl) setClass(dockLeftEl, 'is-visible', false);
+        if (typeof api.setRaceBoardTransform === 'function') {
+          api.setRaceBoardTransform(null);
+        }
+        return;
+      }
+
+      const snap = session.getSnapshot();
+      const isHost = snap.role === 'host';
+      const selfId = isHost ? 'host' : snap.selfId;
+      const activePool = (snap.players || []).filter((p) => !p.spectator).slice(0, raceLogic.MAX_RACE_PLAYERS);
+      const ranked = raceLogic.computeRaceStandings(activePool, [], 0, 0);
+      const myRank = ranked.find((r) => r.id === selfId);
+
+      const rivals = activePool.filter((p) => p.id !== selfId);
+      const activeDockIds = new Set(rivals.map((p) => p.id));
+      for (const oldId of Array.from(rivalCanvases.keys())) {
+        if (!activeDockIds.has(oldId)) rivalCanvases.delete(oldId);
+      }
+
+      if (rivals.length === 0) {
+        setClass(dockEl, 'is-visible', false);
+        if (dockLeftEl) setClass(dockLeftEl, 'is-visible', false);
+        if (typeof api.setRaceBoardTransform === 'function') {
+          api.setRaceBoardTransform(null);
+        }
+        return;
+      }
+
+      const layout = computeLiveRaceArenaLayout(rivals.length);
+      if (typeof api.setRaceBoardTransform === 'function') {
+        api.setRaceBoardTransform({ ox: layout.ox, os: layout.os });
+      }
+
+      const leftList = layout.leftCount > 0 ? rivals.slice(0, layout.leftCount) : [];
+      const rightList = rivals.slice(layout.leftCount);
+      const useCompactWings = rivals.length >= 3;
+
+      if (dockLeftEl && dockLeftBoardsEl) {
+        if (leftList.length > 0) {
+          if (dockLeftEl.style) {
+            dockLeftEl.style.left = `${layout.leftDockLeftPx}px`;
+            if (typeof dockLeftEl.style.setProperty === 'function') {
+              dockLeftEl.style.setProperty('--twfox-dock-card-w', `${layout.cardW}px`);
+            }
+          }
+          if (dockLeftHeaderEl) {
+            dockLeftHeaderEl.textContent = `THE RACE · ${myRank ? `Nº${myRank.placement}/${ranked.length}` : `${ranked.length}/4`}`;
+          }
+          renderDockCardGroup(dockLeftBoardsEl, leftList, ranked, useCompactWings);
+          setClass(dockLeftEl, 'is-visible', true);
+        } else {
+          setClass(dockLeftEl, 'is-visible', false);
+          dockLeftBoardsEl.innerHTML = '';
+        }
+      }
+
+      if (rightList.length > 0) {
+        if (dockEl.style) {
+          dockEl.style.left = `${layout.rightDockLeftPx}px`;
+          if (typeof dockEl.style.setProperty === 'function') {
+            dockEl.style.setProperty('--twfox-dock-card-w', `${layout.cardW}px`);
+          }
+        }
+        if (dockHeaderEl) {
+          dockHeaderEl.textContent = leftList.length > 0
+            ? `RIVALS (${rightList.length})`
+            : `THE RACE · LIVE (${myRank ? `Nº${myRank.placement}/${ranked.length}` : `${ranked.length}/4`})`;
+        }
+        renderDockCardGroup(dockBoardsEl, rightList, ranked, useCompactWings);
+        setClass(dockEl, 'is-visible', true);
+      } else {
+        setClass(dockEl, 'is-visible', false);
+        dockBoardsEl.innerHTML = '';
       }
     }
 
@@ -2201,6 +2278,13 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     }
 
     function ensureOverlaysMounted() {
+      if (!dockLeftEl && document.body) {
+        dockLeftHeaderEl = el('div', { className: 'twfox-race-dock-hdr', text: 'THE RACE' });
+        dockLeftBoardsEl = el('div', { className: 'twfox-race-boards-row' });
+        dockLeftEl = el('div', { id: DOCK_LEFT_ID }, [dockLeftHeaderEl, dockLeftBoardsEl]);
+        document.body.appendChild(dockLeftEl);
+      }
+
       if (!dockEl && document.body) {
         dockHeaderEl = el('div', { className: 'twfox-race-dock-hdr', text: 'THE RACE · LIVE' });
         dockBoardsEl = el('div', { className: 'twfox-race-boards-row' });
