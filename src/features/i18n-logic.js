@@ -260,6 +260,16 @@
     'skins, board, sfx & backgrounds (tetr.io+)': 'skins, tablero, SFX y fondos (TETR.IO+)',
     'direct download from https://you.have.fail/tetrioplus/ · blocks, board, sounds & animated backgrounds.': 'descarga directa desde https://you.have.fail/tetrioplus/ · piezas, tablero, sonidos y fondos animados.',
     'reload tetr.io (apply sfx/skin)': 'recargar TETR.IO (aplicar SFX/skin)',
+    'open assets folder': 'abrir carpeta de assets',
+    'rescan folder': 'escanear carpeta',
+    'custom folder': 'carpeta personalizada',
+    'opening assets folder...': 'abriendo carpeta de assets...',
+    'scanning custom assets folder...': 'escaneando carpeta de assets...',
+    'drop custom skins, boards, sfx or backgrounds into this folder.': 'pon tus skins, tableros, SFX o fondos propios dentro de esta carpeta.',
+    'folder opened — drop files into skins / boards / sfx / backgrounds, then click rescan folder.': 'carpeta abierta — coloca tus archivos en skins / boards / sfx / backgrounds y pulsa ESCANEAR CARPETA.',
+    'folder synced — all custom assets up to date.': 'carpeta sincronizada — todos tus assets están al día.',
+    'could not open folder (update or run on tetr.io desktop).': 'no se pudo abrir la carpeta (actualiza o abre desde TETR.IO Desktop).',
+    'could not scan assets folder.': 'no se pudo escanear la carpeta de assets.',
     'explore (tetr.io+)': 'explorar (TETR.IO+)',
     'background / local': 'fondo / local',
     'search skin, board, sfx or author in tetr.io+...': 'buscar skin, tablero, SFX o autor en TETR.IO+...',
@@ -566,6 +576,9 @@
     }
     if ((m = trimmed.match(/^Imported & activated: (.+)$/i))) {
       return `Instalado y activado: ${m[1]}`;
+    }
+    if ((m = trimmed.match(/^Loaded (\d+) new custom assets from folder!$/i))) {
+      return `¡Se cargaron ${m[1]} assets personalizados desde la carpeta!`;
     }
     if ((m = trimmed.match(/^BACKGROUND (\d+\/\d+)$/i))) {
       return `FONDO ${m[1]}`;

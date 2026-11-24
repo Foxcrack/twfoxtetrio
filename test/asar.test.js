@@ -250,6 +250,82 @@ test('registerTwfoxMainIpc stages & applies synthetic ASAR self-updates and bloc
   }
 });
 
+test('registerTwfoxMainIpc manages custom assets folder creation, openPath, save, scan, and safe deletion', async () => {
+  const crypto = require('node:crypto');
+  const { registerTwfoxMainIpc } = require('../scripts/install');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'twfox-assetsdir-'));
+  const assetsDir = path.join(tmpDir, 'foxmod-assets');
+  try {
+    const handlers = new Map();
+    const openedPaths = [];
+    registerTwfoxMainIpc({
+      ipcMain: { handle: (ch, fn) => handlers.set(ch, fn) },
+      app: { getPath: () => tmpDir },
+      shell: {
+        async openPath(target) {
+          openedPaths.push(target);
+          return '';
+        }
+      },
+      https: {},
+      fs,
+      path,
+      crypto,
+      cp: null,
+      assetsDir,
+      processRef: { platform: 'win32', pid: process.pid, env: {}, resourcesPath: tmpDir, execPath: 'tetrio.exe' }
+    });
+
+    const openRes = await handlers.get('twfoxtetrio-assets-open-folder')(null, {});
+    assert.equal(openRes.ok, true);
+    assert.equal(openRes.path, assetsDir);
+    assert.deepEqual(openedPaths, [assetsDir]);
+    assert.equal(fs.existsSync(path.join(assetsDir, 'skins')), true);
+    assert.equal(fs.existsSync(path.join(assetsDir, 'boards')), true);
+    assert.equal(fs.existsSync(path.join(assetsDir, 'sfx')), true);
+    assert.equal(fs.existsSync(path.join(assetsDir, 'backgrounds')), true);
+    assert.equal(fs.existsSync(path.join(assetsDir, 'README.txt')), true);
+
+    // Reject path traversal & disallowed subfolder
+    const badSave = await handlers.get('twfoxtetrio-assets-save-file')(null, {
+      subfolder: '../evil',
+      fileName: 'x.png',
+      base64: Buffer.from('abc').toString('base64')
+    });
+    assert.equal(badSave.ok, false);
+
+    // Save single file + drop custom SFX directory directly on disk
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+    const saveRes = await handlers.get('twfoxtetrio-assets-save-file')(null, {
+      subfolder: 'skins',
+      fileName: 'MySkin.png',
+      base64: pngBytes.toString('base64')
+    });
+    assert.equal(saveRes.ok, true);
+    assert.equal(saveRes.relPath, 'skins/MySkin.png');
+
+    const sfxPackDir = path.join(assetsDir, 'sfx', 'CustomClicks');
+    fs.mkdirSync(sfxPackDir, { recursive: true });
+    fs.writeFileSync(path.join(sfxPackDir, 'move.ogg'), Buffer.from('OggS-fake-audio'));
+
+    const scanRes = await handlers.get('twfoxtetrio-assets-scan-folder')();
+    assert.equal(scanRes.ok, true);
+    assert.equal(scanRes.items.length, 2);
+    assert.ok(scanRes.items.some((x) => x.kind === 'file' && x.relPath === 'skins/MySkin.png'));
+    assert.ok(scanRes.items.some((x) => x.kind === 'dir' && x.relPath === 'sfx/CustomClicks' && x.files[0].fileName === 'move.ogg'));
+
+    // Cannot delete subfolder root itself, only items inside it
+    const badDel = await handlers.get('twfoxtetrio-assets-delete-file')(null, { relPath: 'skins' });
+    assert.equal(badDel.ok, false);
+    const delRes = await handlers.get('twfoxtetrio-assets-delete-file')(null, { relPath: 'skins/MySkin.png' });
+    assert.equal(delRes.ok, true);
+    assert.equal(fs.existsSync(path.join(assetsDir, 'skins', 'MySkin.png')), false);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('Linux installer resolves distro, wrapper script, Flatpak, extracted AppImage, and process detection paths', () => {
   const mkFs = (entries) => {
     const map = new Map(Object.entries(entries));

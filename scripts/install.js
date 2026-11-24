@@ -345,6 +345,7 @@ function registerTwfoxMainIpc(deps) {
   const d = deps || {};
   const ipcMain = d.ipcMain;
   const app = d.app;
+  const shell = d.shell;
   const https = d.https;
   const fs = d.fs;
   const path = d.path;
@@ -841,6 +842,229 @@ function registerTwfoxMainIpc(deps) {
       return { ok: false, error: err && err.message ? err.message : String(err) };
     }
   });
+
+  const ASSET_SUBFOLDERS = ['skins', 'boards', 'sfx', 'backgrounds'];
+  const ASSET_MAX_BYTES = 40 * 1024 * 1024;
+  const ASSET_ALLOWED_EXT = /\.(tpse|zip|png|jpe?g|gif|webp|svg|mp4|webm|mov|m4v|ogg|wav|mp3|flac|m4a|rsd)$/i;
+
+  function resolveAssetsRoot() {
+    if (d.assetsDir) return String(d.assetsDir);
+    if (app && typeof app.getPath === 'function') {
+      try {
+        return path.join(app.getPath('userData'), 'foxmod-assets');
+      } catch (_) {}
+    }
+    return '';
+  }
+
+  function isSafeSubpath(rootDir, targetPath) {
+    if (!rootDir || !targetPath) return false;
+    const rel = path.relative(path.resolve(rootDir), path.resolve(targetPath));
+    return Boolean(rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+  }
+
+  function sanitizeAssetName(rawName) {
+    const base = path.basename(String(rawName || '')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
+    if (!base || base === '.' || base === '..') return '';
+    return base;
+  }
+
+  function ensureAssetsDirs() {
+    const rootDir = resolveAssetsRoot();
+    if (!rootDir) return '';
+    fs.mkdirSync(rootDir, { recursive: true });
+    for (const sub of ASSET_SUBFOLDERS) {
+      fs.mkdirSync(path.join(rootDir, sub), { recursive: true });
+    }
+    const readmePath = path.join(rootDir, 'README.txt');
+    if (!fs.existsSync(readmePath)) {
+      const readmeText = [
+        'FOXMOD (twfoxtetrio) Custom Assets Folder / Carpeta de Assets Personalizados',
+        '========================================================================',
+        '',
+        'Put your custom files in each subfolder, then click "RESCAN FOLDER" (or reopen TETR.IO):',
+        'Pon tus archivos personalizados en cada subcarpeta y pulsa "ESCANEAR CARPETA":',
+        '',
+        '- skins/        -> .tpse, .zip, .png, .gif, .svg (block skins & ghost skins)',
+        '- boards/       -> .tpse, .zip, .png, .gif, .svg (board, queue, grid)',
+        '- sfx/          -> .tpse, .zip, .rsd, .ogg/.wav/.mp3 (or a subfolder with move.ogg, rotate.ogg, etc.)',
+        '- backgrounds/  -> .png, .jpg, .gif, .webp, .mp4, .webm (menu & gameplay backgrounds)',
+        ''
+      ].join('\r\n');
+      try {
+        fs.writeFileSync(readmePath, readmeText, 'utf8');
+      } catch (_) {}
+    }
+    return rootDir;
+  }
+
+  ipcMain.handle('twfoxtetrio-assets-open-folder', async (_ev, opts) => {
+    try {
+      const rootDir = ensureAssetsDirs();
+      if (!rootDir) {
+        return { ok: false, error: 'Could not resolve userData directory' };
+      }
+      const sub = opts && typeof opts.subfolder === 'string' && ASSET_SUBFOLDERS.includes(opts.subfolder)
+        ? opts.subfolder
+        : '';
+      const targetDir = sub ? path.join(rootDir, sub) : rootDir;
+      const openFn = d.openPath || (shell && typeof shell.openPath === 'function' ? (p) => shell.openPath(p) : null);
+      if (!openFn) {
+        return { ok: false, path: targetDir, rootPath: rootDir, error: 'shell.openPath unavailable' };
+      }
+      const openErr = await openFn(targetDir);
+      if (openErr) {
+        return { ok: false, path: targetDir, rootPath: rootDir, error: String(openErr) };
+      }
+      return { ok: true, path: targetDir, rootPath: rootDir };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('twfoxtetrio-assets-save-file', async (_ev, opts) => {
+    try {
+      const rootDir = ensureAssetsDirs();
+      if (!rootDir) return { ok: false, error: 'Assets folder unavailable' };
+      const sub = opts && typeof opts.subfolder === 'string' ? opts.subfolder : '';
+      if (!ASSET_SUBFOLDERS.includes(sub)) {
+        return { ok: false, error: 'Invalid asset subfolder' };
+      }
+      const safeName = sanitizeAssetName(opts && opts.fileName);
+      if (!safeName || !ASSET_ALLOWED_EXT.test(safeName)) {
+        return { ok: false, error: 'Invalid or unsupported filename' };
+      }
+      const buf = Buffer.from(String((opts && opts.base64) || ''), 'base64');
+      if (buf.length === 0 || buf.length > ASSET_MAX_BYTES) {
+        return { ok: false, error: 'File size out of bounds' };
+      }
+      const subDir = path.join(rootDir, sub);
+      const targetPath = path.join(subDir, safeName);
+      if (!isSafeSubpath(subDir, targetPath)) {
+        return { ok: false, error: 'Path escapes assets directory' };
+      }
+      fs.writeFileSync(targetPath, buf);
+      const st = fs.statSync(targetPath);
+      return {
+        ok: true,
+        relPath: sub + '/' + safeName,
+        fullPath: targetPath,
+        rootPath: rootDir,
+        mtimeMs: Math.round(st.mtimeMs || Date.now())
+      };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('twfoxtetrio-assets-delete-file', async (_ev, opts) => {
+    try {
+      const rootDir = ensureAssetsDirs();
+      if (!rootDir) return { ok: false, error: 'Assets folder unavailable' };
+      const rawRel = String((opts && opts.relPath) || '').replace(/\\/g, '/').replace(/^\/+/, '');
+      const parts = rawRel.split('/').filter(Boolean);
+      if (parts.length < 2 || !ASSET_SUBFOLDERS.includes(parts[0])) {
+        return { ok: false, error: 'Invalid asset relative path' };
+      }
+      const subDir = path.join(rootDir, parts[0]);
+      const target = path.join(subDir, ...parts.slice(1));
+      if (!isSafeSubpath(subDir, target)) {
+        return { ok: false, error: 'Unsafe path' };
+      }
+      if (fs.existsSync(target)) {
+        const st = fs.statSync(target);
+        if (st.isDirectory()) {
+          fs.rmSync(target, { recursive: true, force: true });
+        } else {
+          fs.unlinkSync(target);
+        }
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('twfoxtetrio-assets-scan-folder', async () => {
+    try {
+      const rootDir = ensureAssetsDirs();
+      if (!rootDir) return { ok: false, error: 'Assets folder unavailable', items: [] };
+      const items = [];
+      for (const sub of ASSET_SUBFOLDERS) {
+        const subDir = path.join(rootDir, sub);
+        if (!fs.existsSync(subDir)) continue;
+        const dirents = fs.readdirSync(subDir);
+        for (const entryName of dirents) {
+          if (items.length >= 64) break;
+          if (!entryName || entryName.startsWith('.') || /^readme\.txt$/i.test(entryName)) continue;
+          const full = path.join(subDir, entryName);
+          if (!isSafeSubpath(subDir, full)) continue;
+          let st;
+          try {
+            st = fs.statSync(full);
+          } catch (_) {
+            continue;
+          }
+          if (st.isFile()) {
+            if (!ASSET_ALLOWED_EXT.test(entryName) || st.size <= 0 || st.size > ASSET_MAX_BYTES) continue;
+            const buf = fs.readFileSync(full);
+            items.push({
+              kind: 'file',
+              subfolder: sub,
+              relPath: sub + '/' + entryName,
+              fileName: entryName,
+              mtimeMs: Math.round(st.mtimeMs || 0),
+              size: buf.length,
+              base64: buf.toString('base64')
+            });
+          } else if (st.isDirectory()) {
+            let subFiles;
+            try {
+              subFiles = fs.readdirSync(full);
+            } catch (_) {
+              continue;
+            }
+            const packed = [];
+            let totalSize = 0;
+            let maxMtime = Math.round(st.mtimeMs || 0);
+            for (const fn of subFiles) {
+              if (packed.length >= 120) break;
+              if (!fn || fn.startsWith('.') || !ASSET_ALLOWED_EXT.test(fn)) continue;
+              const fFull = path.join(full, fn);
+              if (!isSafeSubpath(full, fFull)) continue;
+              let fst;
+              try {
+                fst = fs.statSync(fFull);
+              } catch (_) {
+                continue;
+              }
+              if (!fst.isFile() || fst.size <= 0 || totalSize + fst.size > ASSET_MAX_BYTES) continue;
+              totalSize += fst.size;
+              maxMtime = Math.max(maxMtime, Math.round(fst.mtimeMs || 0));
+              packed.push({
+                fileName: fn,
+                base64: fs.readFileSync(fFull).toString('base64')
+              });
+            }
+            if (packed.length > 0) {
+              items.push({
+                kind: 'dir',
+                subfolder: sub,
+                relPath: sub + '/' + entryName,
+                dirName: entryName,
+                mtimeMs: maxMtime,
+                size: totalSize,
+                files: packed
+              });
+            }
+          }
+        }
+      }
+      return { ok: true, rootPath: rootDir, items };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err), items: [] };
+    }
+  });
 }
 
 function buildMainSnippet() {
@@ -850,13 +1074,14 @@ function buildMainSnippet() {
     '  try {',
     '    if (global.__TWFOX_MAIN_IPC_READY__) return;',
     '    global.__TWFOX_MAIN_IPC_READY__ = true;',
-    "    const { ipcMain, app } = require('electron');",
+    "    const { ipcMain, app, shell } = require('electron');",
     '    let origFs;',
     "    try { origFs = require('original-fs'); } catch (_) { origFs = require('fs'); }",
     '    ' + registerTwfoxMainIpc.toString(),
     '    registerTwfoxMainIpc({',
     '      ipcMain,',
     '      app,',
+    '      shell,',
     "      https: require('https'),",
     '      fs: origFs,',
     "      path: require('path'),",

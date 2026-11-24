@@ -44,6 +44,9 @@
   let nativeFetch = null;
   let bgRafId = null;
   let bgCurrentSignature = '';
+  let assetsFolderPath = '';
+  let folderSyncing = false;
+  let folderSyncPromise = null;
 
   const DEFAULT_META = {
     activeSkinId: null,
@@ -750,6 +753,11 @@
       refreshCustomBackgroundDom();
       notifyCanvasSpriteReload();
       emitChange();
+      if (root.IPC && typeof root.IPC.invoke === 'function') {
+        Promise.resolve()
+          .then(() => syncAssetsFolder({ exportMissing: true }))
+          .catch(() => {});
+      }
     }
   }
 
@@ -881,6 +889,10 @@
           payload
         };
         await dbPutAsset(record);
+        await persistRecordToDisk(record, {
+          fileName: url.split('/').pop(),
+          bytes
+        });
         lastError = '';
         if (options.autoApply !== false) {
           await activateAsset(record.id);
@@ -924,6 +936,10 @@
       payload
     };
     await dbPutAsset(record);
+    await persistRecordToDisk(record, {
+      fileName,
+      bytes
+    });
     lastError = '';
     if (!input || input.autoApply !== false) {
       await activateAsset(id);
@@ -1076,15 +1092,231 @@
     emitChange();
   }
 
-  async function uninstallAsset(id) {
+  async function uninstallAsset(id, opts) {
     await readyPromise;
     const strId = String(id);
+    const existing = memoryAssetStore.get(strId);
     if (activeMeta.activeSkinId === strId) await deactivateSlot('skin');
     if (activeMeta.activeBoardId === strId) await deactivateSlot('board');
     if (activeMeta.activeSfxId === strId) await deactivateSlot('sfx');
     if (activeMeta.bgAssetId === strId) await deactivateSlot('background');
     await dbDeleteAsset(strId);
+    if (
+      existing &&
+      existing.diskRelPath &&
+      !(opts && opts.skipDiskDelete) &&
+      root.IPC &&
+      typeof root.IPC.invoke === 'function'
+    ) {
+      try {
+        await root.IPC.invoke('twfoxtetrio-assets-delete-file', { relPath: existing.diskRelPath });
+      } catch (_) {}
+    }
     emitChange();
+  }
+
+  function subfolderToCategoryHint(sub) {
+    if (sub === 'boards') return 'board';
+    if (sub === 'sfx') return 'sfx';
+    if (sub === 'backgrounds') return 'background';
+    return 'skin';
+  }
+
+  async function persistRecordToDisk(record, rawFile) {
+    if (!root.IPC || typeof root.IPC.invoke !== 'function' || !record || !record.payload) return null;
+    if (record.diskRelPath) return null;
+    try {
+      let uploadSpec = null;
+      const rawName = rawFile && typeof rawFile.fileName === 'string' ? rawFile.fileName.trim() : '';
+      const rawExtMatch = rawName.match(/\.(tpse|zip|png|jpe?g|gif|webp|svg|mp4|webm|mov|m4v|ogg|wav|mp3|flac|m4a|rsd)$/i);
+      if (rawFile && rawFile.bytes && rawFile.bytes.length > 0 && rawExtMatch) {
+        const subfolder = logic.mapCategoryToSubfolder(record.category, record.payload.capabilities);
+        const cleanStem = String(record.name || rawName.replace(/\.[^.]+$/, '') || 'asset')
+          .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+          .trim()
+          .slice(0, 80);
+        uploadSpec = {
+          subfolder,
+          fileName: (cleanStem || 'asset') + '.' + rawExtMatch[1].toLowerCase(),
+          bytes: rawFile.bytes
+        };
+      } else if (typeof logic.serializeRecordForDisk === 'function') {
+        uploadSpec = logic.serializeRecordForDisk(record);
+      }
+      if (!uploadSpec || !uploadSpec.bytes || uploadSpec.bytes.length === 0) return null;
+
+      const res = await root.IPC.invoke('twfoxtetrio-assets-save-file', {
+        subfolder: uploadSpec.subfolder,
+        fileName: uploadSpec.fileName,
+        base64: logic.bytesToBase64(uploadSpec.bytes)
+      });
+      if (res && res.ok && res.relPath) {
+        record.diskRelPath = res.relPath;
+        record.diskMtimeMs = res.mtimeMs || Date.now();
+        if (res.rootPath) assetsFolderPath = res.rootPath;
+        await dbPutAsset(record);
+        return res;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  async function buildRecordFromDiskItem(item, existing) {
+    const categoryHint = subfolderToCategoryHint(item.subfolder);
+    let payload = null;
+    let displayName = '';
+
+    if (item.kind === 'dir' && Array.isArray(item.files)) {
+      const entries = item.files.map((f) => ({
+        fileName: f.fileName,
+        bytes: logic.base64ToBytes(f.base64 || '')
+      }));
+      payload = logic.parseDirectoryPack(entries, { category: categoryHint });
+      displayName = String(item.dirName || 'Custom Pack');
+    } else {
+      const bytes = logic.base64ToBytes(item.base64 || '');
+      payload = await parseDownloadedBytes(bytes, item.fileName, '', { category: categoryHint });
+      displayName = String(item.fileName || 'Custom Asset').replace(/\.[^.]+$/, '') || 'Custom Asset';
+    }
+
+    await compilePayloadVariants(payload, {});
+    const isFolderOrigin = !existing || existing.sourceKind === 'folder';
+    return {
+      id: (existing && existing.id) || ('folder:' + item.relPath),
+      name: !isFolderOrigin && existing.name ? existing.name : displayName,
+      author: !isFolderOrigin && existing.author ? existing.author : 'Custom Folder',
+      description: (!isFolderOrigin && existing.description) || `Loaded from ${item.relPath}`,
+      category: payload.category || categoryHint,
+      sourceKind: existing ? existing.sourceKind : 'folder',
+      sourceUrl: existing ? existing.sourceUrl : undefined,
+      downloadedAt: (existing && existing.downloadedAt) || item.mtimeMs || Date.now(),
+      bytesEstimate: estimatePayloadBytes(payload),
+      diskRelPath: item.relPath,
+      diskMtimeMs: item.mtimeMs || 0,
+      payload
+    };
+  }
+
+  async function syncAssetsFolder(opts) {
+    await readyPromise;
+    if (folderSyncPromise) return folderSyncPromise;
+    if (!root.IPC || typeof root.IPC.invoke !== 'function') {
+      return { ok: false, unsupported: true, path: assetsFolderPath, added: 0, updated: 0 };
+    }
+
+    folderSyncPromise = (async () => {
+      folderSyncing = true;
+      emitChange();
+      let added = 0;
+      let updated = 0;
+      try {
+        if (opts && opts.exportMissing) {
+          const currentRecords = Array.from(memoryAssetStore.values());
+          for (const rec of currentRecords) {
+            if (!rec.diskRelPath) {
+              await persistRecordToDisk(rec);
+            }
+          }
+        }
+
+        const scanRes = await root.IPC.invoke('twfoxtetrio-assets-scan-folder');
+        if (!scanRes || !scanRes.ok) {
+          return {
+            ok: false,
+            error: (scanRes && scanRes.error) || 'Failed to scan folder',
+            path: (scanRes && scanRes.rootPath) || assetsFolderPath,
+            added: 0,
+            updated: 0
+          };
+        }
+        if (scanRes.rootPath) assetsFolderPath = scanRes.rootPath;
+
+        const byRel = new Map();
+        for (const rec of memoryAssetStore.values()) {
+          if (rec && rec.diskRelPath) byRel.set(rec.diskRelPath, rec);
+        }
+
+        const seenRel = new Set();
+        const items = Array.isArray(scanRes.items) ? scanRes.items : [];
+        for (const item of items) {
+          if (!item || !item.relPath) continue;
+          seenRel.add(item.relPath);
+          const existing = byRel.get(item.relPath);
+          if (existing && existing.diskMtimeMs === item.mtimeMs) {
+            continue;
+          }
+          try {
+            const nextRec = await buildRecordFromDiskItem(item, existing);
+            await dbPutAsset(nextRec);
+            if (existing) {
+              updated += 1;
+              if (activeMeta.activeSkinId === nextRec.id) activePayloads.skin = nextRec;
+              if (activeMeta.activeBoardId === nextRec.id) activePayloads.board = nextRec;
+              if (activeMeta.activeSfxId === nextRec.id) activePayloads.sfx = nextRec;
+              if (activeMeta.bgMode === 'asset' && activeMeta.bgAssetId === nextRec.id) {
+                activePayloads.background = nextRec;
+              }
+            } else {
+              added += 1;
+            }
+          } catch (_) {}
+        }
+
+        const allRecords = Array.from(memoryAssetStore.values());
+        for (const rec of allRecords) {
+          if (rec && rec.sourceKind === 'folder' && rec.diskRelPath && !seenRel.has(rec.diskRelPath)) {
+            await uninstallAsset(rec.id, { skipDiskDelete: true });
+          }
+        }
+
+        if (updated > 0) {
+          refreshTrackedTetrioImages();
+          refreshCustomBackgroundDom();
+          notifyCanvasSpriteReload();
+        }
+        return { ok: true, path: assetsFolderPath, added, updated };
+      } catch (err) {
+        return {
+          ok: false,
+          error: err && err.message ? err.message : String(err),
+          path: assetsFolderPath,
+          added,
+          updated
+        };
+      } finally {
+        folderSyncing = false;
+        folderSyncPromise = null;
+        emitChange();
+      }
+    })();
+
+    return folderSyncPromise;
+  }
+
+  async function openAssetsFolder(subfolder) {
+    await readyPromise;
+    if (!root.IPC || typeof root.IPC.invoke !== 'function') {
+      return { ok: false, unsupported: true, error: 'Desktop IPC unavailable' };
+    }
+    try {
+      await syncAssetsFolder({ exportMissing: true });
+    } catch (_) {}
+    try {
+      const res = await root.IPC.invoke('twfoxtetrio-assets-open-folder', {
+        subfolder: subfolder || ''
+      });
+      if (res && (res.rootPath || res.path)) {
+        assetsFolderPath = res.rootPath || res.path;
+        emitChange();
+      }
+      return res || { ok: false, error: 'Failed to open folder' };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+
+  async function rescanAssetsFolder() {
+    return syncAssetsFolder({ exportMissing: true });
   }
 
   async function setBackgroundConfig(patch) {
@@ -1715,7 +1947,9 @@ body.twfox-has-custom-bg #pixi {
         bgBlur: activeMeta.bgBlur
       },
       needsReload,
-      lastError
+      lastError,
+      folderPath: assetsFolderPath,
+      folderSyncing
     };
   }
 
@@ -1799,7 +2033,9 @@ body.twfox-has-custom-bg #pixi {
     resolveSkinOverrideUrl,
     getCatalogItemPreviewUrl,
     requestCatalogItemPreview,
-    resetPreviewQueue
+    resetPreviewQueue,
+    openAssetsFolder,
+    rescanAssetsFolder
   };
 
   root.__TWFOX_INTERNAL__ = root.__TWFOX_INTERNAL__ || {};

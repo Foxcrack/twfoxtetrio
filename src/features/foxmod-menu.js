@@ -2050,6 +2050,18 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
   gap: 10px;
   margin-bottom: 10px;
 }
+.twfox-assets-folder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  background: rgba(11, 15, 24, 0.72);
+  border: 1px solid rgba(255, 123, 28, 0.28);
+  border-radius: 4px;
+}
 .twfox-assets-slots {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
@@ -5556,6 +5568,70 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           }
         });
 
+        const openFolderBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-open-folder-btn',
+          className: 'twfox-btn is-sm is-pri',
+          text: 'OPEN ASSETS FOLDER',
+          type: 'button',
+          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        const rescanFolderBtn = createEl('button', {
+          id: 'twfoxtetrio-assets-rescan-folder-btn',
+          className: 'twfox-btn is-sm',
+          text: 'RESCAN FOLDER',
+          type: 'button',
+          attrs: { 'data-hover': 'tap', 'data-hit': 'click' }
+        });
+        const folderStatusTextEl = createEl('span', {
+          id: 'twfoxtetrio-assets-folder-status',
+          className: 'twfox-assets-status',
+          text: 'Drop custom skins, boards, SFX or backgrounds into this folder.'
+        });
+        const folderPathEl = createEl('code', {
+          id: 'twfoxtetrio-assets-folder-path',
+          className: 'twfox-updater-cmd hidden',
+          text: '',
+          attrs: { 'data-twfox-no-i18n': '1' }
+        });
+
+        function updateFolderInfoUi(st, overrideStatus) {
+          const p = (st && st.folderPath) || '';
+          if (p) {
+            folderPathEl.textContent = p;
+            setClass(folderPathEl, 'hidden', false);
+          }
+          if (overrideStatus) {
+            folderStatusTextEl.textContent = overrideStatus;
+          } else if (st && st.folderSyncing) {
+            folderStatusTextEl.textContent = 'Scanning custom assets folder...';
+          }
+        }
+
+        openFolderBtn.addEventListener('click', async function () {
+          if (!assetsApi || typeof assetsApi.openAssetsFolder !== 'function') return;
+          folderStatusTextEl.textContent = 'Opening assets folder...';
+          const res = await assetsApi.openAssetsFolder();
+          if (res && res.ok) {
+            updateFolderInfoUi(assetsApi.getState(), 'Folder opened — drop files into skins / boards / sfx / backgrounds, then click RESCAN FOLDER.');
+          } else {
+            folderStatusTextEl.textContent = (res && res.error) || 'Could not open folder (update or run on TETR.IO Desktop).';
+          }
+        });
+
+        rescanFolderBtn.addEventListener('click', async function () {
+          if (!assetsApi || typeof assetsApi.rescanAssetsFolder !== 'function') return;
+          folderStatusTextEl.textContent = 'Scanning custom assets folder...';
+          const res = await assetsApi.rescanAssetsFolder();
+          if (res && res.ok) {
+            const countMsg = res.added > 0
+              ? `Loaded ${res.added} new custom assets from folder!`
+              : 'Folder synced — all custom assets up to date.';
+            updateFolderInfoUi(assetsApi.getState(), countMsg);
+          } else {
+            folderStatusTextEl.textContent = (res && res.error) || 'Could not scan assets folder.';
+          }
+        });
+
         const tabExploreBtn = createEl('button', {
           id: 'twfoxtetrio-assets-tab-explore',
           className: 'twfox-btn is-sm twfox-assets-tab is-active',
@@ -6199,7 +6275,11 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
 
         refreshAssetsStudio = function (allowAutoCatalog) {
           if (!assetsApi) return;
+          if (typeof assetsApi.rescanAssetsFolder === 'function') {
+            assetsApi.rescanAssetsFolder();
+          }
           const st = assetsApi.getState();
+          updateFolderInfoUi(st);
           renderActiveSlots(st);
           renderInstalledList();
           syncBgPanel(st);
@@ -6212,6 +6292,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
 
         if (assetsApi && typeof assetsApi.subscribe === 'function') {
           assetsApi.subscribe(function (st) {
+            updateFolderInfoUi(st);
             renderActiveSlots(st);
             renderInstalledList();
             syncBgPanel(st);
@@ -6227,8 +6308,9 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
               createEl('h1', { text: 'SKINS, BOARD, SFX & BACKGROUNDS (TETR.IO+)' }),
               createEl('p', { text: 'Direct download from https://you.have.fail/tetrioplus/ · blocks, board, sounds & animated backgrounds.' })
             ]),
-            reloadBtn
+            createEl('div', { className: 'twfox-updater-actions' }, [openFolderBtn, rescanFolderBtn, reloadBtn])
           ]),
+          createEl('div', { className: 'twfox-assets-folder-bar' }, [folderStatusTextEl, folderPathEl]),
           slotsWrap,
           createEl('div', { className: 'twfox-assets-tabs' }, [tabExploreBtn, tabInstalledBtn, tabBgBtn]),
           explorePanel,

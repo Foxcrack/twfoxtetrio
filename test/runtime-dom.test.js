@@ -3070,3 +3070,97 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     if (i18nGlobal) i18nGlobal.destroy();
   }
 });
+
+test('OPEN ASSETS FOLDER exports downloaded items, opens Electron folder, and imports user-dropped skin & SFX files', async () => {
+  const customAssetsLogic = require('../src/features/custom-assets-logic');
+  const savedFiles = new Map();
+  const openedFolders = [];
+  const deletedFiles = [];
+  const fakePng = Buffer.alloc(24);
+  fakePng[0] = 0x89; fakePng[1] = 0x50; fakePng[2] = 0x4e; fakePng[3] = 0x47;
+  fakePng[4] = 0x0d; fakePng[5] = 0x0a; fakePng[6] = 0x1a; fakePng[7] = 0x0a;
+  fakePng.writeUInt32BE(13, 8);
+  fakePng.write('IHDR', 12, 'ascii');
+  fakePng.writeUInt32BE(256, 16);
+  fakePng.writeUInt32BE(256, 20);
+
+  let diskItems = [
+    {
+      kind: 'file',
+      subfolder: 'skins',
+      relPath: 'skins/CustomDropSkin.png',
+      fileName: 'CustomDropSkin.png',
+      mtimeMs: 12345,
+      size: fakePng.length,
+      base64: fakePng.toString('base64')
+    },
+    {
+      kind: 'dir',
+      subfolder: 'sfx',
+      relPath: 'sfx/MyVoiceSfx',
+      dirName: 'MyVoiceSfx',
+      mtimeMs: 67890,
+      size: 16,
+      files: [{ fileName: 'harddrop.ogg', base64: Buffer.from('OggS-test').toString('base64') }]
+    }
+  ];
+
+  const env = createFakeDomEnvironment('https:', {
+    IPC: {
+      async invoke(channel, arg) {
+        if (channel === 'twfoxtetrio-assets-save-file') {
+          const relPath = arg.subfolder + '/' + arg.fileName;
+          savedFiles.set(relPath, arg.base64);
+          return { ok: true, relPath, rootPath: 'C:\\Users\\fox\\AppData\\Roaming\\tetrio-desktop\\foxmod-assets', mtimeMs: 100 };
+        }
+        if (channel === 'twfoxtetrio-assets-scan-folder') {
+          return { ok: true, rootPath: 'C:\\Users\\fox\\AppData\\Roaming\\tetrio-desktop\\foxmod-assets', items: diskItems };
+        }
+        if (channel === 'twfoxtetrio-assets-open-folder') {
+          openedFolders.push('C:\\Users\\fox\\AppData\\Roaming\\tetrio-desktop\\foxmod-assets');
+          return { ok: true, path: 'C:\\Users\\fox\\AppData\\Roaming\\tetrio-desktop\\foxmod-assets', rootPath: 'C:\\Users\\fox\\AppData\\Roaming\\tetrio-desktop\\foxmod-assets' };
+        }
+        if (channel === 'twfoxtetrio-assets-delete-file') {
+          deletedFiles.push(arg.relPath);
+          savedFiles.delete(arg.relPath);
+          diskItems = diskItems.filter((x) => x.relPath !== arg.relPath);
+          return { ok: true };
+        }
+        return { ok: false, status: 404, base64: '' };
+      }
+    }
+  });
+
+  env.triggerDOMContentLoaded();
+  await env.context.__TWFOX_INTERNAL__.customAssets.ready();
+  env.elements.get('twfoxtetrio-home-foxmod').click();
+  env.elements.get('twfoxtetrio-card-config').click();
+
+  const openBtn = env.elements.get('twfoxtetrio-assets-open-folder-btn');
+  const rescanBtn = env.elements.get('twfoxtetrio-assets-rescan-folder-btn');
+  assert.ok(openBtn && rescanBtn, 'Assets Studio should render OPEN ASSETS FOLDER and RESCAN FOLDER buttons');
+
+  openBtn.click();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(openedFolders.length, 1);
+
+  rescanBtn.click();
+  await new Promise((r) => setTimeout(r, 30));
+
+  const assetsApi = env.context.__TWFOX_INTERNAL__.customAssets;
+  const state = assetsApi.getState();
+  assert.equal(state.folderPath, 'C:\\Users\\fox\\AppData\\Roaming\\tetrio-desktop\\foxmod-assets');
+  const dropSkin = state.installed.find((a) => a.name === 'CustomDropSkin');
+  const dropSfx = state.installed.find((a) => a.name === 'MyVoiceSfx');
+  assert.ok(dropSkin && dropSkin.capabilities.skin, 'Dropped PNG in skins/ should import as skin');
+  assert.ok(dropSfx && dropSfx.capabilities.sfx, 'Dropped folder in sfx/ should import as custom SFX pack');
+
+  await assetsApi.activateAsset(dropSfx.id);
+  const loadedSfx = customAssetsLogic.parseTpseObject({
+    sfxFiles: { harddrop: 'data:audio/ogg;base64,' + Buffer.from('OggS-test').toString('base64') }
+  });
+  assert.equal(loadedSfx.capabilities.sfx, true);
+
+  await assetsApi.uninstallAsset(dropSkin.id);
+  assert.deepEqual(deletedFiles, ['skins/CustomDropSkin.png']);
+});

@@ -475,6 +475,16 @@
     const gridUrl = normalizeDataUrl(obj.grid, 'image/png');
     const customSoundsUrl = normalizeDataUrl(obj.customSounds, 'audio/ogg');
     const atlas = normalizeSfxAtlasEntries(obj.customSoundAtlas);
+    let parsedSfxFiles = null;
+    if (obj.sfxFiles && typeof obj.sfxFiles === 'object') {
+      const cleanSfx = {};
+      for (const [k, v] of Object.entries(obj.sfxFiles)) {
+        const key = String(k || '').trim().toLowerCase();
+        const url = normalizeDataUrl(v, 'audio/ogg');
+        if (key && url) cleanSfx[key] = url;
+      }
+      if (Object.keys(cleanSfx).length > 0) parsedSfxFiles = cleanSfx;
+    }
 
     const skinDims = skinUrl ? readPngDimensionsFromDataUrl(skinUrl) : null;
     const ghostDims = ghostUrl ? readPngDimensionsFromDataUrl(ghostUrl) : null;
@@ -534,7 +544,7 @@
       board: Boolean(boardUrl),
       queue: Boolean(queueUrl),
       grid: Boolean(gridUrl),
-      sfx: Boolean(customSoundsUrl && Object.keys(atlas).length > 0),
+      sfx: Boolean((customSoundsUrl && Object.keys(atlas).length > 0) || parsedSfxFiles),
       background: backgrounds.length > 0,
       animated: Boolean(skinAnimUrl || ghostAnimUrl || (backgrounds[0] && (backgrounds[0].mediaType === 'video' || /gif/i.test(backgrounds[0].dataUrl))))
     };
@@ -566,7 +576,7 @@
       grid: gridUrl,
       sfxAtlasDataUrl: customSoundsUrl,
       sfxAtlasMap: atlas,
-      sfxFiles: null,
+      sfxFiles: parsedSfxFiles,
       backgrounds
     };
   }
@@ -670,7 +680,10 @@
       const jsonText = decodeUtf8(tpseEntry.bytes);
       return parseTpseObject(JSON.parse(jsonText), meta);
     }
+    return parseStructuredFileEntries(entries, meta);
+  }
 
+  function parseStructuredFileEntries(entries, meta) {
     const sfxFiles = {};
     const backgrounds = [];
     let skin = null;
@@ -682,38 +695,45 @@
     let grid = null;
 
     for (const entry of entries) {
-      const base = entry.lowerName.replace(/^.*\//, '');
-      if (!base) continue;
+      const rawName = String((entry && (entry.lowerName || entry.name || entry.fileName)) || '').toLowerCase();
+      const base = rawName.replace(/^.*\//, '');
+      const bytes = toUint8Array(entry && entry.bytes);
+      if (!base || bytes.length === 0) continue;
 
       if (SUPPORTED_AUDIO_EXT.test(base)) {
         const stem = base.replace(SUPPORTED_AUDIO_EXT, '');
         if (stem) {
-          sfxFiles[stem] = bytesToDataUrl(entry.bytes, 'audio/ogg');
+          const aMime = detectMimeFromBytes(bytes, 'audio/ogg');
+          sfxFiles[stem] = bytesToDataUrl(bytes, aMime.startsWith('audio/') ? aMime : 'audio/ogg');
         }
         continue;
       }
       if (SUPPORTED_VIDEO_EXT.test(base)) {
         backgrounds.push({
-          id: 'zip-bg-' + backgrounds.length,
+          id: 'dir-bg-' + backgrounds.length,
           filename: base,
           mediaType: 'video',
-          dataUrl: bytesToDataUrl(entry.bytes, base.endsWith('.webm') ? 'video/webm' : 'video/mp4')
+          dataUrl: bytesToDataUrl(bytes, base.endsWith('.webm') ? 'video/webm' : 'video/mp4')
         });
         continue;
       }
       if (!SUPPORTED_IMAGE_EXT.test(base)) continue;
 
-      const dataUrl = bytesToDataUrl(entry.bytes, 'image/png');
-      const dims = readImageDimensions(entry.bytes, detectMimeFromBytes(entry.bytes, 'image/png'));
-      if (base.includes('board')) {
+      const mime = detectMimeFromBytes(bytes, 'image/png');
+      const dataUrl = bytesToDataUrl(bytes, mime.startsWith('image/') ? mime : 'image/png');
+      const dims = readImageDimensions(bytes, mime);
+      if (base.includes('board') || (meta && meta.category === 'board' && !base.includes('queue') && !base.includes('grid') && !base.includes('skin') && !base.includes('mino') && !base.includes('ghost'))) {
         board = dataUrl;
       } else if (base.includes('queue')) {
         queue = dataUrl;
       } else if (base.includes('grid')) {
         grid = dataUrl;
-      } else if (/(?:^|[^a-z])(bg|background|backdrop)(?:[^a-z]|$)/i.test(base)) {
+      } else if (
+        (meta && meta.category === 'background') ||
+        /(?:^|[^a-z])(bg|background|backdrop)(?:[^a-z]|$)/i.test(base)
+      ) {
         backgrounds.push({
-          id: 'zip-bg-' + backgrounds.length,
+          id: 'dir-bg-' + backgrounds.length,
           filename: base,
           mediaType: 'image',
           dataUrl
@@ -729,7 +749,7 @@
         base.includes('connected') ||
         base.includes('tetrio') ||
         base.includes('block') ||
-        (!skin && entries.filter((x) => SUPPORTED_IMAGE_EXT.test(x.lowerName)).length <= 3)
+        (!skin && entries.filter((x) => SUPPORTED_IMAGE_EXT.test(String(x.lowerName || x.name || x.fileName || '').toLowerCase())).length <= 3)
       ) {
         if (!skin || base.includes('connected') || base.includes('2x') || (dims && (!skinDims || dims.width > skinDims.width))) {
           skin = dataUrl;
@@ -775,6 +795,15 @@
       sfxFiles: hasSfx ? sfxFiles : null,
       backgrounds
     };
+  }
+
+  function parseDirectoryPack(filesInput, meta) {
+    const list = Array.isArray(filesInput) ? filesInput : [];
+    const normalized = list.map((f) => ({
+      lowerName: String((f && (f.fileName || f.name || f.lowerName)) || '').toLowerCase(),
+      bytes: f && f.bytes
+    }));
+    return parseStructuredFileEntries(normalized, meta);
   }
 
   function parseSingleMediaPayload(bytesInput, fileName, mimeHint, meta) {
@@ -824,7 +853,7 @@
 
     const dims = readImageDimensions(bytes, mime);
     const hasStripGhost = Boolean(dims && dims.width >= dims.height * 6 && !/ghost/.test(lowerName));
-    if (lowerName.includes('board')) {
+    if (lowerName.includes('board') || (meta && meta.category === 'board' && !lowerName.includes('queue') && !lowerName.includes('grid'))) {
       return {
         category: 'board',
         capabilities: { skin: false, ghost: false, board: true, queue: false, grid: false, sfx: false, background: false, animated: false },
@@ -1029,6 +1058,73 @@
     return out;
   }
 
+  function mapCategoryToSubfolder(category, capabilities) {
+    const caps = capabilities || {};
+    if (caps.skin || caps.ghost || category === 'skin' || category === 'skins') return 'skins';
+    if (caps.board || caps.queue || caps.grid || category === 'board' || category === 'boards') return 'boards';
+    if (caps.sfx || category === 'sfx') return 'sfx';
+    if (caps.background || category === 'background' || category === 'backgrounds') return 'backgrounds';
+    return 'skins';
+  }
+
+  function sanitizeDiskStem(raw) {
+    const clean = String(raw || 'asset').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim();
+    return (clean && clean !== '.' && clean !== '..' ? clean : 'asset').slice(0, 80);
+  }
+
+  function serializeRecordForDisk(record) {
+    if (!record || !record.payload) return null;
+    const p = record.payload;
+    const caps = p.capabilities || {};
+    const subfolder = mapCategoryToSubfolder(record.category, caps);
+    const stem = sanitizeDiskStem(record.name || record.id);
+
+    // Pure single-background media exports directly as PNG/GIF/MP4/WEBM so it's easy to preview & swap
+    if (
+      subfolder === 'backgrounds' &&
+      !caps.skin &&
+      !caps.board &&
+      !caps.sfx &&
+      Array.isArray(p.backgrounds) &&
+      p.backgrounds.length === 1 &&
+      p.backgrounds[0] &&
+      p.backgrounds[0].dataUrl
+    ) {
+      const bg = p.backgrounds[0];
+      const extMatch = String(bg.filename || '').match(/\.(png|jpe?g|gif|webp|svg|mp4|webm|mov|m4v)$/i);
+      const mimeExt = bg.mediaType === 'video' ? (/webm/i.test(bg.dataUrl) ? '.webm' : '.mp4') : (/gif/i.test(bg.dataUrl) ? '.gif' : '.png');
+      const ext = extMatch ? '.' + extMatch[1].toLowerCase() : mimeExt;
+      return {
+        subfolder,
+        fileName: stem + ext,
+        bytes: dataUrlToBytes(bg.dataUrl)
+      };
+    }
+
+    const tpseObj = { version: 1, name: record.name || stem, author: record.author || 'FOXMOD' };
+    for (const k of ['skin', 'skinAnim', 'skinAnimMeta', 'ghost', 'ghostAnim', 'ghostAnimMeta', 'board', 'queue', 'grid']) {
+      if (p[k]) tpseObj[k] = p[k];
+    }
+    if (p.sfxAtlasDataUrl) tpseObj.customSounds = p.sfxAtlasDataUrl;
+    if (p.sfxAtlasMap) tpseObj.customSoundAtlas = p.sfxAtlasMap;
+    if (p.sfxFiles) tpseObj.sfxFiles = p.sfxFiles;
+    if (Array.isArray(p.backgrounds) && p.backgrounds.length > 0) {
+      tpseObj.backgrounds = p.backgrounds.map((bg) => ({
+        id: bg.id,
+        filename: bg.filename,
+        type: bg.mediaType,
+        data: bg.dataUrl
+      }));
+    }
+    const json = JSON.stringify(tpseObj);
+    const bytes = typeof Buffer === 'function' ? Buffer.from(json, 'utf8') : new TextEncoder().encode(json);
+    return {
+      subfolder,
+      fileName: stem + '.tpse',
+      bytes: toUint8Array(bytes)
+    };
+  }
+
   const api = {
     TETRIOPLUS_BASE_URL,
     TETRIOPLUS_CATALOG_URL,
@@ -1060,7 +1156,10 @@
     parseTpseObject,
     parseZipArchive,
     parseAssetZip,
+    parseDirectoryPack,
     parseSingleMediaPayload,
+    mapCategoryToSubfolder,
+    serializeRecordForDisk,
     parseTrsd,
     buildTrsd,
     encodeWavPcm16
