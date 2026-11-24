@@ -22,11 +22,27 @@
 
   const RACE_CSS = `
 #${CARD_ID}.is-race-selected {
-  transform: translate3d(calc(var(--x) * 36.5rem), -1.8rem, 0) perspective(700px) rotate(var(--br)) scale(1.03);
+  transform: translate3d(calc(var(--x) * 36.5rem), 0.5rem, 0) perspective(700px) rotate(var(--br)) scale(1);
+}
+#${CARD_ID}.is-race-selected:hover {
+  transform: translate3d(calc(var(--x) * 36.5rem), -2.5rem, 0) perspective(700px) rotate(var(--br)) scale(1);
   z-index: 2;
 }
+#${CARD_ID} .zenith_card_front,
+#${CARD_ID} .zenith_card_back,
+#${CARD_ID} .zenith_card_throb,
+#${CARD_ID} .zenith_card_outline {
+  width: 13.2rem !important;
+  height: 18rem !important;
+  max-width: 13.2rem !important;
+  max-height: 18rem !important;
+}
+#${CARD_ID} .zenith_card_outline {
+  display: none;
+}
 #${CARD_ID}.is-race-selected .zenith_card_outline {
-  filter: drop-shadow(0 0 12px rgba(255, 138, 42, 0.92));
+  display: block !important;
+  filter: hue-rotate(-14deg) saturate(1.25);
 }
 #${CARD_ID} .zenith_card_throb {
   opacity: 0;
@@ -34,18 +50,17 @@
 }
 #${CARD_ID}.is-race-selected .zenith_card_throb,
 #${CARD_ID}:hover .zenith_card_throb {
-  opacity: 0.9;
+  opacity: 0.72;
+}
+
+#zenithmenu.twfox-race-open #start_zenith {
+  display: none !important;
 }
 
 #${PARTY_ID} {
-  margin: 0.75rem 0 1.4rem;
-  padding: 0.95rem 1.05rem;
-  border-radius: 5px;
-  border: 2px solid rgba(255, 128, 44, 0.78);
-  background: linear-gradient(180deg, rgba(44, 17, 13, 0.94), rgba(22, 10, 14, 0.96));
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.58), inset 0 0 22px rgba(255, 118, 36, 0.12);
-  color: #fff3e6;
-  font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
+  position: relative;
+  text-align: left;
+  padding-top: 0.75rem;
 }
 #${PARTY_ID}.hidden {
   display: none !important;
@@ -54,178 +69,260 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
 }
 #${PARTY_ID} .twfox-race-title-group {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 #${PARTY_ID} .twfox-race-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 0.92rem;
   font-weight: 900;
-  letter-spacing: 0.06em;
-  color: #ffbe7b;
+  letter-spacing: 0.08em;
+  color: #b26040;
 }
 #${PARTY_ID} .twfox-race-code-pill {
-  padding: 3px 9px;
-  border-radius: 4px;
-  background: rgba(255, 123, 28, 0.2);
-  border: 1px solid rgba(255, 155, 72, 0.75);
-  color: #ffdcb5;
-  font-size: 0.95rem;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(178, 96, 64, 0.16);
+  border: 1px solid rgba(184, 58, 27, 0.7);
+  color: #ff9c6b;
+  font-size: 0.85rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   cursor: pointer;
 }
 #${PARTY_ID} .twfox-race-code-pill:hover {
-  background: rgba(255, 123, 28, 0.35);
-}
-#${PARTY_ID} .twfox-race-slots {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 10px;
-}
-@media (max-width: 780px) {
-  #${PARTY_ID} .twfox-race-slots {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-#${PARTY_ID} .twfox-race-slot {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 58px;
-  padding: 7px 8px;
-  border-radius: 4px;
-  border: 1.5px solid rgba(255, 156, 86, 0.32);
-  background: rgba(16, 8, 12, 0.72);
-}
-#${PARTY_ID} .twfox-race-slot.is-empty {
-  border-style: dashed;
-  border-color: rgba(255, 156, 86, 0.22);
-  color: rgba(255, 200, 160, 0.45);
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-#${PARTY_ID} .twfox-race-slot.is-ready {
-  border-color: rgba(65, 226, 130, 0.85);
-  background: rgba(14, 42, 24, 0.74);
-  box-shadow: inset 0 0 12px rgba(65, 226, 130, 0.16);
-}
-#${PARTY_ID} .twfox-race-slot-name {
-  font-size: 0.9rem;
-  font-weight: 900;
+  border-color: #ff9c6b;
   color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#${PARTY_ID} .twfox-race-slot-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-#${PARTY_ID} .twfox-race-badge-ready {
-  color: #5cf29c;
-}
-#${PARTY_ID} .twfox-race-badge-wait {
-  color: #ffb876;
-}
-#${PARTY_ID} .twfox-race-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 156, 86, 0.24);
 }
 #${PARTY_ID} .twfox-race-join-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 5px;
 }
 #${PARTY_ID} .twfox-race-input {
-  width: 112px;
-  padding: 5px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 155, 72, 0.55);
-  background: rgba(10, 6, 10, 0.85);
-  color: #fff2e3;
+  width: 6.8rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(178, 96, 64, 0.45);
+  background: rgba(0, 0, 0, 0.25);
+  color: #ffd2bd;
   font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
-  font-weight: 900;
-  font-size: 0.85rem;
+  font-weight: 800;
+  font-size: 0.78rem;
   text-transform: uppercase;
 }
+#${PARTY_ID} .twfox-race-input::placeholder {
+  color: rgba(178, 96, 64, 0.75);
+}
 #${PARTY_ID} .twfox-race-btn {
-  padding: 5px 11px;
-  border-radius: 4px;
-  border: 1.5px solid rgba(255, 146, 62, 0.7);
-  background: rgba(255, 123, 28, 0.22);
-  color: #ffdfb8;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid rgba(184, 58, 27, 0.7);
+  background: rgba(100, 42, 24, 0.55);
+  color: #ff9c6b;
   font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
   font-weight: 900;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   letter-spacing: 0.05em;
   cursor: pointer;
+  transition: filter 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 #${PARTY_ID} .twfox-race-btn:hover:not(:disabled) {
-  filter: brightness(1.2);
+  filter: brightness(1.25);
+  color: #ffffff;
+  border-color: #ff9c6b;
 }
 #${PARTY_ID} .twfox-race-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.42;
   cursor: default;
 }
-#${PARTY_ID} .twfox-race-btn.is-ready-cta {
-  padding: 7px 20px;
-  font-size: 0.95rem;
-  border-color: #ff8e3c;
-  background: linear-gradient(180deg, #ff7b1c, #cc4e07);
-  color: #ffffff;
+#${PARTY_ID} .twfox-race-slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 1rem;
+  position: relative;
 }
-#${PARTY_ID} .twfox-race-btn.is-ready-cta.is-on {
-  border-color: #5cf29c;
-  background: linear-gradient(180deg, #2ecc71, #198749);
+#${PARTY_ID} .twfox-race-slots::after {
+  content: '';
+  position: absolute;
+  top: 0.1rem;
+  bottom: 0.1rem;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-1px);
+  background-color: rgba(184, 58, 27, 0.55);
+  pointer-events: none;
+}
+#${PARTY_ID} .twfox-race-slot {
+  position: relative;
+  height: 3.35rem;
+  padding-left: 3.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+#${PARTY_ID} .twfox-race-avatar {
+  position: absolute;
+  top: 0.12rem;
+  left: 0;
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: 4px;
+  object-fit: cover;
+  background: rgba(255, 140, 72, 0.14);
+}
+#${PARTY_ID} .twfox-race-avatar-badge {
+  position: absolute;
+  top: 0.12rem;
+  left: 0;
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: 4px;
+  background: rgba(130, 52, 26, 0.45);
+  border: 1px solid rgba(255, 156, 107, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.1rem;
+  color: #ffb992;
+}
+#${PARTY_ID} .twfox-race-avatar-stub {
+  position: absolute;
+  top: 0.18rem;
+  left: 0.06rem;
+  width: 2.95rem;
+  height: 2.95rem;
+  box-sizing: border-box;
+  border: 2.5px dotted #b26040;
+  border-radius: 6px;
+}
+#${PARTY_ID} .twfox-race-slot-name {
+  font-weight: 900;
+  font-size: 1.05rem;
+  line-height: 1.1;
+  color: #ff9c6b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#${PARTY_ID} .twfox-race-slot.is-empty .twfox-race-slot-name {
+  font-weight: 500;
+  font-size: 0.92rem;
+  color: #b26040;
+}
+#${PARTY_ID} .twfox-race-slot-sub {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #b26040;
+  margin-top: 2px;
+}
+#${PARTY_ID} .twfox-race-slot.is-ready .twfox-race-slot-sub {
+  font-size: 0.9rem;
+  font-weight: 900;
   color: #ffffff;
+  text-shadow: 0 0 6px #ff9c6b;
 }
 #${PARTY_ID} .twfox-race-friends {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 0.55rem;
   align-items: center;
+}
+#${PARTY_ID} .twfox-race-friends:empty {
+  display: none;
 }
 #${PARTY_ID} .twfox-race-friend-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 130, 44, 0.45);
-  background: rgba(26, 12, 16, 0.8);
-  font-size: 0.78rem;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(83, 35, 20, 0.52);
+  border: 1px solid rgba(184, 58, 27, 0.55);
+  color: #ffd2bd;
+  font-size: 0.74rem;
   font-weight: 800;
 }
+#${PARTY_ID} .twfox-race-ready-bar {
+  display: block;
+  width: calc(100% + 2rem + 6px);
+  text-align: center;
+  padding: 0.75rem 1rem 0.55rem;
+  margin: calc(-1rem - 3px);
+  margin-top: 0.85rem;
+  border: 0;
+  background-color: #532314;
+  border-left: 3px solid #8d2e1b;
+  border-bottom: 3px solid #2f0a0a;
+  border-right: 3px solid #37160d;
+  border-top: 3px solid #8d2e1b;
+  box-shadow: 0 8px #210707;
+  cursor: pointer;
+  color: #ffd2bd;
+  font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
+  transition: 180ms transform, 180ms filter, 180ms box-shadow, 180ms background-color;
+}
+#${PARTY_ID} .twfox-race-ready-bar:hover:not(:disabled) {
+  box-shadow: 0 6px #210707;
+  transform: translateY(2px);
+  filter: brightness(1.18);
+}
+#${PARTY_ID} .twfox-race-ready-bar:active:not(:disabled),
+#${PARTY_ID} .twfox-race-ready-bar.is-on {
+  background-color: #420e0d;
+  box-shadow: 0 4px #210707;
+  transform: translateY(4px);
+}
+#${PARTY_ID} .twfox-race-ready-bar h1 {
+  margin: 0 !important;
+  font-size: 1.55rem !important;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #ffd2bd !important;
+  text-shadow: 0 0 12px rgba(255, 156, 107, 0.45);
+}
+#${PARTY_ID} .twfox-race-ready-bar.is-on h1 {
+  color: #a8ffcb !important;
+  text-shadow: 0 0 14px rgba(92, 242, 156, 0.65);
+}
 #${PARTY_ID} .twfox-race-status {
-  margin-top: 7px;
-  font-size: 0.82rem;
+  margin-top: 2px;
+  font-size: 0.72rem;
   font-weight: 800;
-  color: #ffd39e;
-  letter-spacing: 0.04em;
+  color: #b26040;
+  letter-spacing: 0.08em;
+}
+#${PARTY_ID} .twfox-race-ready-bar.is-on .twfox-race-status {
+  color: #ffd2bd;
+}
+.twfox-race-floating-back {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 999998;
+  padding: 9px 18px;
+  border-radius: 4px;
+  border: 2px solid #8d2e1b;
+  background: #532314;
+  color: #ffd2bd;
+  font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.twfox-race-floating-back.hidden {
+  display: none !important;
 }
 
 #${DOCK_ID} {
@@ -566,6 +663,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let joinInputEl = null;
     let joinBtnEl = null;
     let readyBtnEl = null;
+    let readyLabelEl = null;
     let leaveBtnEl = null;
     let statusEl = null;
     let dockEl = null;
@@ -925,8 +1023,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
     function renderParty() {
       if (!partyEl) return;
+      const zMenu = document.getElementById('zenithmenu');
       const snap = session ? session.getSnapshot() : null;
       const showParty = Boolean(cardSelected && (racePhase === 'idle' || racePhase === 'countdown'));
+      if (zMenu) {
+        setClass(zMenu, 'twfox-race-open', showParty);
+      }
       setClass(partyEl, 'hidden', !showParty);
       if (!showParty) return;
 
@@ -947,6 +1049,9 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         codePillEl.textContent = roomCode ? `#${roomCode}` : '#LOCAL';
       }
 
+      const selfAvatarEl = document.getElementById('zenith_party_self_avatar') || document.getElementById('me_avatar');
+      const selfAvatarSrc = (selfAvatarEl && selfAvatarEl.src) || '';
+
       if (slotsEl) {
         slotsEl.innerHTML = '';
         for (let i = 0; i < raceLogic.MAX_RACE_PLAYERS; i++) {
@@ -954,27 +1059,30 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           if (!p) {
             slotsEl.appendChild(
               el('div', { className: 'twfox-race-slot is-empty' }, [
-                el('span', { text: `SLOT ${i + 1}/4 · INVITE FRIEND` })
+                el('div', { className: 'twfox-race-avatar-stub' }),
+                el('div', { className: 'twfox-race-slot-name', text: 'WAITING FOR PLAYER' }),
+                el('div', { className: 'twfox-race-slot-sub', text: `SLOT ${i + 1}/4 · INVITE FRIEND` })
               ])
             );
             continue;
           }
           const slotClasses = ['twfox-race-slot', p.ready ? 'is-ready' : ''].filter(Boolean).join(' ');
           const cleanName = String(p.name || 'PLAYER');
+          const avatarNode = p.id === selfId && selfAvatarSrc
+            ? el('img', { className: 'twfox-race-avatar', attrs: { src: selfAvatarSrc, alt: '' } })
+            : el('div', { className: 'twfox-race-avatar-badge', text: cleanName.slice(0, 2).toUpperCase() });
           slotsEl.appendChild(
             el('div', { className: slotClasses }, [
+              avatarNode,
               el('div', {
                 className: 'twfox-race-slot-name twfox-paw-target twfox-player-name',
                 text: cleanName + (p.id === selfId ? ' (YOU)' : ''),
                 attrs: { 'data-username': cleanName.toLowerCase() }
               }),
-              el('div', { className: 'twfox-race-slot-meta' }, [
-                el('span', { text: p.isHost ? 'HOST' : 'RACER' }),
-                el('span', {
-                  className: p.ready ? 'twfox-race-badge-ready' : 'twfox-race-badge-wait',
-                  text: p.ready ? 'READY ✓' : 'WAIT'
-                })
-              ])
+              el('div', {
+                className: 'twfox-race-slot-sub',
+                text: p.ready ? 'READY!' : (p.isHost ? 'HOST' : 'WAITING')
+              })
             ])
           );
         }
@@ -984,8 +1092,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const myReady = Boolean(me ? me.ready : (snap && snap.ready));
       if (readyBtnEl) {
         setClass(readyBtnEl, 'is-on', myReady);
-        readyBtnEl.textContent = myReady ? 'READY ✓' : 'READY';
         readyBtnEl.disabled = !session;
+      }
+      if (readyLabelEl) {
+        readyLabelEl.textContent = racePhase === 'countdown'
+          ? `STARTING ${Math.max(1, countdownRemainingSec)}`
+          : (myReady ? 'READY ✓' : 'READY');
       }
 
       if (friendsEl) {
@@ -996,7 +1108,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           : [];
         if (mutuals.length > 0 && players.length < raceLogic.MAX_RACE_PLAYERS) {
           const label = el('span', {
-            style: 'font-size:0.74rem;font-weight:800;color:rgba(255,220,185,0.75);',
+            style: 'font-size:0.72rem;font-weight:800;color:#b26040;letter-spacing:0.06em;',
             text: 'INVITE:'
           });
           friendsEl.appendChild(label);
@@ -1032,11 +1144,11 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         } else if (racePhase === 'countdown') {
           statusEl.textContent = `STARTING IN ${Math.max(1, countdownRemainingSec)}...`;
         } else if (activeList.length < raceLogic.MIN_RACE_PLAYERS) {
-          statusEl.textContent = `NEED AT LEAST 2 RACERS (${activeList.length}/4)`;
+          statusEl.textContent = `THE RACE (${activeList.length}/4) · NEED AT LEAST 2 RACERS`;
         } else if (readyCount === activeList.length) {
           statusEl.textContent = 'ALL PLAYERS READY — LAUNCHING TOGETHER!';
         } else {
-          statusEl.textContent = `WAITING FOR EVERYONE TO CLICK READY (${readyCount}/${activeList.length})`;
+          statusEl.textContent = `THE RACE (${activeList.length}/4) · READY ${readyCount}/${activeList.length}`;
         }
       }
 
@@ -1364,10 +1476,9 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       if (!backToSpecBtnEl && document.body) {
         backToSpecBtnEl = el('button', {
           id: 'twfoxtetrio-race-back-spec-btn',
-          className: 'twfox-race-next-btn hidden',
+          className: 'twfox-race-floating-back hidden',
           type: 'button',
-          text: 'BACK TO SPECTATOR',
-          style: 'position:fixed;right:18px;bottom:18px;z-index:999998;padding:9px 18px;font-size:0.86rem;'
+          text: 'BACK TO SPECTATOR'
         });
         backToSpecBtnEl.addEventListener('click', () => {
           peekMyResult = false;
@@ -1557,12 +1668,18 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
             }
           });
 
+          readyLabelEl = el('h1', { text: 'READY' });
+          statusEl = el('div', {
+            id: 'twfoxtetrio-race-status',
+            className: 'twfox-race-status',
+            text: 'THE RACE (1/4) · NEED AT LEAST 2 RACERS'
+          });
           readyBtnEl = el('button', {
             id: 'twfoxtetrio-race-ready-btn',
-            className: 'twfox-race-btn is-ready-cta',
+            className: 'twfox-race-ready-bar',
             type: 'button',
-            text: 'READY'
-          });
+            attrs: { 'data-hover': 'hover', 'data-hit': 'confirm' }
+          }, [readyLabelEl, statusEl]);
           readyBtnEl.addEventListener('click', () => {
             statusOverride = '';
             const s = session || ensureHostSessionCreated();
@@ -1576,12 +1693,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
             }
           });
 
-          statusEl = el('div', {
-            id: 'twfoxtetrio-race-status',
-            className: 'twfox-race-status',
-            text: 'NEED AT LEAST 2 RACERS (1/4)'
-          });
-
           partyEl = el('div', {
             id: PARTY_ID,
             className: 'scroller_block hidden',
@@ -1589,24 +1700,27 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           }, [
             el('div', { className: 'twfox-race-hdr' }, [
               el('div', { className: 'twfox-race-title-group' }, [
-                el('h2', { className: 'twfox-race-title', text: 'THE RACE' }),
+                el('span', { className: 'twfox-race-title', text: 'THE RACE' }),
                 codePillEl
               ]),
-              leaveBtnEl
+              el('div', { className: 'twfox-race-join-row' }, [joinInputEl, joinBtnEl, leaveBtnEl])
             ]),
             slotsEl,
-            el('div', { className: 'twfox-race-controls' }, [
-              el('div', { className: 'twfox-race-join-row' }, [joinInputEl, joinBtnEl]),
-              readyBtnEl
-            ]),
             friendsEl,
-            statusEl
+            readyBtnEl
           ]);
 
           if (deckBlock && deckBlock.parentNode === slides) {
             slides.insertBefore(partyEl, deckBlock);
           } else {
             slides.appendChild(partyEl);
+          }
+          const duoCardNode = document.getElementById('zenith-duo-card');
+          if (duoCardNode && !duoCardNode.__twfoxRaceSyncBound) {
+            duoCardNode.__twfoxRaceSyncBound = true;
+            duoCardNode.addEventListener('click', () => {
+              if (cardSelected) selectRaceCard(false);
+            });
           }
         } else {
           partyEl = document.getElementById(PARTY_ID);

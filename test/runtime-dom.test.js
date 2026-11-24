@@ -3634,10 +3634,13 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     assert.ok(raceCard, 'THE RACE tarot card should mount inside #zenith_deck_cards');
     assert.ok(raceInfo, 'data-for="race" info block should mount inside #zenith_deck_infos');
 
-    // Selecting the card MUST NOT set TETR.IO's .active server-mod class
+    // Selecting the card MUST NOT set TETR.IO's .active server-mod class, and hides #start_zenith via .twfox-race-open (Duo style)
+    const backSpecBtn = env.elements.get('twfoxtetrio-race-back-spec-btn');
+    assert.equal(backSpecBtn.classList.contains('hidden'), true, 'Floating back-to-spectator button must stay hidden outside spectator peek');
     raceCard.click();
     assert.equal(raceCard.classList.contains('active'), false);
     assert.equal(raceCard.classList.contains('is-race-selected'), true);
+    assert.equal(zMenu.classList.contains('twfox-race-open'), true);
     const partyEl = env.elements.get('twfoxtetrio-race-party');
     assert.equal(partyEl.classList.contains('hidden'), false);
 

@@ -671,17 +671,20 @@
     if ((m = trimmed.match(/^Sent orange FOXMOD invite to (.+?)! \((\d+)s cooldown\)$/i))) {
       return `¡Invitación naranja enviada a ${m[1]}! (espera ${m[2]}s)`;
     }
+    if ((m = trimmed.match(/^STARTING (\d+)$/i))) {
+      return `INICIANDO ${m[1]}`;
+    }
     if ((m = trimmed.match(/^STARTING IN (\d+)\.\.\.$/i))) {
       return `INICIANDO EN ${m[1]}...`;
     }
-    if ((m = trimmed.match(/^NEED AT LEAST 2 RACERS \((\d+)\/(\d+)\)$/i))) {
-      return `SE NECESITAN AL MENOS 2 CORREDORES (${m[1]}/${m[2]})`;
+    if ((m = trimmed.match(/^THE RACE \((\d+\/\d+)\) · NEED AT LEAST 2 RACERS$/i))) {
+      return `LA CARRERA (${m[1]}) · FALTAN CORREDORES (MÍN. 2)`;
     }
-    if ((m = trimmed.match(/^WAITING FOR EVERYONE TO CLICK READY \((\d+)\/(\d+)\)$/i))) {
-      return `ESPERANDO A QUE TODOS PULSEN LISTO (${m[1]}/${m[2]})`;
+    if ((m = trimmed.match(/^THE RACE \((\d+\/\d+)\) · READY (\d+\/\d+)$/i))) {
+      return `LA CARRERA (${m[1]}) · LISTOS ${m[2]}`;
     }
     if ((m = trimmed.match(/^SLOT (\d+\/\d+) · INVITE FRIEND$/i))) {
-      return `ESPACIO ${m[1]} · INVITA A UN AMIGO`;
+      return `ESPACIO ${m[1]} · INVITAR AMIGO`;
     }
     if ((m = trimmed.match(/^THE RACE · LIVE \(([^)]+)\)$/i))) {
       return `LA CARRERA · EN VIVO (${m[1]})`;

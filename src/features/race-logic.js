@@ -296,52 +296,55 @@
   }
 
   function buildRaceCardArtUrls() {
+    // Match official TETR.IO card PNG sheet dimensions (550x770) with identical transparent halo margins
+    // around the solid card frame [x=39, y=60, w=472, h=649] so it aligns seamlessly in #zenith_deck_cards.
     const frontSvg =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 360">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="550" height="770" viewBox="0 0 550 770">' +
       '<defs>' +
       '<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0%" stop-color="#2c120d"/>' +
-      '<stop offset="52%" stop-color="#190b16"/>' +
-      '<stop offset="100%" stop-color="#0d0811"/>' +
+      '<stop offset="0%" stop-color="#351610"/>' +
+      '<stop offset="55%" stop-color="#1d0c15"/>' +
+      '<stop offset="100%" stop-color="#0f070e"/>' +
       '</linearGradient>' +
       '<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">' +
-      '<stop offset="0%" stop-color="#ffe18c"/>' +
-      '<stop offset="50%" stop-color="#ff8c3a"/>' +
-      '<stop offset="100%" stop-color="#ff4d6d"/>' +
+      '<stop offset="0%" stop-color="#ffe2a8"/>' +
+      '<stop offset="55%" stop-color="#ff944d"/>' +
+      '<stop offset="100%" stop-color="#ff5e4d"/>' +
       '</linearGradient>' +
       '</defs>' +
-      '<rect x="0" y="0" width="264" height="360" rx="14" fill="url(#bg)"/>' +
-      '<rect x="10" y="10" width="244" height="340" rx="10" fill="none" stroke="url(#gold)" stroke-width="3"/>' +
-      '<rect x="18" y="18" width="228" height="324" rx="6" fill="none" stroke="rgba(255,190,120,0.35)" stroke-width="1.5"/>' +
-      '<text x="132" y="44" text-anchor="middle" fill="#ffd89c" font-family="sans-serif" font-weight="900" font-size="14" letter-spacing="4">IX · FOXMOD</text>' +
-      '<path d="M132 72 L147 96 L176 82 L166 116 L98 116 L88 82 L117 96 Z" fill="url(#gold)"/>' +
-      '<g fill="rgba(255,140,66,0.22)" stroke="url(#gold)" stroke-width="2">' +
-      '<rect x="34" y="156" width="38" height="114" rx="3"/>' +
-      '<rect x="82" y="138" width="38" height="132" rx="3"/>' +
-      '<rect x="144" y="128" width="38" height="142" rx="3"/>' +
-      '<rect x="192" y="146" width="38" height="124" rx="3"/>' +
+      '<rect x="39" y="60" width="472" height="649" rx="18" fill="url(#bg)"/>' +
+      '<rect x="53" y="74" width="444" height="621" rx="12" fill="none" stroke="url(#gold)" stroke-width="5"/>' +
+      '<rect x="65" y="86" width="420" height="597" rx="7" fill="none" stroke="rgba(255,190,140,0.34)" stroke-width="2"/>' +
+      '<text x="86" y="132" fill="#ffd9b3" font-family="sans-serif" font-weight="900" font-size="30" letter-spacing="2">IX</text>' +
+      '<path d="M446 104 L454 118 L470 109 L465 130 L427 130 L422 109 L438 118 Z" fill="url(#gold)"/>' +
+      '<path d="M275 152 L297 188 L338 168 L324 216 L226 216 L212 168 L253 188 Z" fill="url(#gold)"/>' +
+      '<g fill="rgba(255,146,72,0.18)" stroke="url(#gold)" stroke-width="3.5">' +
+      '<rect x="98" y="294" width="68" height="220" rx="5"/>' +
+      '<rect x="190" y="262" width="68" height="252" rx="5"/>' +
+      '<rect x="292" y="242" width="68" height="272" rx="5"/>' +
+      '<rect x="384" y="278" width="68" height="236" rx="5"/>' +
       '</g>' +
-      '<g fill="#ffd89c">' +
-      '<rect x="44" y="210" width="18" height="18" rx="2"/><rect x="44" y="232" width="18" height="18" rx="2"/>' +
-      '<rect x="92" y="184" width="18" height="18" rx="2"/><rect x="92" y="206" width="18" height="18" rx="2"/>' +
-      '<rect x="154" y="154" width="18" height="18" rx="2"/><rect x="154" y="176" width="18" height="18" rx="2"/>' +
-      '<rect x="202" y="196" width="18" height="18" rx="2"/><rect x="202" y="218" width="18" height="18" rx="2"/>' +
+      '<g fill="#ffdcb8">' +
+      '<rect x="116" y="390" width="32" height="32" rx="3"/><rect x="116" y="432" width="32" height="32" rx="3"/>' +
+      '<rect x="208" y="346" width="32" height="32" rx="3"/><rect x="208" y="388" width="32" height="32" rx="3"/>' +
+      '<rect x="310" y="296" width="32" height="32" rx="3"/><rect x="310" y="338" width="32" height="32" rx="3"/>' +
+      '<rect x="402" y="366" width="32" height="32" rx="3"/><rect x="402" y="408" width="32" height="32" rx="3"/>' +
       '</g>' +
-      '<text x="132" y="308" text-anchor="middle" fill="#fff2d6" font-family="sans-serif" font-weight="900" font-size="23" letter-spacing="2">THE RACE</text>' +
-      '<text x="132" y="328" text-anchor="middle" fill="#ff9e64" font-family="sans-serif" font-weight="800" font-size="11" letter-spacing="2">4P TOWER RACE</text>' +
+      '<text x="275" y="592" text-anchor="middle" fill="#fff0db" font-family="sans-serif" font-weight="900" font-size="42" letter-spacing="4">THE RACE</text>' +
+      '<text x="275" y="632" text-anchor="middle" fill="#ff9e6b" font-family="sans-serif" font-weight="800" font-size="20" letter-spacing="4">4P TOWER RACE</text>' +
       '</svg>';
 
     const backSvg =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 360">' +
-      '<rect x="0" y="0" width="264" height="360" rx="14" fill="#180a10"/>' +
-      '<rect x="10" y="10" width="244" height="340" rx="10" fill="none" stroke="#8d361d" stroke-width="3"/>' +
-      '<circle cx="132" cy="180" r="46" fill="none" stroke="#ff7b1c" stroke-width="2.5" opacity="0.65"/>' +
-      '<circle cx="132" cy="180" r="18" fill="#ff7b1c" opacity="0.35"/>' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="550" height="770" viewBox="0 0 550 770">' +
+      '<rect x="39" y="60" width="472" height="649" rx="18" fill="#180a0f"/>' +
+      '<rect x="53" y="74" width="444" height="621" rx="12" fill="none" stroke="#8d361d" stroke-width="5"/>' +
+      '<circle cx="275" cy="385" r="88" fill="none" stroke="#ff7b1c" stroke-width="4" opacity="0.65"/>' +
+      '<circle cx="275" cy="385" r="32" fill="#ff7b1c" opacity="0.35"/>' +
       '</svg>';
 
     const throbSvg =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 360">' +
-      '<rect x="6" y="6" width="252" height="348" rx="12" fill="none" stroke="#ff9642" stroke-width="6" opacity="0.75"/>' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="550" height="770" viewBox="0 0 550 770">' +
+      '<rect x="35" y="56" width="480" height="657" rx="20" fill="none" stroke="#ff9642" stroke-width="9" opacity="0.78"/>' +
       '</svg>';
 
     return {
