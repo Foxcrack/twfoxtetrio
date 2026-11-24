@@ -303,7 +303,7 @@
   }
 
   const scoreDetector = blitzLogic.createDoubleCallScoreDetector({ maxGapMs: 2.5 });
-  const timerDetector = fortyLinesLogic.createFortyLinesTimerDetector({ maxPairGapMs: 1.5, maxTickGapMs: 2.0 });
+  const timerDetector = fortyLinesLogic.createFortyLinesTimerDetector({ maxPairGapMs: 6.0, maxTickGapMs: 12.0 });
   const rosterTracker = multiplayerLogic.createMultiplayerRosterTracker();
 
   function refreshSelfUsername() {
@@ -378,6 +378,7 @@
     const modeName = entry[3];
     scoreDetector.reset();
     timerDetector.reset();
+    live40lCounterActive = false;
 
     if (modeName === 'Blitz') {
       exitPracticeZenSession(false);
@@ -514,6 +515,7 @@
       if (
         state.inGame &&
         state.mode === '40l' &&
+        !live40lCounterActive &&
         arguments.length === 2 &&
         fillString === '0' &&
         (maxLength === 3 || maxLength === 2)
@@ -540,6 +542,7 @@
 
   let activeZenWrapper = null;
   let lastGameWrapper = null;
+  let live40lCounterActive = false;
   let applyingZenMods = false;
   let hookAppliedDuringPull = false;
   let practiceZenRequested = false;
@@ -778,6 +781,64 @@
     emitState();
   }
 
+  function attachLocalCounterHook(value) {
+    const board = value && value.parent;
+    const ctx = board && board.ctx;
+    if (!ctx || !ctx.ctm || typeof ctx.ctm.UpdateCounter !== 'function') return;
+    if (ctx.iom && typeof ctx.iom.IsLocal === 'function' && !ctx.iom.IsLocal()) return;
+
+    const origUpdateCounter = ctx.ctm.UpdateCounter;
+    if (origUpdateCounter.__twfoxWrapped) return;
+
+    function wrappedUpdateCounter(counterName, counterValue) {
+      if (
+        state.inGame &&
+        state.mode === '40l' &&
+        counterName === 'stopwatch' &&
+        (!ctx.iom || typeof ctx.iom.IsLocal !== 'function' || ctx.iom.IsLocal())
+      ) {
+        const timeState = ctx.gsm && ctx.gsm.time;
+        const esmState = ctx.esm;
+        let exactMs = null;
+        if (timeState && !timeState.locked) {
+          if (timeState.zero) {
+            exactMs = 0;
+          } else if (
+            esmState &&
+            typeof esmState.frame === 'number' &&
+            typeof timeState.frameoffset === 'number'
+          ) {
+            exactMs = Math.max(0, Math.round(((esmState.frame - timeState.frameoffset) / 60) * 1000));
+          }
+        }
+        if (exactMs === null && (!timeState || !timeState.locked)) {
+          const cleaned = String(counterValue == null ? '' : counterValue).replace(/\f\d*/g, '').trim();
+          const parsed = fortyLinesLogic.parseTimeText(cleaned);
+          if (parsed > 0 || /^0+:00(\.0+)?$/.test(cleaned)) {
+            exactMs = parsed;
+          }
+        }
+        if (exactMs !== null) {
+          live40lCounterActive = true;
+          if (exactMs !== state.currentTimeMs) {
+            state.currentTimeMs = exactMs;
+            emitState();
+          }
+        }
+      }
+      return origUpdateCounter.apply(this, arguments);
+    }
+
+    try {
+      Object.defineProperty(wrappedUpdateCounter, '__twfoxWrapped', {
+        value: true,
+        enumerable: false
+      });
+    } catch (_) {}
+
+    ctx.ctm.UpdateCounter = wrappedUpdateCounter;
+  }
+
   function installMapHook() {
     const origMapSet = Map.prototype.set;
     if (origMapSet.__twfoxWrapped) return;
@@ -791,6 +852,7 @@
         rosterTracker.observeMapSet(this, key, value);
         attachZenGameWrapper(value);
         attachSoloPracticeWrapper(value);
+        attachLocalCounterHook(value);
       }
       return result;
     }
@@ -931,6 +993,7 @@
           state.currentTimeMs = 0;
           scoreDetector.reset();
           timerDetector.reset();
+          live40lCounterActive = false;
           if (prevMode === 'blitz' || prevMode === '40l') {
             needEmit = true;
           }
@@ -1013,7 +1076,7 @@
   }
 
   const api = {
-    version: '0.6.16',
+    version: '0.6.17',
     getState() {
       refreshSelfUsername();
       return {

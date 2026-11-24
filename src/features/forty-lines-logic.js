@@ -157,8 +157,8 @@
    * @param {{ maxPairGapMs?: number, maxTickGapMs?: number }} [options]
    */
   function createFortyLinesTimerDetector(options) {
-    const maxPairGapMs = options && typeof options.maxPairGapMs === 'number' ? options.maxPairGapMs : 1.5;
-    const maxTickGapMs = options && typeof options.maxTickGapMs === 'number' ? options.maxTickGapMs : 2.0;
+    const maxPairGapMs = options && typeof options.maxPairGapMs === 'number' ? options.maxPairGapMs : 6.0;
+    const maxTickGapMs = options && typeof options.maxTickGapMs === 'number' ? options.maxTickGapMs : 12.0;
 
     let pendingMs = null;
     let pendingMsTime = -Infinity;

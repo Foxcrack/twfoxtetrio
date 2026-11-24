@@ -4133,11 +4133,9 @@ test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on Q
   env.body.appendChild(leagueSelfEl);
   publishedMqtt.length = 0;
 
-  env.body.classList.remove('innormalmulti');
+  env.body.classList.add('inzenith', 'innormalmulti', 'multiplexed', 'ingame');
   zMenu.classList.remove('hidden');
-  env.body.classList.add('inzenith');
-  env.body.classList.add('multiplexed');
-  env.body.classList.add('ingame');
+  zMenu.classList.add('rolledup');
   env.menus.setAttribute('data-menu-type', 'multi');
   env.tickIntervals();
 
@@ -4149,6 +4147,7 @@ test('THE RACE renders player avatars, blocks BUSY/IN-TL invites, cleans up on Q
   const joinPromise = zenRace.joinByInviteCode('ABCD');
   assert.equal(zenRace.getState().cardSelected, true);
   assert.equal(zenRace.getState().session.role, 'client');
+  assert.equal(zMenu.classList.contains('rolledup'), false, 'Accepting invite while spectating QP unrolls card panel');
 
   if (zenRace.getState().session) {
     leaveZenithBtn.click();
@@ -4208,4 +4207,66 @@ test('renderRacePlayfield draws HOLD and NEXT 5 wings for compact dock and spect
   assert.equal(drawnTexts.includes('HOLD'), true, 'Spectator board canvas should render HOLD header');
   assert.equal(drawnTexts.includes('NEXT'), true, 'Spectator board canvas should render NEXT header');
   assert.equal(filledRects > 20, true, 'HOLD and NEXT minos plus board well should be painted');
+});
+
+test('bundled mod tracks 40 Lines via local ctm.UpdateCounter across 30s+ without padStart drift', () => {
+  const env = createFakeDomEnvironment('https:');
+  const { context } = env;
+
+  vm.runInContext(`window._paq = window._paq || [];`, context);
+  const pb40 = env.elements.get('pbdisplay_40l_inner');
+  if (pb40) {
+    pb40.textContent = '0:45.000';
+    pb40.classList.remove('hidden');
+  }
+  env.triggerDOMContentLoaded();
+
+  const hud = env.elements.get('twfoxtetrio-top-hud');
+  const valueEl = hud.querySelector('.twfox-delta-value');
+
+  env.menus.classList.add('hidden');
+  env.menus.setAttribute('data-menu-type', 'none');
+  vm.runInContext(`
+    window.__testBoardMap = new Map();
+    window.__testLocalCtx = {
+      iom: { IsLocal: () => true },
+      esm: { frame: 0 },
+      gsm: { time: { zero: true, locked: false, frameoffset: 0 } },
+      ctm: { UpdateCounter: function () {} }
+    };
+    window.__testBoardMap.set('boardsides', { parent: { ctx: window.__testLocalCtx } });
+    window._paq.push(['trackEvent', 'Activity', 'Start Game', '40 Lines']);
+    window.__testLocalCtx.ctm.UpdateCounter('stopwatch', '0:00\\f3.000');
+  `, context);
+
+  assert.equal(valueEl.textContent, '0:45.000');
+
+  // Advance past 30 seconds and >60 seconds; spurious padStart noise must not corrupt ctm tracking
+  vm.runInContext(`
+    window.__testLocalCtx.gsm.time.zero = false;
+    window.__testLocalCtx.esm.frame = 1945;
+    window.__testLocalCtx.ctm.UpdateCounter('stopwatch', '0:32\\f3.417');
+    String(999).padStart(3, '0');
+    String(55).padStart(2, '0');
+  `, context);
+  assert.equal(context.__TWFOX_TETRIO__.getState().currentTimeMs, 32417);
+  assert.equal(hud.getAttribute('data-state'), 'ahead');
+  assert.equal(valueEl.textContent, '0:12.583');
+
+  vm.runInContext(`
+    window.__testLocalCtx.esm.frame = 3630;
+    window.__testLocalCtx.ctm.UpdateCounter('stopwatch', '1:00\\f3.500');
+  `, context);
+  assert.equal(context.__TWFOX_TETRIO__.getState().currentTimeMs, 60500);
+  assert.equal(hud.getAttribute('data-state'), 'behind');
+  assert.equal(valueEl.textContent, '+0:15.500');
+
+  // Retry (R) resets clean 0:00.000
+  vm.runInContext(`
+    window.__testLocalCtx.gsm.time.zero = true;
+    window.__testLocalCtx.ctm.UpdateCounter('stopwatch', '0:00\\f3.000');
+  `, context);
+  assert.equal(context.__TWFOX_TETRIO__.getState().currentTimeMs, 0);
+  assert.equal(hud.getAttribute('data-state'), 'ahead');
+  assert.equal(valueEl.textContent, '0:45.000');
 });

@@ -2066,12 +2066,14 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const rState = api.getState ? api.getState() : null;
       const zMenu = document.getElementById('zenithmenu');
       const inZenithBody = Boolean(document.body && document.body.classList && document.body.classList.contains('inzenith'));
-      const inOfficialCustomOrTl = Boolean(
-        document.body && document.body.classList && document.body.classList.contains('innormalmulti')
-      ) || Boolean(rState && rState.inMultiplayer && !(rState && rState.inZenith) && !inZenithBody);
+      const inOfficialCustomOrTl = !inZenithBody && (
+        Boolean(document.body && document.body.classList && document.body.classList.contains('innormalmulti')) ||
+        Boolean(rState && rState.inMultiplayer && !(rState && rState.inZenith))
+      );
+      const zSnapNow = typeof api.getSelfZenithSnapshot === 'function' ? api.getSelfZenithSnapshot() : null;
       const inQuickPlayMatch = Boolean(
         (document.body && document.body.classList && document.body.classList.contains('ingame_phys')) ||
-        (zMenu && zMenu.classList && zMenu.classList.contains('rolledup') && !zMenu.classList.contains('inresults'))
+        (zSnapNow && zSnapNow.found && zSnapNow.alive)
       );
       const inNonZenithGame = !inZenithBody && Boolean(
         (rState && rState.inGame) ||
@@ -2087,6 +2089,15 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           );
         }
         return;
+      }
+
+      if (zMenu && zMenu.classList && zMenu.classList.contains('rolledup')) {
+        const rollupBtn = typeof zMenu.querySelector === 'function' ? zMenu.querySelector('.menuslide_rollup') : null;
+        if (rollupBtn && typeof rollupBtn.click === 'function') {
+          rollupBtn.click();
+        } else {
+          zMenu.classList.remove('rolledup');
+        }
       }
 
       const helpers = internals.foxMenuHelpers;

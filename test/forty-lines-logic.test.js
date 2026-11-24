@@ -103,3 +103,27 @@ test('createFortyLinesTimerDetector extracts Bt(elapsed) across frames, minute r
   assert.equal(emitUpdateTimersTick(0, 0, 154), 60000);
   assert.equal(emitUpdateTimersTick(0, 0, 170), 0);
 });
+
+test('createFortyLinesTimerDetector resists >2.5ms UpdateCounter pauses after 30s and past 60s', () => {
+  const detector = createFortyLinesTimerDetector();
+
+  function emitStalledUpdateTimersTick(ms, sec, ts, renderStallMs) {
+    assert.equal(detector.observe(String(ms), 3, '0', ts), null);
+    const out = detector.observe(String(sec), 2, '0', ts + 0.05);
+    const afterRender = ts + 0.05 + renderStallMs;
+    assert.equal(detector.observe('0', 3, '0', afterRender), null);
+    assert.equal(detector.observe('0', 2, '0', afterRender + 0.02), null);
+    assert.equal(detector.observe('0', 3, '0', afterRender + 0.04), null);
+    assert.equal(detector.observe('0', 2, '0', afterRender + 0.06), null);
+    return out;
+  }
+
+  assert.equal(emitStalledUpdateTimersTick(0, 0, 1000, 0.1), 0);
+  assert.equal(emitStalledUpdateTimersTick(412, 31, 1016, 4.5), 31412);
+  assert.equal(emitStalledUpdateTimersTick(429, 31, 1032, 8.0), 31429);
+  assert.equal(emitStalledUpdateTimersTick(983, 59, 1048, 5.2), 59983);
+  assert.equal(emitStalledUpdateTimersTick(17, 0, 1064, 6.0), 60017);
+  assert.equal(emitStalledUpdateTimersTick(250, 5, 1080, 9.0), 65250);
+  assert.equal(emitStalledUpdateTimersTick(267, 5, 1096, 0.1), 65267);
+  assert.equal(emitStalledUpdateTimersTick(0, 0, 1112, 0.1), 0);
+});
