@@ -82,6 +82,9 @@ test('i18n-logic translates TETR.IO & FOXMOD UI cleanly with case preservation w
 
   // Dynamic patterns preserve numbers & names
   assert.equal(i18nLogic.translateText('PLAYERS (6)', 'es'), 'JUGADORES (6)');
+  assert.equal(i18nLogic.translateText('PLAYERS (', 'es'), 'JUGADORES (');
+  assert.equal(i18nLogic.translateText('\u00a0IN QUEUE -\u00a0', 'es'), '\u00a0EN COLA -\u00a0');
+  assert.equal(i18nLogic.translateText('\u00a0IN GAME', 'es'), '\u00a0EN PARTIDA');
   assert.equal(i18nLogic.translateText('NEED 2+ PLAYERS (1/2)', 'es'), 'FALTAN JUGADORES (1/2)');
   assert.equal(i18nLogic.translateText('WAIT 15S', 'es'), 'ESPERA 15S');
   assert.equal(i18nLogic.translateText('ROOM ONLINE · CODE #ABCD', 'es'), 'SALA EN LÍNEA · CÓDIGO #ABCD');

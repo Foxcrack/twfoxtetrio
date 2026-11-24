@@ -2916,6 +2916,34 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
   friendCard.appendChild(friendStatus);
   doc.body.appendChild(friendCard);
 
+  // Critical TETR.IO dynamic ID-bound spans inside headings (used by QP room.join & Tetra League counts)
+  const roomPlayersH1 = new FakeEl('h1', '', '');
+  const spanPlayersPrefix = { nodeType: 3, nodeValue: 'PLAYERS (', parentNode: roomPlayersH1 };
+  const spanPlayerCount = new FakeEl('span', 'playercount', '');
+  spanPlayerCount.setAttribute('id', 'playercount');
+  spanPlayerCount.textContent = '0';
+  const spanPlayersSuffix = { nodeType: 3, nodeValue: ')', parentNode: roomPlayersH1 };
+  roomPlayersH1.children = [spanPlayerCount];
+  roomPlayersH1.childNodes = [spanPlayersPrefix, spanPlayerCount, spanPlayersSuffix];
+  spanPlayerCount.parentNode = roomPlayersH1;
+  doc.body.appendChild(roomPlayersH1);
+
+  const mmPlayerCountH1 = new FakeEl('h1', 'mm_playercount', 'ns');
+  mmPlayerCountH1.setAttribute('id', 'mm_playercount');
+  const mmQueueSpan = new FakeEl('span', 'mm_queuecount_count', '');
+  mmQueueSpan.setAttribute('id', 'mm_queuecount_count');
+  mmQueueSpan.textContent = '0';
+  const mmMidText = { nodeType: 3, nodeValue: '\u00a0IN QUEUE -\u00a0', parentNode: mmPlayerCountH1 };
+  const mmPlaySpan = new FakeEl('span', 'mm_playercount_count', '');
+  mmPlaySpan.setAttribute('id', 'mm_playercount_count');
+  mmPlaySpan.textContent = '0';
+  const mmEndText = { nodeType: 3, nodeValue: '\u00a0IN GAME', parentNode: mmPlayerCountH1 };
+  mmPlayerCountH1.children = [mmQueueSpan, mmPlaySpan];
+  mmPlayerCountH1.childNodes = [mmQueueSpan, mmMidText, mmPlaySpan, mmEndText];
+  mmQueueSpan.parentNode = mmPlayerCountH1;
+  mmPlaySpan.parentNode = mmPlayerCountH1;
+  doc.body.appendChild(mmPlayerCountH1);
+
   env.meUsername.textContent = 'TWFOXCRACK';
   doc.body.appendChild(env.meUsername);
   doc.body.appendChild(env.pbBlitz);
@@ -2985,6 +3013,21 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     env.headerText.textContent = '40 LINES';
     assert.equal(env.headerText.textContent, '40 LÍNEAS');
 
+    // Critical ID-bound child spans for QP (playercount) and TL (mm_queuecount_count / mm_playercount_count) MUST stay in DOM!
+    assert.equal(doc.getElementById('playercount'), spanPlayerCount, 'QP #playercount span must not be wiped');
+    assert.equal(spanPlayersPrefix.nodeValue, 'JUGADORES (');
+    doc.getElementById('playercount').textContent = '42';
+    assert.equal(doc.getElementById('playercount').textContent, '42');
+
+    assert.equal(doc.getElementById('mm_queuecount_count'), mmQueueSpan, 'TL #mm_queuecount_count span must not be wiped');
+    assert.equal(doc.getElementById('mm_playercount_count'), mmPlaySpan, 'TL #mm_playercount_count span must not be wiped');
+    assert.equal(mmMidText.nodeValue, '\u00a0EN COLA -\u00a0');
+    assert.equal(mmEndText.nodeValue, '\u00a0EN PARTIDA');
+    doc.getElementById('mm_queuecount_count').textContent = '19';
+    doc.getElementById('mm_playercount_count').textContent = '184';
+    assert.equal(mmQueueSpan.textContent, '19');
+    assert.equal(mmPlaySpan.textContent, '184');
+
     // Usernames and PB digits remain untouched
     assert.equal(env.meUsername.textContent, 'TWFOXCRACK');
     assert.equal(friendName.textContent, 'PLAYERONE');
@@ -3017,6 +3060,9 @@ test('auto-updater shows orange notification, triggers IPC update & manual fallb
     assert.equal(configDesc.innerHTML, 'tweak your <span class="cheeky">TETRIO</span> experience');
     assert.equal(doc.getElementById('twfoxtetrio-card-practice').querySelector('h1').textContent, 'PRACTICE');
     assert.equal(doc.getElementById('twfoxtetrio-assets-tab-explore').textContent, 'EXPLORE (TETR.IO+)');
+    assert.equal(spanPlayersPrefix.nodeValue, 'PLAYERS (');
+    assert.equal(mmMidText.nodeValue, '\u00a0IN QUEUE -\u00a0');
+    assert.equal(mmEndText.nodeValue, '\u00a0IN GAME');
     assert.equal(friendStatus.textContent, 'Playing QUICK PLAY');
     assert.equal(env.headerText.textContent, '40 LINES');
   } finally {

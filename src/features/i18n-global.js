@@ -54,6 +54,24 @@ body[data-twfox-lang='es'] .twfox-invite-notif {
   const SKIP_IDS = new Set([
     'me_username',
     'social_dm_username',
+    'zenith_party_self_username',
+    'zenith_party_other_username',
+    'zenith_party_self_mods',
+    'zenith_party_other_mods',
+    'start_zenith_mods',
+    'zenith_party_ready_mods',
+    'zenith_deck_reversename',
+    'zenith_deck_reversesubtext',
+    'mm_queuecount_count',
+    'mm_playercount_count',
+    'playercount',
+    'playerlimit',
+    'spectatorcount',
+    'quickplay_players',
+    'royale_players',
+    'room_count',
+    'roomid',
+    'finalplace',
     'twfoxtetrio-lobby-invite-code',
     'twfoxtetrio-host-room-code',
     'pbdisplay_blitz_inner',
@@ -176,17 +194,22 @@ body[data-twfox-lang='es'] .twfox-invite-notif {
   }
 
   function areOnlySafeInlineDescendants(el, depth) {
-    if (!el || depth > 3) return false;
+    if (!el || depth > 2) return false;
     const kids = Array.isArray(el.children) ? el.children : el.children ? Array.from(el.children) : [];
-    if (kids.length > 5) return false;
+    if (kids.length === 0 || kids.length > 3) return false;
     for (let i = 0; i < kids.length; i++) {
       const k = kids[i];
       const tag = String(k.tagName || '').toUpperCase();
-      if (!ALLOWED_INLINE_CHILDREN.has(tag)) return false;
+      // Only ever replace inline phrasing containers whose child elements are pure decorative <span class="cheeky"> brand spans (never ID-bound or dynamic spans).
+      if (tag !== 'SPAN') return false;
+      if (k.id || (typeof k.getAttribute === 'function' && k.getAttribute('id'))) return false;
       if (isSkippedElement(k)) return false;
+      const cls = typeof k.className === 'string' ? k.className : '';
+      const hasCheeky = (k.classList && k.classList.contains('cheeky')) || cls.includes('cheeky');
+      if (!hasCheeky) return false;
       if (typeof k.getAttribute === 'function' && k.getAttribute('role') === 'button') return false;
       const subKids = Array.isArray(k.children) ? k.children : k.children ? Array.from(k.children) : [];
-      if (subKids.length > 0 && !areOnlySafeInlineDescendants(k, depth + 1)) return false;
+      if (subKids.length > 0) return false;
     }
     return true;
   }
@@ -468,20 +491,34 @@ body[data-twfox-lang='es'] .twfox-invite-notif {
       const rec = records[i];
       if (!rec) continue;
       if (rec.addedNodes && rec.addedNodes.length > 0) {
-        for (let j = 0; j < rec.addedNodes.length; j++) {
-          const added = rec.addedNodes[j];
-          const holder = added.nodeType === 3 ? added.parentNode : added;
-          if (!shouldSkipAncestor(holder)) {
-            visitNode(holder && origHtmlMap.has(holder) ? holder : added, 0);
+        const tgtHolder = rec.target && rec.target.nodeType === 1 ? rec.target : null;
+        if (tgtHolder && isInlinePhrasingContainerParent(tgtHolder) && !shouldSkipAncestor(tgtHolder)) {
+          visitNode(tgtHolder, 0);
+        } else {
+          for (let j = 0; j < rec.addedNodes.length; j++) {
+            const added = rec.addedNodes[j];
+            const holder = added.nodeType === 3 ? added.parentNode : added;
+            if (!shouldSkipAncestor(holder)) {
+              visitNode(holder && origHtmlMap.has(holder) ? holder : added, 0);
+            }
           }
         }
       }
-      if (rec.target) {
-        const tgt = rec.target;
-        const holder = tgt.nodeType === 3 ? tgt.parentNode : tgt;
-        if (!shouldSkipAncestor(holder)) {
-          visitNode(holder && isInlinePhrasingContainerParent(holder) ? holder : tgt, 0);
+      if (!rec.target) continue;
+      const tgt = rec.target;
+      const holder = tgt.nodeType === 3 ? tgt.parentNode : tgt;
+      if (shouldSkipAncestor(holder)) continue;
+      if (rec.type === 'attributes') {
+        syncElementAttributes(tgt);
+      } else if (rec.type === 'characterData') {
+        visitNode(holder && isInlinePhrasingContainerParent(holder) ? holder : tgt, 0);
+      } else if (rec.type === 'childList') {
+        if (holder && isInlinePhrasingContainerParent(holder)) {
+          visitNode(holder, 0);
         }
+      } else {
+        // FakeDOM synthetic mutation record
+        visitNode(holder && isInlinePhrasingContainerParent(holder) ? holder : tgt, 0);
       }
     }
   }
