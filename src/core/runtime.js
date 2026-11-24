@@ -542,6 +542,8 @@
 
   let activeZenWrapper = null;
   let lastGameWrapper = null;
+  let lastLocalGameWrapper = null;
+  let raceBoardTransform = null;
   let live40lCounterActive = false;
   let applyingZenMods = false;
   let hookAppliedDuringPull = false;
@@ -839,6 +841,71 @@
     ctx.ctm.UpdateCounter = wrappedUpdateCounter;
   }
 
+  function applyTransformToLocalWrapper(wrapper) {
+    if (!wrapper || typeof wrapper.location !== 'function') return;
+    const origLoc = wrapper.location.__twfoxOrig || wrapper.location;
+    const gOpts = wrapper.state && wrapper.state.setoptions;
+    if (gOpts && gOpts.zenith_duo) return;
+
+    let curOy = 0;
+    try {
+      const holder = typeof wrapper.getHolderData === 'function'
+        ? wrapper.getHolderData()
+        : (wrapper.self && wrapper.self.hm && wrapper.self.hm.H);
+      if (holder && holder.holderstate && Number.isFinite(holder.holderstate.oy)) {
+        curOy = holder.holderstate.oy;
+      }
+    } catch (_) {}
+
+    try {
+      if (raceBoardTransform && state.inZenith) {
+        origLoc.call(wrapper, raceBoardTransform.ox, curOy, raceBoardTransform.os, false);
+      } else {
+        origLoc.call(wrapper, 0, curOy, 1, false);
+      }
+    } catch (_) {}
+  }
+
+  function attachLocalBoardTransformHook(value) {
+    if (!value || typeof value !== 'object') return;
+    if (!value.self || !value.self.iom || typeof value.self.iom.IsLocal !== 'function' || !value.self.iom.IsLocal()) {
+      return;
+    }
+    if (typeof value.location !== 'function') return;
+
+    lastLocalGameWrapper = value;
+
+    const origLocation = value.location.__twfoxOrig || value.location;
+    if (!value.location.__twfoxWrapped) {
+      function wrappedLocation(x, y, s, instant) {
+        if (raceBoardTransform && state.inZenith) {
+          const gOpts = value.state && value.state.setoptions;
+          if (!gOpts || !gOpts.zenith_duo) {
+            return origLocation.call(this, raceBoardTransform.ox, y, raceBoardTransform.os, instant);
+          }
+        }
+        return origLocation.apply(this, arguments);
+      }
+
+      try {
+        Object.defineProperty(wrappedLocation, '__twfoxOrig', {
+          value: origLocation,
+          enumerable: false
+        });
+        Object.defineProperty(wrappedLocation, '__twfoxWrapped', {
+          value: true,
+          enumerable: false
+        });
+      } catch (_) {}
+
+      value.location = wrappedLocation;
+    }
+
+    if (raceBoardTransform && state.inZenith) {
+      applyTransformToLocalWrapper(value);
+    }
+  }
+
   function installMapHook() {
     const origMapSet = Map.prototype.set;
     if (origMapSet.__twfoxWrapped) return;
@@ -853,6 +920,7 @@
         attachZenGameWrapper(value);
         attachSoloPracticeWrapper(value);
         attachLocalCounterHook(value);
+        attachLocalBoardTransformHook(value);
       }
       return result;
     }
@@ -924,6 +992,10 @@
     if (nextMulti !== state.inMultiplayer || nextZenith !== state.inZenith) {
       state.inMultiplayer = nextMulti;
       state.inZenith = nextZenith;
+      if (!nextZenith && raceBoardTransform) {
+        raceBoardTransform = null;
+        applyTransformToLocalWrapper(lastLocalGameWrapper);
+      }
       if (nextZenith && !prevZenith) {
         refreshPBs();
         maybeFetchWeeklyZenithPbFallback(false);
@@ -1076,7 +1148,7 @@
   }
 
   const api = {
-    version: '0.6.17',
+    version: '0.6.18',
     getState() {
       refreshSelfUsername();
       return {
@@ -1135,6 +1207,24 @@
     },
     reapplyZenQpMods() {
       return applyModsToActiveZenWrapper(true);
+    },
+    setRaceBoardTransform(transform) {
+      if (transform && Number.isFinite(Number(transform.ox)) && Number.isFinite(Number(transform.os))) {
+        const nextOx = Number(transform.ox);
+        const nextOs = Math.max(0.35, Math.min(1.25, Number(transform.os)));
+        if (
+          raceBoardTransform &&
+          Math.abs(raceBoardTransform.ox - nextOx) < 1e-4 &&
+          Math.abs(raceBoardTransform.os - nextOs) < 1e-4
+        ) {
+          return;
+        }
+        raceBoardTransform = { ox: nextOx, os: nextOs };
+      } else {
+        if (!raceBoardTransform) return;
+        raceBoardTransform = null;
+      }
+      applyTransformToLocalWrapper(lastLocalGameWrapper);
     },
     updateConfig(patch) {
       if (applyConfigPatch(config, patch)) {

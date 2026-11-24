@@ -48,6 +48,10 @@ function createFakeDomEnvironment(protocol, extraGlobals) {
       this.value = '';
       this.type = '';
       this._textContent = '';
+      this.style = {
+        setProperty(k, v) { this[k] = String(v); },
+        getPropertyValue(k) { return this[k] || ''; }
+      };
       this.classList = new FakeClassList(this, classes);
       if (this.id) elements.set(this.id, this);
     }
@@ -3764,8 +3768,16 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     selfBoard[19][0] = 't';
     let selfAlive = true;
     let selfAlt = 145.6;
+    const recordedLocations = [];
     const selfGame = {
       id: 'g-self',
+      self: {
+        iom: { IsLocal: () => true },
+        hm: { H: { holderstate: { oy: 0 } } }
+      },
+      location(ox, oy, os, instant) {
+        recordedLocations.push({ ox, oy, os, instant });
+      },
       getOwner: () => 'HostFox',
       getFrame: () => 600,
       getZenithAltitude: () => selfAlt,
@@ -3791,8 +3803,14 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     f4.updateSelfBoard({ compactBoard: selfBoard, altitude: 95.0, floor: 2, pps: 1.2, score: 6000 });
     await new Promise((r) => setTimeout(r, 140));
 
+    // Simulate TETR.IO _TickGame_Primary attempting to re-center at (0, 0, 1) -> runtime shifts/scales left
+    vm.runInContext(`raceSelfRef.location(0, 0, 1, false);`, env.context);
+    const liveLoc = recordedLocations[recordedLocations.length - 1];
+    assert.ok(liveLoc && liveLoc.ox < -0.4 && liveLoc.os < 0.7, 'Local PIXI board must shift left and scale down for side-by-side Race stage');
+
     const dockEl = env.elements.get('twfoxtetrio-race-dock');
     assert.equal(dockEl.classList.contains('is-visible'), true, 'Side-by-side Race boards dock should be visible while alive');
+    assert.ok(parseInt(dockEl.style.left, 10) > 200, 'Rivals panel must position horizontally beside shifted local board');
     assert.equal(dockEl.querySelectorAll('.twfox-race-board-card').length, 3, 'Should show the 3 rival boards side-by-side');
 
     // Local player dies while Runner2, Runner3, Runner4 keep climbing -> enters Spectator mode automatically
@@ -3802,6 +3820,11 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     zMenu.classList.add('inresults');
     env.elements.get('zenith_result').textContent = '145.6';
     await new Promise((r) => setTimeout(r, 150));
+
+    vm.runInContext(`raceSelfRef.location(0, 0, 1, false);`, env.context);
+    const restoredLoc = recordedLocations[recordedLocations.length - 1];
+    assert.equal(restoredLoc.ox, 0, 'Local PIXI board transform must restore to center after death');
+    assert.equal(restoredLoc.os, 1, 'Local PIXI board scale must restore to 1 after death');
 
     const specEl = env.elements.get('twfoxtetrio-race-spectator');
     const resultsEl = env.elements.get('twfoxtetrio-race-results');
