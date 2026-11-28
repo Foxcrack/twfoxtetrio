@@ -1252,7 +1252,8 @@ body.twfox-race-spectating #zenithmenu {
         roomName: `${hostName}'S RACE`,
         gameMode: raceLogic.RACE_GAME_MODE,
         maxPlayers: raceLogic.MAX_RACE_PLAYERS,
-        countdownMs: raceLogic.RACE_COUNTDOWN_MS
+        countdownMs: raceLogic.RACE_COUNTDOWN_MS,
+        allowHostMigration: false
       });
       sessionUnsub = session.subscribe(handleSessionEvent);
       return session;
@@ -1546,12 +1547,24 @@ body.twfox-race-spectating #zenithmenu {
           racePhase = 'idle';
           spectatingTargetId = null;
         }
-      } else if (evType === 'host_closed') {
-        teardownRaceSession(true);
+      } else if (
+        evType === 'host_closed' ||
+        evType === 'host_migrate_self' ||
+        evType === 'host_migrating' ||
+        evType === 'disconnected'
+      ) {
+        const wasActive = Boolean(cardSelected || session);
         cardSelected = false;
-        const helpers = internals.foxMenuHelpers;
-        if (helpers && typeof helpers.showOrangeNoticeNotification === 'function') {
-          helpers.showOrangeNoticeNotification('FOXMOD ROOM CLOSED', 'The Race Host closed the room.');
+        teardownRaceSession(true);
+        if (wasActive) {
+          const helpers = internals.foxMenuHelpers;
+          if (helpers && typeof helpers.showOrangeNoticeNotification === 'function') {
+            const isClose = evType !== 'disconnected';
+            helpers.showOrangeNoticeNotification(
+              isClose ? 'FOXMOD ROOM CLOSED' : 'DISCONNECTED',
+              isClose ? 'The Race Host closed the room.' : 'Connection to The Race host was lost.'
+            );
+          }
         }
       } else if (evType === 'webrtc_failed' && detail && detail.reason) {
         statusOverride = `Error: ${detail.reason}`;
@@ -2138,12 +2151,9 @@ body.twfox-race-spectating #zenithmenu {
       } else {
         clearCardSpin();
         cardSelected = false;
-        if (session && racePhase === 'idle') {
-          const snap = session.getSnapshot();
-          if (!snap.players || snap.players.length <= 1) {
-            teardownRaceSession(true);
-            return;
-          }
+        if (session && (racePhase === 'idle' || racePhase === 'countdown')) {
+          teardownRaceSession(true);
+          return;
         }
       }
       syncVisualState();
@@ -2225,8 +2235,10 @@ body.twfox-race-spectating #zenithmenu {
         statusOverride = '';
         renderParty();
       } catch (err) {
-        statusOverride = err && err.message ? err.message : 'Failed to join Race.';
-        renderParty();
+        if (session) {
+          statusOverride = err && err.message ? err.message : 'Failed to join Race.';
+          renderParty();
+        }
       }
     }
 

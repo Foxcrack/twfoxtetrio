@@ -737,6 +737,7 @@
       (opts.autoSignaling !== false && Boolean(opts.fetchFn))
     );
     const shouldAutoSignal = shouldAutoSignalWs || shouldAutoSignalFetch;
+    const allowHostMigration = opts.allowHostMigration !== false;
     const pollIntervalMs = Math.max(20, Number(opts.pollIntervalMs) || 950);
     const heartbeatIntervalMs = Math.max(25, Number(opts.heartbeatIntervalMs) || 2500);
     const heartbeatTimeoutMs = Math.max(60, Number(opts.heartbeatTimeoutMs) || 7000);
@@ -1342,7 +1343,12 @@
             board: null
           });
         }
-        sendToPeer(peerId, { type: 'welcome', id: peerId, autoSignaling: shouldAutoSignal });
+        sendToPeer(peerId, {
+          type: 'welcome',
+          id: peerId,
+          autoSignaling: shouldAutoSignal,
+          allowHostMigration
+        });
         broadcastRoomState();
         ensureHostHeartbeat();
         if (room.status === 'countdown') {
@@ -1843,7 +1849,7 @@
     function close() {
       if (closed) return;
       const successor = selectNextHostCandidate(Array.from(players.values()));
-      const canMigrate = Boolean(successor && room.roomCode && (shouldAutoSignalWs || shouldAutoSignalFetch));
+      const canMigrate = Boolean(allowHostMigration && successor && room.roomCode && (shouldAutoSignalWs || shouldAutoSignalFetch));
       if (connections.size > 0) {
         broadcast({
           type: 'host_closing',
@@ -1865,6 +1871,17 @@
             chat: chat.slice(-25)
           }
         });
+      }
+      const hadPendingOffers = pendingOffers.size > 0;
+      if (!canMigrate && signalBus && room.roomCode) {
+        try {
+          signalBus.publish({
+            kind: 'room_closed',
+            roomCode: room.roomCode,
+            from: 'host',
+            hostName
+          });
+        } catch (_) {}
       }
       closed = true;
       clearBlitzTimer();
@@ -1889,7 +1906,7 @@
       connections.clear();
       listeners.clear();
 
-      if (connsToClose.length > 0) {
+      if (connsToClose.length > 0 || (!canMigrate && busToClose && (hadPendingOffers || shouldAutoSignalWs))) {
         const closeSockets = () => {
           for (const conn of connsToClose) {
             try {
@@ -1904,8 +1921,8 @@
           }
           if (busToClose) busToClose.close();
         };
-        // Allow queued host_closing frame (WebRTC or WS relay) to flush before tearing down sockets.
-        unrefIfPossible(setTimeout(closeSockets, 25));
+        // Allow queued host_closing / room_closed frames (WebRTC or WS relay) to flush before tearing down sockets.
+        unrefIfPossible(setTimeout(closeSockets, 80));
       } else if (busToClose) {
         busToClose.close();
       }
@@ -2000,6 +2017,7 @@
     const heartbeatIntervalMs = Math.max(25, Number(opts.heartbeatIntervalMs) || 2500);
     const heartbeatTimeoutMs = Math.max(60, Number(opts.heartbeatTimeoutMs) || 8000);
     let roomAutoSignaling = Boolean(opts.autoSignaling !== false && (wsFactory || fetchFn));
+    let roomAllowMigration = opts.allowHostMigration !== false;
     const playerName = String(opts.playerName || 'PLAYER').trim().slice(0, 20) || 'PLAYER';
     const playerAvatar = sanitizeAvatarUrl(opts.playerAvatar || opts.avatar || '');
 
@@ -2093,7 +2111,7 @@
       const successorName = hostCloseMsg ? hostCloseMsg.successorName : (fallbackSuccessor ? fallbackSuccessor.name : null);
       const canMigrate = hostCloseMsg
         ? Boolean(hostCloseMsg.canMigrate && successorId && room.roomCode)
-        : Boolean(wasConnected && roomAutoSignaling && room.roomCode && successorId && selfId);
+        : Boolean(roomAllowMigration && wasConnected && roomAutoSignaling && room.roomCode && successorId && selfId);
 
       if (canMigrate) {
         const baseSnap = (hostCloseMsg && hostCloseMsg.snapshot) || {
@@ -2163,6 +2181,9 @@
           selfId = msg.id;
           if (msg.autoSignaling !== undefined) {
             roomAutoSignaling = Boolean(msg.autoSignaling);
+          }
+          if (msg.allowHostMigration !== undefined) {
+            roomAllowMigration = Boolean(msg.allowHostMigration);
           }
           notify('welcome', { id: selfId });
           break;
@@ -2459,6 +2480,18 @@
           if (!msg || typeof msg !== 'object') return;
           if (msg.kind === 'room_full' && msg.to === clientId) {
             finishOffer(offerReject, new Error(`Room #${code} is full (max ${msg.maxPlayers || 4} players).`));
+          } else if (msg.kind === 'room_closed' && msg.from === 'host') {
+            if (!offerSettled) {
+              finishOffer(offerReject, new Error('The Host closed the room.'));
+            }
+            if (connected || usingRelay) {
+              handleHostLost({
+                reason: 'host_left',
+                hostName: msg.hostName || 'HOST',
+                roomCode: code,
+                canMigrate: false
+              });
+            }
           } else if (msg.kind === 'offer' && msg.to === clientId && msg.offer) {
             finishOffer(offerResolve, msg);
           } else if (msg.kind === 'offer_relay' && msg.to === clientId) {

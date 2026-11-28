@@ -712,6 +712,41 @@ test('host_closed fires on manual P2P host exit and auto-signaling rooms elect n
 
   c3Rejoined.close();
   hostB.close();
+
+  // 3. Rooms with allowHostMigration=false (e.g. THE RACE) emit host_closed on ALL guests when host leaves
+  const raceRtc = createLoopbackRtcFactory();
+  const raceHost = p2p.createHostServer({
+    hostName: 'RaceHost',
+    gameMode: 'race',
+    allowHostMigration: false,
+    rtcFactory: raceRtc,
+    wsFactory,
+    brokers: ['wss://mock/mqtt']
+  });
+  const raceCode = raceHost.getSnapshot().room.roomCode;
+  await new Promise((r) => setTimeout(r, 25));
+
+  const g1 = p2p.createClientPeer({ playerName: 'GuestA', rtcFactory: raceRtc, wsFactory, brokers: ['wss://mock/mqtt'] });
+  const g2 = p2p.createClientPeer({ playerName: 'GuestB', rtcFactory: raceRtc, wsFactory, brokers: ['wss://mock/mqtt'] });
+  const g1Events = [];
+  const g2Events = [];
+  g1.subscribe((_s, ev, detail) => g1Events.push({ ev, detail }));
+  g2.subscribe((_s, ev, detail) => g2Events.push({ ev, detail }));
+
+  await g1.joinByCode(raceCode);
+  await new Promise((r) => setTimeout(r, 35));
+  await g2.joinByCode(raceCode);
+  await new Promise((r) => setTimeout(r, 35));
+
+  raceHost.close();
+  await new Promise((r) => setTimeout(r, 40));
+
+  assert.equal(g1Events.some((e) => e.ev === 'host_closed'), true, 'GuestA must receive host_closed instead of migrating');
+  assert.equal(g2Events.some((e) => e.ev === 'host_closed'), true, 'GuestB must receive host_closed instead of migrating');
+  assert.equal(g1Events.some((e) => e.ev === 'host_migrate_self' || e.ev === 'host_migrating'), false);
+  assert.equal(g2Events.some((e) => e.ev === 'host_migrate_self' || e.ev === 'host_migrating'), false);
+  g1.close();
+  g2.close();
 });
 
 test('client seamlessly joins via WS relay fallback when WebRTC UDP is blocked or brokers connect out-of-order', async () => {

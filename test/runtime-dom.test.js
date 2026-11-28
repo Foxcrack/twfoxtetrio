@@ -4522,3 +4522,221 @@ test('THE RACE hides offline friends from INVITE and updates live when friends c
     }
   }
 });
+
+test('THE RACE host leaving or deselecting the card immediately kicks all guests out of the card', async () => {
+  const raceBrokerTopics = new Map();
+  let rtcSeq = 1;
+  const rtcMap = new Map();
+  class KickRtc {
+    constructor() {
+      this._id = 'krtc-' + rtcSeq++;
+      this.iceGatheringState = 'complete';
+      this.localDescription = null;
+      this.remoteDescription = null;
+      this.connectionState = 'new';
+      this.iceConnectionState = 'new';
+      this.ondatachannel = null;
+      this._pending = null;
+      rtcMap.set(this._id, this);
+    }
+    createDataChannel(label) {
+      const ch = { label, readyState: 'connecting', onopen: null, onmessage: null, onclose: null };
+      this._pending = ch;
+      return ch;
+    }
+    async createOffer() { return { type: 'offer', sdp: 'v=0\r\nfrom=' + this._id }; }
+    async createAnswer() { return { type: 'answer', sdp: 'v=0\r\nfrom=' + this._id }; }
+    async setLocalDescription(d) { this.localDescription = d; }
+    async setRemoteDescription(d) {
+      this.remoteDescription = d;
+      if (d && d.type === 'answer') {
+        const rem = rtcMap.get(String(d.sdp || '').split('from=')[1]);
+        const a = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+        const b = { label: 'foxmod-room', readyState: 'open', onopen: null, onmessage: null, onclose: null };
+        a.send = (data) => b.onmessage && queueMicrotask(() => b.onmessage({ data }));
+        b.send = (data) => a.onmessage && queueMicrotask(() => a.onmessage({ data }));
+        a.close = () => {
+          a.readyState = 'closed';
+          b.readyState = 'closed';
+          if (a.onclose) a.onclose();
+          if (b.onclose) b.onclose();
+        };
+        b.close = a.close;
+        this._a = a;
+        if (rem) rem._b = b;
+        if (this._pending) {
+          a.onopen = this._pending.onopen;
+          a.onmessage = this._pending.onmessage;
+          a.onclose = this._pending.onclose;
+          this._pending.send = a.send;
+          this._pending.close = a.close;
+          Object.defineProperty(this._pending, 'readyState', { get: () => a.readyState });
+        }
+        this.connectionState = 'connected';
+        this.iceConnectionState = 'connected';
+        if (rem) {
+          rem.connectionState = 'connected';
+          rem.iceConnectionState = 'connected';
+          if (rem.ondatachannel) rem.ondatachannel({ channel: b });
+        }
+        if (a.onopen) a.onopen();
+        if (b.onopen) b.onopen();
+      }
+    }
+    close() {
+      if (this._a) this._a.close();
+      if (this._b) this._b.close();
+    }
+  }
+
+  class KickMqttWs {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.binaryType = 'arraybuffer';
+      this._topics = new Set();
+      setTimeout(() => {
+        if (this.readyState !== 0) return;
+        this.readyState = 1;
+        if (this.onopen) this.onopen({});
+      }, 2);
+    }
+    send(bytes) {
+      const parsed = parseMqttClientFrame(bytes);
+      if (parsed.type === 'CONNECT') {
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: buildMqttConnackFrame().buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'SUBSCRIBE') {
+        this._topics.add(parsed.topic);
+        if (!raceBrokerTopics.has(parsed.topic)) raceBrokerTopics.set(parsed.topic, new Set());
+        raceBrokerTopics.get(parsed.topic).add(this);
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: Uint8Array.from([0x90, 0x03, 0x00, 0x01, 0x00]).buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'PUBLISH') {
+        const subs = raceBrokerTopics.get(parsed.topic);
+        if (subs) {
+          const pkt = buildMqttPublishFrame(parsed.topic, parsed.text, false);
+          for (const sub of subs) {
+            if (sub !== this && sub.readyState === 1 && sub.onmessage) {
+              queueMicrotask(() => sub.onmessage({ data: pkt.buffer }));
+            }
+          }
+        }
+      }
+    }
+    close() {
+      this.readyState = 3;
+      for (const topic of this._topics) {
+        const subs = raceBrokerTopics.get(topic);
+        if (subs) subs.delete(this);
+      }
+      if (this.onclose) this.onclose({});
+    }
+  }
+
+  const env = createFakeDomEnvironment('https:', {
+    WebSocket: KickMqttWs,
+    RTCPeerConnection: KickRtc
+  });
+  const doc = env.context.document;
+  const FakeEl = env.elements.get('me_username').constructor;
+  const zMenu = env.elements.get('zenithmenu');
+  const deckBlock = doc.createElement('div');
+  deckBlock.setAttribute('id', 'zenith_deck_block');
+  const deckCards = doc.createElement('div');
+  deckCards.setAttribute('id', 'zenith_deck_cards');
+  const duoCard = doc.createElement('div');
+  duoCard.setAttribute('id', 'zenith-duo-card');
+  duoCard.className = 'zenith_card';
+  duoCard.setAttribute('data-card', 'duo');
+  deckCards.appendChild(duoCard);
+  deckBlock.appendChild(deckCards);
+  zMenu.appendChild(deckBlock);
+
+  const notifBox = new FakeEl('div', 'notifications', '');
+  env.body.appendChild(notifBox);
+
+  env.triggerDOMContentLoaded();
+  env.meUsername.textContent = 'GuestFox';
+  await new Promise((r) => setTimeout(r, 20));
+
+  try {
+    env.body.classList.add('inzenith');
+    env.menus.setAttribute('data-menu-type', 'zenith');
+    const zenRace = env.context.__TWFOX_INTERNAL__.zenRace;
+    const p2pRoom = env.context.__TWFOX_INTERNAL__.p2pRoom;
+    zenRace.refresh();
+
+    // Auto-signaling Race host opens lobby
+    const remoteHost = p2pRoom.createHostServer({
+      hostName: 'HostBoss',
+      gameMode: 'race',
+      allowHostMigration: false,
+      rtcFactory: () => new KickRtc(),
+      wsFactory: () => new KickMqttWs('wss://mock/mqtt'),
+      brokers: ['wss://mock/mqtt']
+    });
+    const code = remoteHost.getSnapshot().room.roomCode;
+    await new Promise((r) => setTimeout(r, 20));
+
+    // GuestFox joins THE RACE via invite code -> party panel opens inside THE RACE card
+    await zenRace.joinByInviteCode(code);
+    await new Promise((r) => setTimeout(r, 35));
+
+    const partyEl = env.elements.get('twfoxtetrio-race-party');
+    const raceCard = env.elements.get('twfoxtetrio-zenith-race-card');
+    assert.equal(zenRace.getState().cardSelected, true);
+    assert.equal(zenRace.getState().session.players.length, 2);
+    assert.equal(partyEl.classList.contains('hidden'), false);
+    assert.equal(raceCard.classList.contains('is-race-selected'), true);
+
+    // Host leaves the room -> GuestFox is immediately kicked off THE RACE card with notice
+    remoteHost.close();
+    await new Promise((r) => setTimeout(r, 45));
+
+    assert.equal(zenRace.getState().cardSelected, false, 'Guest must be removed from THE RACE card when Host exits');
+    assert.equal(zenRace.getState().session, null);
+    assert.equal(partyEl.classList.contains('hidden'), true);
+    assert.equal(raceCard.classList.contains('is-race-selected'), false);
+    assert.equal(zMenu.classList.contains('twfox-race-open'), false);
+    assert.equal(
+      notifBox.querySelectorAll('.twfox-invite-notif').some((n) => n.getAttribute('data-fox-notice') === 'FOXMOD ROOM CLOSED'),
+      true,
+      'Guest must receive room closed notification'
+    );
+
+    // Also verify when local user IS host with 2 players and clicks THE RACE card off -> closes room and kicks guest!
+    raceCard.click();
+    await new Promise((r) => setTimeout(r, 15));
+    const localCode = zenRace.getState().session.room.roomCode;
+    const gPeer = p2pRoom.createClientPeer({
+      playerName: 'Buddy',
+      rtcFactory: () => new KickRtc(),
+      wsFactory: () => new KickMqttWs('wss://mock/mqtt'),
+      brokers: ['wss://mock/mqtt']
+    });
+    const peerEvents = [];
+    gPeer.subscribe((_s, ev) => peerEvents.push(ev));
+    await gPeer.joinByCode(localCode);
+    await new Promise((r) => setTimeout(r, 35));
+    assert.equal(zenRace.getState().session.players.length, 2);
+
+    // Host clicks THE RACE card again to exit/close -> tears down session and kicks Buddy too
+    raceCard.click();
+    await new Promise((r) => setTimeout(r, 45));
+    assert.equal(zenRace.getState().cardSelected, false);
+    assert.equal(zenRace.getState().session, null);
+    assert.equal(peerEvents.includes('host_closed'), true, 'Deselecting THE RACE card as host must close room and kick guests');
+    gPeer.close();
+  } finally {
+    if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {
+      env.context.__TWFOX_INTERNAL__.foxPawBadge.destroy();
+    }
+  }
+});
