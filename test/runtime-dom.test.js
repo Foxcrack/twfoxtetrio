@@ -3459,7 +3459,7 @@ test('Accepting orange FOXMOD invite unhides #menus, connects via relay fallback
   }
 });
 
-test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live visual boards, spectator switch, and Final Leaderboard NEXT', async () => {
+test('Quick Play THE RACE tarot card coordinates 5-player ready launch, 4-corner visual boards, chat hide, spectator lock, and Final Leaderboard NEXT', async () => {
   const relayPeers = new Set();
   function buildFrame(topic, text) {
     const t = Buffer.from(topic, 'utf8');
@@ -3738,7 +3738,7 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     assert.ok(roomCode);
     assert.equal(sentPayload.roomCode, roomCode);
 
-    // First friend joins -> existing INVITE button switches in-place to IN ROOM; remaining 2 fill 4/4
+    // First friend joins -> existing INVITE button switches in-place to IN ROOM; remaining 3 fill 5/5
     const f2 = p2pRoom.createClientPeer({ playerName: 'Runner2', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
     await f2.joinByCode(roomCode);
     await new Promise((r) => setTimeout(r, 40));
@@ -3747,23 +3747,26 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
 
     const f3 = p2pRoom.createClientPeer({ playerName: 'Runner3', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
     const f4 = p2pRoom.createClientPeer({ playerName: 'Runner4', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
+    const f5 = p2pRoom.createClientPeer({ playerName: 'Runner5', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
     await f3.joinByCode(roomCode);
     await f4.joinByCode(roomCode);
+    await f5.joinByCode(roomCode);
     await new Promise((r) => setTimeout(r, 40));
-    assert.equal(zenRace.getState().session.players.length, 4);
+    assert.equal(zenRace.getState().session.players.length, 5);
 
-    // All 4 click READY -> countdown launches Quick Play simultaneously
+    // All 5 click READY -> countdown launches Quick Play simultaneously
     env.elements.get('twfoxtetrio-race-ready-btn').click();
     f2.setReady(true);
     f3.setReady(true);
     f4.setReady(true);
+    f5.setReady(true);
     const launchDeadline = Date.now() + 1000;
     while (Date.now() < launchDeadline && startZenithClicks === 0) {
       await new Promise((r) => setTimeout(r, 20));
     }
-    assert.equal(startZenithClicks, 1, 'All 4 ready should trigger synchronized #start_zenith click');
+    assert.equal(startZenithClicks, 1, 'All 5 ready should trigger synchronized #start_zenith click');
 
-    // Simulate active Quick Play gameWrapper + rivals streaming boards & altitudes side by side
+    // Simulate active Quick Play gameWrapper + 4 corner rivals while main player stays full size centered
     const selfBoard = Array.from({ length: 20 }, () => new Array(10).fill(null));
     selfBoard[19][0] = 't';
     let selfAlive = true;
@@ -3799,23 +3802,27 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     f2.updateSelfBoard({ compactBoard: selfBoard, altitude: 290.4, floor: 4, pps: 2.1, score: 21000 });
     f3.updateSelfBoard({ compactBoard: selfBoard, altitude: 210.0, floor: 3, pps: 1.8, score: 15000 });
     f4.updateSelfBoard({ compactBoard: selfBoard, altitude: 95.0, floor: 2, pps: 1.2, score: 6000 });
+    f5.updateSelfBoard({ compactBoard: selfBoard, altitude: 65.0, floor: 1, pps: 1.0, score: 3500 });
     await new Promise((r) => setTimeout(r, 140));
 
-    // Simulate TETR.IO _TickGame_Primary attempting to re-center at (0, 0, 1) -> runtime shifts/scales left
+    // Player board must remain centered full size (ox=0, os=1) and Quick Play chat must stay hidden during live Race
     vm.runInContext(`raceSelfRef.location(0, 0, 1, false);`, env.context);
     const liveLoc = recordedLocations[recordedLocations.length - 1];
-    assert.ok(liveLoc && liveLoc.ox < -0.25 && liveLoc.os < 0.7, 'Local PIXI board must position cleanly between left rival and 2 right rivals in 4P Race');
+    assert.equal(liveLoc.ox, 0, 'Main player PIXI board must remain centered at full size');
+    assert.equal(liveLoc.os, 1, 'Main player PIXI board must remain at scale 1');
+    assert.equal(env.body.classList.contains('twfox-race-in-match'), true, 'Chat must be hidden while Race match is active');
 
-    const dockLeftEl = env.elements.get('twfoxtetrio-race-dock-left');
     const dockEl = env.elements.get('twfoxtetrio-race-dock');
-    assert.ok(dockLeftEl, 'Left rival dock must exist for 3P/4P Race');
-    assert.equal(dockLeftEl.classList.contains('is-visible'), true, 'Left rival dock must be visible in 4P Race');
-    assert.equal(dockEl.classList.contains('is-visible'), true, 'Right rivals dock must be visible while alive');
-    assert.equal(dockLeftEl.querySelectorAll('.twfox-race-board-card').length, 1, '4P Race puts 1 rival on the left');
-    assert.equal(dockEl.querySelectorAll('.twfox-race-board-card').length, 2, '4P Race puts 2 rivals side-by-side on the right');
-    assert.ok(parseInt(dockLeftEl.style.left, 10) < parseInt(dockEl.style.left, 10), 'Left dock must sit cleanly to the left of right dock');
+    assert.equal(dockEl.classList.contains('is-visible'), true, '4-corner Race boards overlay should be visible while alive');
+    const cornerCards = dockEl.querySelectorAll('.twfox-race-board-card');
+    assert.equal(cornerCards.length, 4, '5P Race puts the 4 rival boards in the 4 screen corners');
+    assert.deepEqual(
+      cornerCards.map((c) => c.getAttribute('data-corner')),
+      ['tr', 'tl', 'br', 'bl'],
+      'Rivals must occupy each screen corner cleanly'
+    );
 
-    // Local player dies while Runner2, Runner3, Runner4 keep climbing -> enters Spectator mode automatically
+    // Local player dies while Runner2..Runner5 keep climbing -> enters Spectator mode and blocks starting another run
     selfAlive = false;
     env.body.classList.remove('ingame_phys');
     zMenu.classList.remove('rolledup', 'hidden');
@@ -3823,17 +3830,25 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     env.elements.get('zenith_result').textContent = '145.6';
     await new Promise((r) => setTimeout(r, 150));
 
-    vm.runInContext(`raceSelfRef.location(0, 0, 1, false);`, env.context);
-    const restoredLoc = recordedLocations[recordedLocations.length - 1];
-    assert.equal(restoredLoc.ox, 0, 'Local PIXI board transform must restore to center after death');
-    assert.equal(restoredLoc.os, 1, 'Local PIXI board scale must restore to 1 after death');
+    // Attempt to restart via #start_zenith while spectating -> must be blocked
+    startZenith.click();
+    assert.equal(startZenithClicks, 1, 'Starting another Quick Play run must be blocked while spectating Race');
 
     const specEl = env.elements.get('twfoxtetrio-race-spectator');
     const resultsEl = env.elements.get('twfoxtetrio-race-results');
     assert.equal(env.body.classList.contains('twfox-race-spectating'), true);
+    assert.equal(env.body.classList.contains('twfox-race-locked'), true);
     assert.equal(specEl.classList.contains('hidden'), false);
     assert.equal(resultsEl.classList.contains('hidden'), true, 'Final leaderboard must stay hidden while other runners are alive');
     assert.ok(env.elements.get('twfoxtetrio-race-spectate-target').textContent.includes('RUNNER2'));
+
+    // Even when PEEK MY RESULT is toggled open, clicking AGAIN (#start_zenith) must stay blocked until round finishes
+    env.elements.get('twfoxtetrio-race-peek-btn').click();
+    assert.equal(env.body.classList.contains('twfox-race-spectating'), false);
+    startZenith.click();
+    assert.equal(startZenithClicks, 1, 'Clicking #start_zenith while peeking result during active Race must remain blocked');
+    env.elements.get('twfoxtetrio-race-back-spec-btn').click();
+    assert.equal(env.body.classList.contains('twfox-race-spectating'), true);
 
     // Switch spectator view to Runner3 by clicking Runner3 card directly in DOM
     const r3Id = f3.getSnapshot().selfId;
@@ -3846,22 +3861,25 @@ test('Quick Play THE RACE tarot card coordinates 4-player ready launch, live vis
     // Remaining runners finish -> once the LAST runner dies, Final Leaderboard opens with NEXT button
     f2.reportSelfKo({ altitude: 340.5, floor: 4, score: 29000 });
     f3.reportSelfKo({ altitude: 210.0, floor: 3, score: 15000 });
-    await new Promise((r) => setTimeout(r, 40));
-    assert.equal(resultsEl.classList.contains('hidden'), true, 'Must still wait for Runner4 (the last survivor)');
-
     f4.reportSelfKo({ altitude: 110.0, floor: 2, score: 7000 });
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(resultsEl.classList.contains('hidden'), true, 'Must still wait for Runner5 (the last survivor)');
+
+    f5.reportSelfKo({ altitude: 80.0, floor: 1, score: 5000 });
     await new Promise((r) => setTimeout(r, 50));
 
     assert.equal(env.body.classList.contains('twfox-race-spectating'), false);
     assert.equal(specEl.classList.contains('hidden'), true);
     assert.equal(resultsEl.classList.contains('hidden'), false, 'Final Leaderboard must appear once the last runner dies');
     const rows = resultsEl.querySelectorAll('.twfox-res-item');
-    assert.equal(rows.length, 4);
+    assert.equal(rows.length, 5);
     assert.ok(env.elements.get('twfoxtetrio-race-winner-name').textContent.includes('Runner2'));
 
-    // Clicking NEXT closes Final Leaderboard cleanly and leaves party intact
+    // Clicking NEXT closes Final Leaderboard, re-enables Quick Play start + chat, and leaves party intact
     env.elements.get('twfoxtetrio-race-next-btn').click();
     assert.equal(resultsEl.classList.contains('hidden'), true);
+    assert.equal(env.body.classList.contains('twfox-race-in-match'), false);
+    assert.equal(env.body.classList.contains('twfox-race-locked'), false);
     assert.equal(env.elements.get('twfoxtetrio-race-party').classList.contains('hidden'), false);
 
     f2.close();

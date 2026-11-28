@@ -17,7 +17,6 @@
   const INFO_ID = 'twfoxtetrio-zenith-race-info';
   const PARTY_ID = 'twfoxtetrio-race-party';
   const DOCK_ID = 'twfoxtetrio-race-dock';
-  const DOCK_LEFT_ID = 'twfoxtetrio-race-dock-left';
   const SPECTATOR_ID = 'twfoxtetrio-race-spectator';
   const RESULTS_ID = 'twfoxtetrio-race-results';
 
@@ -217,19 +216,11 @@
 #${PARTY_ID} .twfox-race-slots {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem 1rem;
+  gap: 0.5rem 0.9rem;
   position: relative;
 }
-#${PARTY_ID} .twfox-race-slots::after {
-  content: '';
-  position: absolute;
-  top: 0.1rem;
-  bottom: 0.1rem;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-1px);
-  background-color: rgba(184, 58, 27, 0.55);
-  pointer-events: none;
+#${PARTY_ID} .twfox-race-slot:nth-child(5) {
+  grid-column: 1 / -1;
 }
 #${PARTY_ID} .twfox-race-slot {
   position: relative;
@@ -412,87 +403,75 @@
   display: none !important;
 }
 
-#${DOCK_ID},
-#${DOCK_LEFT_ID} {
+body.twfox-race-in-match #ingame_chat_container,
+body.twfox-race-in-match #ingame_chat,
+body.twfox-race-in-match #ingame_chat_input {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.twfox-race-locked #start_zenith,
+body.twfox-race-spectating #start_zenith {
+  opacity: 0.42 !important;
+  filter: grayscale(0.55) !important;
+  pointer-events: none !important;
+}
+
+#${DOCK_ID} {
   position: fixed;
-  top: 50%;
-  left: 50vw;
+  inset: 0;
   z-index: 999996;
   pointer-events: none;
   user-select: none;
   font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
   opacity: 0;
-  transform: translateY(-50%) scale(0.97);
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition: opacity 180ms ease;
 }
-#${DOCK_ID}:not(.is-visible),
-#${DOCK_LEFT_ID}:not(.is-visible) {
+#${DOCK_ID}:not(.is-visible) {
   visibility: hidden;
 }
-#${DOCK_ID}.is-visible,
-#${DOCK_LEFT_ID}.is-visible {
+#${DOCK_ID}.is-visible {
   opacity: 1;
   visibility: visible;
-  transform: translateY(-50%) scale(1);
 }
-#${DOCK_ID} .twfox-race-dock-hdr,
-#${DOCK_LEFT_ID} .twfox-race-dock-hdr {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 5px 10px;
-  border-radius: 6px 6px 0 0;
-  border: 1.5px solid rgba(245, 146, 76, 0.88);
-  border-bottom: none;
-  background: rgba(26, 11, 13, 0.92);
-  color: #ffd39f;
-  font-size: 0.74rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-#${DOCK_ID} .twfox-race-boards-row,
-#${DOCK_LEFT_ID} .twfox-race-boards-row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 0;
-  border-radius: 0 0 6px 6px;
-  border: 2px solid rgba(245, 146, 76, 0.88);
-  background: rgba(14, 7, 11, 0.88);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.72);
-  overflow: hidden;
-}
-#${DOCK_ID} .twfox-race-board-card,
-#${DOCK_LEFT_ID} .twfox-race-board-card {
-  width: var(--twfox-dock-card-w, 200px);
-  flex: 0 0 var(--twfox-dock-card-w, 200px);
+#${DOCK_ID} .twfox-race-board-card {
+  position: fixed;
+  width: var(--twfox-corner-w, 172px);
   padding: 6px 6px 7px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: space-between;
   gap: 4px;
-  background: rgba(18, 9, 13, 0.86);
+  border-radius: 6px;
+  border: 2px solid rgba(245, 146, 76, 0.9);
+  background: rgba(16, 8, 12, 0.9);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.72);
   box-sizing: border-box;
 }
-#${DOCK_ID} .twfox-race-board-card + .twfox-race-board-card,
-#${DOCK_LEFT_ID} .twfox-race-board-card + .twfox-race-board-card {
-  border-left: 1.5px solid rgba(245, 146, 76, 0.45);
+#${DOCK_ID} .twfox-race-board-card[data-corner="tl"] {
+  top: 84px;
+  left: 46px;
 }
-#${DOCK_ID} .twfox-race-board-card.is-ko,
-#${DOCK_LEFT_ID} .twfox-race-board-card.is-ko {
-  background: rgba(28, 10, 16, 0.84);
-  opacity: 0.82;
+#${DOCK_ID} .twfox-race-board-card[data-corner="tr"] {
+  top: 12px;
+  right: 12px;
 }
-#${DOCK_ID} .twfox-race-board-name,
-#${DOCK_LEFT_ID} .twfox-race-board-name {
+#${DOCK_ID} .twfox-race-board-card[data-corner="bl"] {
+  bottom: 14px;
+  left: 46px;
+}
+#${DOCK_ID} .twfox-race-board-card[data-corner="br"] {
+  bottom: 14px;
+  right: 12px;
+}
+#${DOCK_ID} .twfox-race-board-card.is-ko {
+  background: rgba(28, 10, 16, 0.86);
+  border-color: rgba(255, 78, 108, 0.7);
+  opacity: 0.84;
+}
+#${DOCK_ID} .twfox-race-board-name {
   width: 100%;
   display: flex;
   align-items: center;
@@ -500,31 +479,28 @@
   gap: 5px;
   padding-bottom: 3px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 900;
   color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
 }
-#${DOCK_ID} .twfox-race-board-name .twfox-player-name,
-#${DOCK_LEFT_ID} .twfox-race-board-name .twfox-player-name {
+#${DOCK_ID} .twfox-race-board-name .twfox-player-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#${DOCK_ID} .twfox-race-board-rank,
-#${DOCK_LEFT_ID} .twfox-race-board-rank {
+#${DOCK_ID} .twfox-race-board-rank {
   flex: 0 0 auto;
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgba(255, 146, 62, 0.22);
-  border: 1px solid rgba(255, 154, 76, 0.56);
+  background: rgba(255, 146, 62, 0.24);
+  border: 1px solid rgba(255, 154, 76, 0.62);
   color: #ffd085;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 900;
 }
-#${DOCK_ID} .twfox-race-board-foot,
-#${DOCK_LEFT_ID} .twfox-race-board-foot {
+#${DOCK_ID} .twfox-race-board-foot {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -533,18 +509,16 @@
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   width: 100%;
 }
-#${DOCK_ID} .twfox-race-board-alt,
-#${DOCK_LEFT_ID} .twfox-race-board-alt {
-  font-size: 0.92rem;
+#${DOCK_ID} .twfox-race-board-alt {
+  font-size: 0.88rem;
   font-weight: 900;
   color: #ffd37d;
   font-variant-numeric: tabular-nums;
 }
-#${DOCK_ID} .twfox-race-board-meta,
-#${DOCK_LEFT_ID} .twfox-race-board-meta {
-  font-size: 0.66rem;
+#${DOCK_ID} .twfox-race-board-meta {
+  font-size: 0.64rem;
   font-weight: 800;
-  color: rgba(255, 224, 194, 0.82);
+  color: rgba(255, 224, 194, 0.84);
   white-space: nowrap;
 }
 
@@ -897,10 +871,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let statusEl = null;
     let dockEl = null;
     let dockBoardsEl = null;
-    let dockHeaderEl = null;
-    let dockLeftEl = null;
-    let dockLeftBoardsEl = null;
-    let dockLeftHeaderEl = null;
+    let allowProgrammaticRaceStart = false;
     let specEl = null;
     let specHeaderEl = null;
     let specCanvasEl = null;
@@ -1075,6 +1046,32 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         leaveZp.addEventListener('click', () => {
           triggerLeaveQuickPlayCleanup();
         });
+      }
+      bindStartZenithGuard();
+    }
+
+    function bindStartZenithGuard() {
+      const startBtn = document.getElementById('start_zenith');
+      if (startBtn && !startBtn.__twfoxRaceStartGuard) {
+        startBtn.__twfoxRaceStartGuard = true;
+        if (typeof startBtn.click === 'function') {
+          const origClick = startBtn.click;
+          startBtn.click = function () {
+            if (!allowProgrammaticRaceStart && isNewGameLaunchBlocked()) {
+              return;
+            }
+            return origClick.apply(this, arguments);
+          };
+        }
+        if (typeof startBtn.addEventListener === 'function') {
+          startBtn.addEventListener('click', (ev) => {
+            if (!allowProgrammaticRaceStart && isNewGameLaunchBlocked()) {
+              if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+              if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+              if (ev && typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+            }
+          }, true);
+        }
       }
     }
 
@@ -1266,10 +1263,42 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       return session;
     }
 
+    function isNewGameLaunchBlocked() {
+      return Boolean(session && (racePhase === 'countdown' || racePhase === 'dead' || racePhase === 'results'));
+    }
+
+    function isOverlayKeyboardLocked() {
+      return Boolean(session && ((racePhase === 'dead' && !peekMyResult) || racePhase === 'results'));
+    }
+
+    function readUserRetryKeySet() {
+      const defaults = new Set(['R', 'KEYR']);
+      try {
+        const raw = root.localStorage && root.localStorage.getItem('userConfig');
+        if (!raw) return defaults;
+        const parsed = JSON.parse(raw);
+        const list = parsed && parsed.controls && Array.isArray(parsed.controls.retry) ? parsed.controls.retry : null;
+        if (list && list.length > 0) {
+          const custom = new Set();
+          for (const k of list) {
+            const norm = String(k || '').trim().toUpperCase();
+            if (norm) custom.add(norm);
+          }
+          if (custom.size > 0) return custom;
+        }
+      } catch (_) {}
+      return defaults;
+    }
+
     function launchOfficialQuickPlayRun() {
       const startBtn = document.getElementById('start_zenith');
       if (startBtn && typeof startBtn.click === 'function') {
-        startBtn.click();
+        allowProgrammaticRaceStart = true;
+        try {
+          startBtn.click();
+        } finally {
+          allowProgrammaticRaceStart = false;
+        }
       }
     }
 
@@ -1378,7 +1407,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       const snap = activeSession.getSnapshot();
       const players = snap.players || [];
       if (players.length >= raceLogic.MAX_RACE_PLAYERS) {
-        statusOverride = 'Room is full (max 4 racers).';
+        statusOverride = `Room is full (max ${raceLogic.MAX_RACE_PLAYERS} racers).`;
         inviteNoteText = statusOverride;
         inviteNoteIsError = true;
         renderParty();
@@ -1611,7 +1640,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
               el('div', { className: 'twfox-race-slot is-empty' }, [
                 el('div', { className: 'twfox-race-avatar-stub' }),
                 el('div', { className: 'twfox-race-slot-name', text: 'WAITING FOR PLAYER' }),
-                el('div', { className: 'twfox-race-slot-sub', text: `SLOT ${i + 1}/4 · INVITE FRIEND` })
+                el('div', { className: 'twfox-race-slot-sub', text: `SLOT ${i + 1}/${raceLogic.MAX_RACE_PLAYERS} · INVITE FRIEND` })
               ])
             );
             continue;
@@ -1788,11 +1817,11 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         } else if (racePhase === 'countdown') {
           statusEl.textContent = `STARTING IN ${Math.max(1, countdownRemainingSec)}...`;
         } else if (activeList.length < raceLogic.MIN_RACE_PLAYERS) {
-          statusEl.textContent = `THE RACE (${activeList.length}/4) · NEED AT LEAST 2 RACERS`;
+          statusEl.textContent = `THE RACE (${activeList.length}/${raceLogic.MAX_RACE_PLAYERS}) · NEED AT LEAST 2 RACERS`;
         } else if (readyCount === activeList.length) {
           statusEl.textContent = 'ALL PLAYERS READY — LAUNCHING TOGETHER!';
         } else {
-          statusEl.textContent = `THE RACE (${activeList.length}/4) · READY ${readyCount}/${activeList.length}`;
+          statusEl.textContent = `THE RACE (${activeList.length}/${raceLogic.MAX_RACE_PLAYERS}) · READY ${readyCount}/${activeList.length}`;
         }
       }
 
@@ -1821,56 +1850,59 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       }
     }
 
-    function computeLiveRaceArenaLayout(rivalCount) {
+    const CORNER_ORDER = ['tr', 'tl', 'br', 'bl'];
+
+    function computeCornerCardWidth() {
       const vw = Number(root.innerWidth) > 0 ? Number(root.innerWidth) : 1280;
       const vh = Number(root.innerHeight) > 0 ? Number(root.innerHeight) : 720;
-      const count = Math.max(1, Math.min(3, Number(rivalCount) || 1));
-      const stageUnitPx = Math.min(vw, vh * 2) / 1600;
-      const stageCenterX = vw / 2;
-
-      // Symmetry:
-      // - 2 players (1 rival): [You (left)] [Rival 1 (right)]
-      // - 3 players (2 rivals): [Rival 1 (left)] [You (center)] [Rival 2 (right)]
-      // - 4 players (3 rivals): [Rival 1 (left)] [You (mid-left)] [Rival 2 | Rival 3 (right)]
-      const presets = {
-        1: { ox: -0.34, os: 0.78, leftCount: 0, rightCount: 1 },
-        2: { ox: -0.15, os: 0.62, leftCount: 1, rightCount: 1 },
-        3: { ox: -0.34, os: 0.54, leftCount: 1, rightCount: 2 }
-      };
-      const preset = presets[count] || presets[3];
-      const halfBoardPx = 332 * preset.os * stageUnitPx;
-      const gapPx = Math.round(12 * stageUnitPx);
-      const boardCenterPx = stageCenterX + preset.ox * 800 * stageUnitPx;
-      const boardLeftPx = boardCenterPx - halfBoardPx;
-      const boardRightPx = boardCenterPx + halfBoardPx;
-
-      const leftLimitPx = stageCenterX - 670 * stageUnitPx;
-      const leaderboardLeftPx = stageCenterX + 390 * stageUnitPx;
-
-      const rightDockLeftPx = Math.round(boardRightPx + gapPx);
-      const availRightPx = Math.max(120, Math.floor(leaderboardLeftPx - rightDockLeftPx));
-      const availLeftPx = Math.max(120, Math.floor(boardLeftPx - gapPx - leftLimitPx));
-      const idealCardW = Math.round((460 * preset.os * stageUnitPx) / 1.44);
-
-      const maxPerRightSlot = Math.floor((availRightPx - (preset.rightCount > 1 ? 8 : 4)) / Math.max(1, preset.rightCount));
-      const maxPerLeftSlot = preset.leftCount > 0 ? (availLeftPx - 4) : 9999;
-      const cardW = Math.max(90, Math.min(idealCardW, maxPerRightSlot, maxPerLeftSlot, 240));
-      const leftDockLeftPx = Math.round(boardLeftPx - gapPx - (preset.leftCount * cardW + 6));
-
-      return {
-        ox: preset.ox,
-        os: preset.os,
-        leftCount: preset.leftCount,
-        rightCount: preset.rightCount,
-        leftDockLeftPx,
-        rightDockLeftPx,
-        cardW
-      };
+      const maxVertW = Math.floor(((vh - 150) / 2 - 48) * (264 / 336));
+      const maxHorizW = Math.floor(vw * 0.275 - 56);
+      return Math.max(122, Math.min(maxVertW, maxHorizW, 215));
     }
 
-    function renderDockCardGroup(containerEl, list, ranked, useCompactWings) {
-      containerEl.innerHTML = '';
-      for (const pl of list) {
+    function renderDock() {
+      if (!dockEl || !dockBoardsEl) return;
+      // Keep the active player's TETR.IO board at full centered scale at all times
+      if (typeof api.setRaceBoardTransform === 'function') {
+        api.setRaceBoardTransform(null);
+      }
+
+      const bodyEl = document.body;
+      const inZenith = Boolean(bodyEl && bodyEl.classList && bodyEl.classList.contains('inzenith'));
+      const showDock = Boolean(session && racePhase === 'alive' && inZenith);
+      if (!showDock) {
+        setClass(dockEl, 'is-visible', false);
+        dockBoardsEl.innerHTML = '';
+        return;
+      }
+
+      const snap = session.getSnapshot();
+      const isHost = snap.role === 'host';
+      const selfId = isHost ? 'host' : snap.selfId;
+      const activePool = (snap.players || []).filter((p) => !p.spectator).slice(0, raceLogic.MAX_RACE_PLAYERS);
+      const ranked = raceLogic.computeRaceStandings(activePool, [], 0, 0);
+
+      const rivals = activePool.filter((p) => p.id !== selfId);
+      const activeDockIds = new Set(rivals.map((p) => p.id));
+      for (const oldId of Array.from(rivalCanvases.keys())) {
+        if (!activeDockIds.has(oldId)) rivalCanvases.delete(oldId);
+      }
+
+      if (rivals.length === 0) {
+        setClass(dockEl, 'is-visible', false);
+        dockBoardsEl.innerHTML = '';
+        return;
+      }
+
+      const cornerCardW = computeCornerCardWidth();
+      if (dockEl.style && typeof dockEl.style.setProperty === 'function') {
+        dockEl.style.setProperty('--twfox-corner-w', `${cornerCardW}px`);
+      }
+
+      dockBoardsEl.innerHTML = '';
+      for (let i = 0; i < rivals.length && i < CORNER_ORDER.length; i++) {
+        const pl = rivals[i];
+        const corner = CORNER_ORDER[i];
         const rankInfo = ranked.find((r) => r.id === pl.id);
         const rankNum = rankInfo ? rankInfo.placement : '-';
         const peakAlt = Math.max(Number(pl.peakAltitude) || 0, Number(pl.altitude) || 0);
@@ -1883,10 +1915,13 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           });
           rivalCanvases.set(pl.id, c);
         }
-        drawPlayerRaceBoard(c, pl, pl.alive === false ? rankNum : null, useCompactWings);
+        drawPlayerRaceBoard(c, pl, pl.alive === false ? rankNum : null, false);
         const cardClasses = ['twfox-race-board-card', pl.alive === false ? 'is-ko' : ''].filter(Boolean).join(' ');
-        containerEl.appendChild(
-          el('div', { className: cardClasses, attrs: { 'data-race-player': pl.id } }, [
+        dockBoardsEl.appendChild(
+          el('div', {
+            className: cardClasses,
+            attrs: { 'data-race-player': pl.id, 'data-corner': corner }
+          }, [
             el('div', { className: 'twfox-race-board-name' }, [
               el('span', { className: 'twfox-player-name', text: pl.name }),
               el('span', { className: 'twfox-race-board-rank', text: `Nº${rankNum}` })
@@ -1899,90 +1934,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           ])
         );
       }
-    }
-
-    function renderDock() {
-      if (!dockEl || !dockBoardsEl) return;
-      const bodyEl = document.body;
-      const inZenith = Boolean(bodyEl && bodyEl.classList && bodyEl.classList.contains('inzenith'));
-      const showDock = Boolean(session && racePhase === 'alive' && inZenith);
-      if (!showDock) {
-        setClass(dockEl, 'is-visible', false);
-        if (dockLeftEl) setClass(dockLeftEl, 'is-visible', false);
-        if (typeof api.setRaceBoardTransform === 'function') {
-          api.setRaceBoardTransform(null);
-        }
-        return;
-      }
-
-      const snap = session.getSnapshot();
-      const isHost = snap.role === 'host';
-      const selfId = isHost ? 'host' : snap.selfId;
-      const activePool = (snap.players || []).filter((p) => !p.spectator).slice(0, raceLogic.MAX_RACE_PLAYERS);
-      const ranked = raceLogic.computeRaceStandings(activePool, [], 0, 0);
-      const myRank = ranked.find((r) => r.id === selfId);
-
-      const rivals = activePool.filter((p) => p.id !== selfId);
-      const activeDockIds = new Set(rivals.map((p) => p.id));
-      for (const oldId of Array.from(rivalCanvases.keys())) {
-        if (!activeDockIds.has(oldId)) rivalCanvases.delete(oldId);
-      }
-
-      if (rivals.length === 0) {
-        setClass(dockEl, 'is-visible', false);
-        if (dockLeftEl) setClass(dockLeftEl, 'is-visible', false);
-        if (typeof api.setRaceBoardTransform === 'function') {
-          api.setRaceBoardTransform(null);
-        }
-        return;
-      }
-
-      const layout = computeLiveRaceArenaLayout(rivals.length);
-      if (typeof api.setRaceBoardTransform === 'function') {
-        api.setRaceBoardTransform({ ox: layout.ox, os: layout.os });
-      }
-
-      const leftList = layout.leftCount > 0 ? rivals.slice(0, layout.leftCount) : [];
-      const rightList = rivals.slice(layout.leftCount);
-      const useCompactWings = rivals.length >= 3;
-
-      if (dockLeftEl && dockLeftBoardsEl) {
-        if (leftList.length > 0) {
-          if (dockLeftEl.style) {
-            dockLeftEl.style.left = `${layout.leftDockLeftPx}px`;
-            if (typeof dockLeftEl.style.setProperty === 'function') {
-              dockLeftEl.style.setProperty('--twfox-dock-card-w', `${layout.cardW}px`);
-            }
-          }
-          if (dockLeftHeaderEl) {
-            dockLeftHeaderEl.textContent = `THE RACE · ${myRank ? `Nº${myRank.placement}/${ranked.length}` : `${ranked.length}/4`}`;
-          }
-          renderDockCardGroup(dockLeftBoardsEl, leftList, ranked, useCompactWings);
-          setClass(dockLeftEl, 'is-visible', true);
-        } else {
-          setClass(dockLeftEl, 'is-visible', false);
-          dockLeftBoardsEl.innerHTML = '';
-        }
-      }
-
-      if (rightList.length > 0) {
-        if (dockEl.style) {
-          dockEl.style.left = `${layout.rightDockLeftPx}px`;
-          if (typeof dockEl.style.setProperty === 'function') {
-            dockEl.style.setProperty('--twfox-dock-card-w', `${layout.cardW}px`);
-          }
-        }
-        if (dockHeaderEl) {
-          dockHeaderEl.textContent = leftList.length > 0
-            ? `RIVALS (${rightList.length})`
-            : `THE RACE · LIVE (${myRank ? `Nº${myRank.placement}/${ranked.length}` : `${ranked.length}/4`})`;
-        }
-        renderDockCardGroup(dockBoardsEl, rightList, ranked, useCompactWings);
-        setClass(dockEl, 'is-visible', true);
-      } else {
-        setClass(dockEl, 'is-visible', false);
-        dockBoardsEl.innerHTML = '';
-      }
+      setClass(dockEl, 'is-visible', true);
     }
 
     function renderSpectator() {
@@ -2006,7 +1958,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
 
       spectatingTargetId = target.id;
       const ranked = raceLogic.computeRaceStandings(players, [], 0, 0);
-      const colCount = Math.max(2, Math.min(4, players.length || 2));
+      const colCount = Math.max(2, Math.min(raceLogic.MAX_RACE_PLAYERS, players.length || 2));
       if (specEl.style && typeof specEl.style.setProperty === 'function') {
         specEl.style.setProperty('--twfox-spec-cols', String(colCount));
       }
@@ -2158,6 +2110,11 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         if (cardEl) {
           setClass(cardEl, 'is-race-selected', cardSelected);
         }
+        if (document.body) {
+          const inMatch = Boolean(session && (racePhase === 'entering' || racePhase === 'alive' || racePhase === 'dead'));
+          setClass(document.body, 'twfox-race-in-match', inMatch);
+          setClass(document.body, 'twfox-race-locked', isNewGameLaunchBlocked());
+        }
         renderParty();
         renderDock();
         renderSpectator();
@@ -2278,17 +2235,9 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     }
 
     function ensureOverlaysMounted() {
-      if (!dockLeftEl && document.body) {
-        dockLeftHeaderEl = el('div', { className: 'twfox-race-dock-hdr', text: 'THE RACE' });
-        dockLeftBoardsEl = el('div', { className: 'twfox-race-boards-row' });
-        dockLeftEl = el('div', { id: DOCK_LEFT_ID }, [dockLeftHeaderEl, dockLeftBoardsEl]);
-        document.body.appendChild(dockLeftEl);
-      }
-
       if (!dockEl && document.body) {
-        dockHeaderEl = el('div', { className: 'twfox-race-dock-hdr', text: 'THE RACE · LIVE' });
-        dockBoardsEl = el('div', { className: 'twfox-race-boards-row' });
-        dockEl = el('div', { id: DOCK_ID }, [dockHeaderEl, dockBoardsEl]);
+        dockBoardsEl = el('div', { className: 'twfox-race-corners-layer' });
+        dockEl = el('div', { id: DOCK_ID }, [dockBoardsEl]);
         document.body.appendChild(dockEl);
       }
 
@@ -2406,7 +2355,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
             attrs: { 'data-for': 'race' }
           }, [
             el('h1', { text: 'THE RACE' }),
-            el('p', { text: '4-player visual tower race — climb side-by-side at your own pace' })
+            el('p', { text: '5-player visual tower race — climb at full size with 4 corner rivals' })
           ]);
           deckInfos.appendChild(infoEl);
         } else {
@@ -2535,7 +2484,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           statusEl = el('div', {
             id: 'twfoxtetrio-race-status',
             className: 'twfox-race-status',
-            text: 'THE RACE (1/4) · NEED AT LEAST 2 RACERS'
+            text: `THE RACE (1/${raceLogic.MAX_RACE_PLAYERS}) · NEED AT LEAST 2 RACERS`
           });
           readyBtnEl = el('button', {
             id: 'twfoxtetrio-race-ready-btn',
@@ -2694,6 +2643,25 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         if (!session) return;
         const tgt = ev && ev.target;
         if (!tgt) return;
+
+        if (!allowProgrammaticRaceStart && isNewGameLaunchBlocked()) {
+          const startBtn = document.getElementById('start_zenith');
+          const partyReadyBtn = document.getElementById('zenith_party_ready');
+          const isStartHit =
+            tgt.id === 'start_zenith' ||
+            tgt === startBtn ||
+            tgt.id === 'zenith_party_ready' ||
+            tgt === partyReadyBtn ||
+            (typeof tgt.closest === 'function' && (tgt.closest('#start_zenith') || tgt.closest('#zenith_party_ready')));
+          if (isStartHit) {
+            if (typeof ev.preventDefault === 'function') ev.preventDefault();
+            if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+            if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+            statusOverride = 'Finish the current Race round first.';
+            return;
+          }
+        }
+
         const leaveBtn = document.getElementById('leavezenith');
         if (
           tgt.id === 'leavezenith' ||
@@ -2703,6 +2671,36 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           triggerLeaveQuickPlayCleanup();
         }
       }, true);
+
+      const handleBlockedRaceKey = (ev) => {
+        if (!isNewGameLaunchBlocked() || !ev) return;
+        const codeUp = String(ev.code || '').toUpperCase();
+        const keyUp = String(ev.key || '').toUpperCase();
+        if (ev.ctrlKey || ev.metaKey || ev.altKey || /^F\d{1,2}$/.test(codeUp) || /^F\d{1,2}$/.test(keyUp)) {
+          return;
+        }
+        const retryKeys = readUserRetryKeySet();
+        const isRetryOrConfirm =
+          retryKeys.has(codeUp) ||
+          retryKeys.has(keyUp) ||
+          codeUp === 'ENTER' ||
+          codeUp === 'NUMPADENTER' ||
+          codeUp === 'SPACE' ||
+          keyUp === 'ENTER' ||
+          keyUp === ' ';
+        if (isOverlayKeyboardLocked() || isRetryOrConfirm) {
+          if (typeof ev.preventDefault === 'function') ev.preventDefault();
+          if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+        }
+      };
+
+      document.addEventListener('keydown', handleBlockedRaceKey, true);
+      document.addEventListener('keyup', handleBlockedRaceKey, true);
+      if (typeof root.addEventListener === 'function' && root !== document) {
+        root.addEventListener('keydown', handleBlockedRaceKey, true);
+        root.addEventListener('keyup', handleBlockedRaceKey, true);
+      }
     }
 
     if (typeof root.addEventListener === 'function') {

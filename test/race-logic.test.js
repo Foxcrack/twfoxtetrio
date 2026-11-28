@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 
 const raceLogic = require('../src/features/race-logic');
 
-test('race-logic enforces 2..4 player ready checks, floor mapping, and target switching', () => {
-  assert.equal(raceLogic.MAX_RACE_PLAYERS, 4);
+test('race-logic enforces 2..5 player ready checks, floor mapping, and target switching', () => {
+  assert.equal(raceLogic.MAX_RACE_PLAYERS, 5);
   assert.equal(raceLogic.MIN_RACE_PLAYERS, 2);
 
   // Only 1 player ready -> cannot launch
@@ -13,40 +13,42 @@ test('race-logic enforces 2..4 player ready checks, floor mapping, and target sw
     false
   );
 
-  // 4 players connected, 3 ready and 1 unready -> cannot launch
-  const fourPlayers = [
+  // 5 players connected, 4 ready and 1 unready -> cannot launch
+  const fivePlayers = [
     { id: 'host', name: 'HostFox', ready: true, alive: true, altitude: 120 },
     { id: 'p2', name: 'Runner2', ready: true, alive: true, altitude: 340 },
     { id: 'p3', name: 'Runner3', ready: true, alive: true, altitude: 210 },
-    { id: 'p4', name: 'Runner4', ready: false, alive: true, altitude: 90 }
+    { id: 'p4', name: 'Runner4', ready: true, alive: true, altitude: 90 },
+    { id: 'p5', name: 'Runner5', ready: false, alive: true, altitude: 50 }
   ];
-  assert.equal(raceLogic.areAllRacePlayersReady(fourPlayers), false);
-
-  // Once 4th clicks ready -> all 4 ready
-  fourPlayers[3].ready = true;
-  assert.equal(raceLogic.areAllRacePlayersReady(fourPlayers), true);
-
-  // 5 players exceeds cap -> false
-  const fivePlayers = fourPlayers.concat({ id: 'p5', name: 'Extra', ready: true, alive: true });
   assert.equal(raceLogic.areAllRacePlayersReady(fivePlayers), false);
 
+  // Once 5th clicks ready -> all 5 ready
+  fivePlayers[4].ready = true;
+  assert.equal(raceLogic.areAllRacePlayersReady(fivePlayers), true);
+
+  // 6 players exceeds cap -> false
+  const sixPlayers = fivePlayers.concat({ id: 'p6', name: 'Extra', ready: true, alive: true });
+  assert.equal(raceLogic.areAllRacePlayersReady(sixPlayers), false);
+
   // Dead player auto-picks highest-altitude living opponent, preserves valid switch, returns null when all dead
-  fourPlayers[0].alive = false;
-  const autoTarget = raceLogic.pickNextAliveTarget(fourPlayers, 'host', null);
+  fivePlayers[0].alive = false;
+  const autoTarget = raceLogic.pickNextAliveTarget(fivePlayers, 'host', null);
   assert.equal(autoTarget.id, 'p2');
-  const switched = raceLogic.pickNextAliveTarget(fourPlayers, 'host', 'p3');
+  const switched = raceLogic.pickNextAliveTarget(fivePlayers, 'host', 'p3');
   assert.equal(switched.id, 'p3');
 
-  fourPlayers[1].alive = false;
-  fourPlayers[2].alive = false;
-  fourPlayers[3].alive = false;
-  assert.equal(raceLogic.pickNextAliveTarget(fourPlayers, 'host', 'p3'), null);
+  fivePlayers[1].alive = false;
+  fivePlayers[2].alive = false;
+  fivePlayers[3].alive = false;
+  fivePlayers[4].alive = false;
+  assert.equal(raceLogic.pickNextAliveTarget(fivePlayers, 'host', 'p3'), null);
 
-  // Standings rank by peak altitude descending -> p2 (340), p3 (210), HostFox (120), Runner4 (90)
-  const standings = raceLogic.computeRaceStandings(fourPlayers, [], 1000, 61000);
+  // Standings rank by peak altitude descending -> p2 (340), p3 (210), HostFox (120), Runner4 (90), Runner5 (50)
+  const standings = raceLogic.computeRaceStandings(fivePlayers, [], 1000, 61000);
   assert.deepEqual(
     standings.map((s) => `${s.placement}:${s.name}:${s.altitude}`),
-    ['1:Runner2:340', '2:Runner3:210', '3:HostFox:120', '4:Runner4:90']
+    ['1:Runner2:340', '2:Runner3:210', '3:HostFox:120', '4:Runner4:90', '5:Runner5:50']
   );
 
   // Floor helper accuracy

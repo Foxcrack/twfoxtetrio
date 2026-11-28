@@ -8,7 +8,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : window, function () {
   'use strict';
 
-  const MAX_RACE_PLAYERS = 4;
+  const MAX_RACE_PLAYERS = 5;
   const MIN_RACE_PLAYERS = 2;
   const RACE_GAME_MODE = 'race';
   const RACE_COUNTDOWN_MS = 2800;
