@@ -383,24 +383,22 @@
 #${PARTY_ID} .twfox-race-ready-bar.is-on .twfox-race-status {
   color: #ffd2bd;
 }
-.twfox-race-floating-back {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 999998;
-  padding: 9px 18px;
+#${SPECTATOR_ID} .twfox-spec-leave-btn {
+  padding: 5px 12px;
   border-radius: 4px;
-  border: 2px solid #8d2e1b;
-  background: #532314;
-  color: #ffd2bd;
+  border: 1.5px solid #ff6e54;
+  background: rgba(138, 28, 22, 0.85);
+  color: #ffe0d8;
   font-family: 'HUN', 'C', 'Segoe UI', sans-serif;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   cursor: pointer;
+  transition: filter 120ms ease, background 120ms ease;
 }
-.twfox-race-floating-back.hidden {
-  display: none !important;
+#${SPECTATOR_ID} .twfox-spec-leave-btn:hover {
+  filter: brightness(1.18);
+  background: rgba(176, 36, 26, 0.95);
 }
 
 body.twfox-race-in-match #ingame_chat_container,
@@ -522,7 +520,7 @@ body.twfox-race-spectating #start_zenith {
   white-space: nowrap;
 }
 
-body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
+body.twfox-race-spectating #zenithmenu {
   opacity: 0 !important;
   pointer-events: none !important;
 }
@@ -833,7 +831,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let selfPeakFloor = 1;
     let selfLastSnapshot = null;
     let spectatingTargetId = null;
-    let peekMyResult = false;
     let inviteCooldownTicker = null;
     let statusOverride = '';
     let isMountingDom = false;
@@ -878,8 +875,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     let specTopbarEl = null;
     let specSubEl = null;
     let specListEl = null;
-    let specPeekBtnEl = null;
-    let backToSpecBtnEl = null;
+    let specLeaveBtnEl = null;
     let resultsEl = null;
     let resultsSubEl = null;
     let resultsTableEl = null;
@@ -1235,7 +1231,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         clearCardSpin();
         racePhase = 'idle';
         hasEnteredLivePlay = false;
-        peekMyResult = false;
         spectatingTargetId = null;
         statusOverride = '';
         inviteNoteText = '';
@@ -1268,7 +1263,7 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
     }
 
     function isOverlayKeyboardLocked() {
-      return Boolean(session && ((racePhase === 'dead' && !peekMyResult) || racePhase === 'results'));
+      return Boolean(session && (racePhase === 'dead' || racePhase === 'results'));
     }
 
     function readUserRetryKeySet() {
@@ -1327,7 +1322,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         if (isPlayingNow) {
           hasEnteredLivePlay = true;
           racePhase = 'alive';
-          peekMyResult = false;
         } else if (Date.now() - raceStartedAt > 18000) {
           // Player failed or cancelled entering Quick Play -> finish gracefully
           hasEnteredLivePlay = true;
@@ -1537,14 +1531,12 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         selfPeakFloor = 1;
         selfLastSnapshot = null;
         spectatingTargetId = null;
-        peekMyResult = false;
         startLivePolling();
         launchOfficialQuickPlayRun();
         sampleAndBroadcastLocalRun();
       } else if (evType === 'round_end') {
         stopRaceLoop();
         racePhase = 'results';
-        peekMyResult = false;
         renderResults(snap, detail);
       } else if (evType === 'lobby_reset') {
         stopRaceLoop();
@@ -1552,7 +1544,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         // each player dismisses their own Final Leaderboard using the NEXT button.
         if (racePhase !== 'results') {
           racePhase = 'idle';
-          peekMyResult = false;
           spectatingTargetId = null;
         }
       } else if (evType === 'host_closed') {
@@ -1945,13 +1936,10 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         : [];
       const selfId = snap ? (snap.role === 'host' ? 'host' : snap.selfId) : 'host';
       const target = raceLogic.pickNextAliveTarget(players, selfId, spectatingTargetId);
-      const shouldShow = Boolean(session && racePhase === 'dead' && target && !peekMyResult);
+      const shouldShow = Boolean(session && racePhase === 'dead' && target);
 
       if (document.body) {
-        setClass(document.body, 'twfox-race-spectating', Boolean(session && racePhase === 'dead' && target && !peekMyResult));
-      }
-      if (backToSpecBtnEl) {
-        setClass(backToSpecBtnEl, 'hidden', !(session && racePhase === 'dead' && target && peekMyResult));
+        setClass(document.body, 'twfox-race-spectating', shouldShow);
       }
       setClass(specEl, 'hidden', !shouldShow);
       if (!shouldShow) return;
@@ -2251,20 +2239,20 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           style: 'font-size:0.76rem;font-weight:800;color:#ffd09e;',
           text: 'CLICK A RUNNER TO FOCUS'
         });
-        specPeekBtnEl = el('button', {
-          id: 'twfoxtetrio-race-peek-btn',
-          className: 'twfox-race-btn',
+        specLeaveBtnEl = el('button', {
+          id: 'twfoxtetrio-race-spec-leave-btn',
+          className: 'twfox-spec-leave-btn',
           type: 'button',
-          text: 'PEEK MY RESULT'
+          text: 'LEAVE RACE'
         });
-        specPeekBtnEl.addEventListener('click', () => {
-          peekMyResult = true;
-          syncVisualState();
+        specLeaveBtnEl.addEventListener('click', () => {
+          cardSelected = false;
+          teardownRaceSession(true);
         });
         specTopbarEl = el('div', { className: 'twfox-spec-topbar' }, [
           specHeaderEl,
           specSubEl,
-          specPeekBtnEl
+          specLeaveBtnEl
         ]);
         specListEl = el('div', { className: 'twfox-spec-main' });
         specEl = el('div', { id: SPECTATOR_ID, className: 'hidden' }, [
@@ -2272,20 +2260,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           specListEl
         ]);
         document.body.appendChild(specEl);
-      }
-
-      if (!backToSpecBtnEl && document.body) {
-        backToSpecBtnEl = el('button', {
-          id: 'twfoxtetrio-race-back-spec-btn',
-          className: 'twfox-race-floating-back hidden',
-          type: 'button',
-          text: 'BACK TO SPECTATOR'
-        });
-        backToSpecBtnEl.addEventListener('click', () => {
-          peekMyResult = false;
-          syncVisualState();
-        });
-        document.body.appendChild(backToSpecBtnEl);
       }
 
       if (!resultsEl && document.body) {
@@ -2303,7 +2277,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
         });
         resultsNextBtnEl.addEventListener('click', () => {
           racePhase = 'idle';
-          peekMyResult = false;
           spectatingTargetId = null;
           if (session) {
             const snap = session.getSnapshot();
@@ -2717,7 +2690,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
           cardSelected,
           racePhase,
           spectatingTargetId,
-          peekMyResult,
           session: session ? session.getSnapshot() : null
         };
       },
@@ -2726,7 +2698,6 @@ body.twfox-race-spectating #zenithmenu:not(.twfox-peek-result) {
       sendRaceInvite,
       setSpectateTarget(targetId) {
         spectatingTargetId = targetId || null;
-        peekMyResult = false;
         renderSpectator();
       },
       refresh: ensureZenithDomMounted

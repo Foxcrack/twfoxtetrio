@@ -3658,8 +3658,8 @@ test('Quick Play THE RACE tarot card coordinates 5-player ready launch, 4-corner
 
     // Activating THE LOVERS first and then clicking THE RACE automatically disables THE LOVERS,
     // plays the 250ms card spin + smooth party unfold, and never leaves both cards active at once
-    const backSpecBtn = env.elements.get('twfoxtetrio-race-back-spec-btn');
-    assert.equal(backSpecBtn.classList.contains('hidden'), true, 'Floating back-to-spectator button must stay hidden outside spectator peek');
+    assert.equal(env.elements.get('twfoxtetrio-race-back-spec-btn'), undefined, 'Floating back-to-spectator button must be removed');
+    assert.equal(env.elements.get('twfoxtetrio-race-peek-btn'), undefined, 'PEEK MY RESULT button must be removed');
 
     duoCard.click();
     assert.equal(duoCard.classList.contains('active'), true);
@@ -3842,13 +3842,10 @@ test('Quick Play THE RACE tarot card coordinates 5-player ready launch, 4-corner
     assert.equal(resultsEl.classList.contains('hidden'), true, 'Final leaderboard must stay hidden while other runners are alive');
     assert.ok(env.elements.get('twfoxtetrio-race-spectate-target').textContent.includes('RUNNER2'));
 
-    // Even when PEEK MY RESULT is toggled open, clicking AGAIN (#start_zenith) must stay blocked until round finishes
-    env.elements.get('twfoxtetrio-race-peek-btn').click();
-    assert.equal(env.body.classList.contains('twfox-race-spectating'), false);
-    startZenith.click();
-    assert.equal(startZenithClicks, 1, 'Clicking #start_zenith while peeking result during active Race must remain blocked');
-    env.elements.get('twfoxtetrio-race-back-spec-btn').click();
-    assert.equal(env.body.classList.contains('twfox-race-spectating'), true);
+    // Spectator header offers LEAVE RACE button in case player wants to exit without waiting
+    const specLeaveBtn = env.elements.get('twfoxtetrio-race-spec-leave-btn');
+    assert.ok(specLeaveBtn, 'Spectator topbar must include LEAVE RACE button');
+    assert.equal(specLeaveBtn.textContent, 'LEAVE RACE');
 
     // Switch spectator view to Runner3 by clicking Runner3 card directly in DOM
     const r3Id = f3.getSnapshot().selfId;
@@ -3885,6 +3882,35 @@ test('Quick Play THE RACE tarot card coordinates 5-player ready launch, 4-corner
     f2.close();
     f3.close();
     f4.close();
+    f5.close();
+
+    // Verify clicking LEAVE RACE from Spectator cleanly exits the lobby & unlocks Quick Play
+    zenRace.selectRaceCard(true);
+    const leaveCode = zenRace.getState().session.room.roomCode;
+    const fLeave = p2pRoom.createClientPeer({ playerName: 'StayRunner', rtcFactory: () => new RaceRtc(), wsFactory: () => new RaceWs(), brokers: ['wss://mock/mqtt'] });
+    await fLeave.joinByCode(leaveCode);
+    await new Promise((r) => setTimeout(r, 30));
+    selfAlive = true;
+    env.elements.get('twfoxtetrio-race-ready-btn').click();
+    fLeave.setReady(true);
+    const deadline2 = Date.now() + 800;
+    while (Date.now() < deadline2 && zenRace.getState().racePhase !== 'entering' && zenRace.getState().racePhase !== 'alive') {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    await new Promise((r) => setTimeout(r, 120));
+    selfAlive = false;
+    env.body.classList.remove('ingame_phys');
+    zMenu.classList.remove('rolledup', 'hidden');
+    zMenu.classList.add('inresults');
+    await new Promise((r) => setTimeout(r, 130));
+    assert.equal(env.body.classList.contains('twfox-race-spectating'), true);
+    env.elements.get('twfoxtetrio-race-spec-leave-btn').click();
+    assert.equal(zenRace.getState().session, null, 'Clicking LEAVE RACE in spectator must close the Race session');
+    assert.equal(env.body.classList.contains('twfox-race-spectating'), false);
+    assert.equal(env.body.classList.contains('twfox-race-in-match'), false);
+    assert.equal(env.body.classList.contains('twfox-race-locked'), false);
+    fLeave.close();
+
     env.body.classList.remove('inzenith');
     env.elements.get('twfoxtetrio-race-leave-btn').click();
   } finally {
