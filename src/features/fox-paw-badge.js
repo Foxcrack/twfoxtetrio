@@ -11,7 +11,9 @@
   const STYLE_ID = 'twfoxtetrio-fox-paw-style';
   const CONNECT_TIMEOUT_MS = 9000;
   const KEEPALIVE_MS = 40000;
-  const HEARTBEAT_PUBLISH_MS = 20 * 60 * 1000;
+  const HEARTBEAT_PUBLISH_MS = 90 * 1000;
+  const ONLINE_MQTT_WINDOW_MS = 22 * 60 * 1000;
+  const RECENT_LIVE_MQTT_MS = 5 * 60 * 1000;
   const RECONNECT_MIN_MS = 2000;
   const RECONNECT_MAX_MS = 60000;
   const SCAN_DEBOUNCE_MS = 50;
@@ -105,6 +107,10 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       initialCache: loadStoredCache()
     });
     const activeBadgedEls = new Set();
+    const mqttLiveSeenAtByUser = new Map();
+    const offlineDomSinceByUser = new Map();
+    const prevDomOfflineByUser = new Map();
+    let lastNotifiedMutualRev = -1;
 
     let destroyed = false;
     let enabled = isConfigEnabled(api.getConfig());
@@ -226,6 +232,7 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
 
       const now = Date.now();
       const targetStates = new Map();
+      let notifySocialChanged = false;
 
       function markTarget(el, rawUsername) {
         if (!el) return;
@@ -344,11 +351,28 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
           const targetEl = spanEl || h1;
           if (targetEl) {
             markTarget(targetEl, targetEl.textContent);
+            const relUser = logic.normalizeUsername(targetEl.textContent);
+            if (relUser) {
+              const rowIsOff = Boolean(rel.classList && rel.classList.contains('offline'));
+              const hadPrev = prevDomOfflineByUser.has(relUser);
+              const prevOff = prevDomOfflineByUser.get(relUser);
+              if (rowIsOff) {
+                if (!hadPrev || prevOff !== true) {
+                  offlineDomSinceByUser.set(relUser, now);
+                  prevDomOfflineByUser.set(relUser, true);
+                  if (hadPrev) notifySocialChanged = true;
+                }
+              } else {
+                offlineDomSinceByUser.delete(relUser);
+                prevDomOfflineByUser.set(relUser, false);
+                if (hadPrev && prevOff === true) notifySocialChanged = true;
+              }
+            }
           }
         }
 
         if (mutualStore) {
-          mutualStore.extractFromSocialDom(queryRoot, selfNorm);
+          mutualStore.extractFromSocialDom(queryRoot, selfNorm, now);
         }
 
         // 8c. Social panel NOTIFICATIONS sender (.social_notification h1 > span)
@@ -361,7 +385,7 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
             markTarget(spanEl, spanEl.textContent);
           }
           if (mutualStore && notif && notif.textContent) {
-            mutualStore.ingestNotificationText(notif.textContent, selfNorm);
+            mutualStore.ingestNotificationText(notif.textContent, selfNorm, now);
           }
         }
 
@@ -374,9 +398,14 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
             : [];
           for (let i = 0; i < liveToasts.length; i++) {
             if (liveToasts[i] && liveToasts[i].textContent) {
-              mutualStore.ingestNotificationText(liveToasts[i].textContent, selfNorm);
+              mutualStore.ingestNotificationText(liveToasts[i].textContent, selfNorm, now);
             }
           }
+        }
+        const nextMutualRev = mutualStore && typeof mutualStore.getRevision === 'function' ? mutualStore.getRevision() : 0;
+        if (mutualStore && nextMutualRev !== lastNotifiedMutualRev) {
+          lastNotifiedMutualRev = nextMutualRev;
+          notifySocialChanged = true;
         }
 
         // 8d. Quick user profile card modal (.tetra_modal containing .avatar -> h2)
@@ -435,6 +464,10 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
           logic.applyPawAttribute(el, false);
           activeBadgedEls.delete(el);
         }
+      }
+
+      if (notifySocialChanged) {
+        notifyPresenceListeners();
       }
     }
 
@@ -682,7 +715,16 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
             }
             return;
           }
-          const res = registry.applyMessage(topic, text, Date.now());
+          const mqttNow = Date.now();
+          const res = registry.applyMessage(topic, text, mqttNow);
+          if (res.action === 'remove' && res.username) {
+            mqttLiveSeenAtByUser.delete(res.username);
+          } else if (res.action === 'upsert' && res.username) {
+            const recTs = typeof registry.getTimestamp === 'function' ? registry.getTimestamp(res.username, mqttNow) : mqttNow;
+            if (recTs > 0 && mqttNow - recTs <= RECENT_LIVE_MQTT_MS) {
+              mqttLiveSeenAtByUser.set(res.username, mqttNow);
+            }
+          }
           if (res.changed) {
             scheduleSaveCache();
             scheduleScan();
@@ -804,12 +846,22 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         subtree: true,
         characterData: true,
         attributes: true,
-        attributeFilter: ['data-username']
+        attributeFilter: ['data-username', 'class']
       });
     }
 
+    function handleBeforeUnload() {
+      if (enabled && wsConnected && lastPublishedUser && p2pRoom && p2pRoom.mqttPacketPublish) {
+        const topic = logic.buildPresenceTopic(lastPublishedUser);
+        if (topic) {
+          sendPacket(p2pRoom.mqttPacketPublish(topic, '', true));
+        }
+      }
+      flushCache();
+    }
+
     if (typeof root.addEventListener === 'function') {
-      root.addEventListener('beforeunload', flushCache);
+      root.addEventListener('beforeunload', handleBeforeUnload);
     }
 
     // Initial activation when enabled
@@ -833,7 +885,7 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         scanTimer = null;
       }
       if (typeof root.removeEventListener === 'function') {
-        root.removeEventListener('beforeunload', flushCache);
+        root.removeEventListener('beforeunload', handleBeforeUnload);
       }
       closeSocket();
       flushCache();
@@ -844,6 +896,9 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       inviteListeners.clear();
       presenceListeners.clear();
       seenInviteIds.clear();
+      mqttLiveSeenAtByUser.clear();
+      offlineDomSinceByUser.clear();
+      prevDomOfflineByUser.clear();
     }
 
     function sendRoomInvite(targetUsername, payloadObj) {
@@ -923,8 +978,25 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       if (!norm) return { invitable: false, reason: 'invalid', badge: '' };
       const now = Date.now();
       const regAvail = typeof registry.getAvailability === 'function' ? registry.getAvailability(norm, now) : '';
+      const regTs = typeof registry.getTimestamp === 'function' ? registry.getTimestamp(norm, now) : 0;
+      const mqttLiveAt = mqttLiveSeenAtByUser.get(norm) || 0;
+      const mqttOnlineRecently = Boolean(regTs > 0 && now - regTs <= ONLINE_MQTT_WINDOW_MS);
       const live = getLiveSocialInfo(norm);
       if (live) {
+        const offSince = offlineDomSinceByUser.get(norm) || 0;
+        const mqttOverridesDomOffline = Boolean(
+          live.isOffline &&
+          mqttLiveAt > 0 &&
+          offSince > 0 &&
+          mqttLiveAt > offSince &&
+          regTs > 0 &&
+          now - regTs <= RECENT_LIVE_MQTT_MS
+        );
+        if (mqttOverridesDomOffline) {
+          return inviteLogic.classifyInviteAvailability({
+            registryAvailability: regAvail
+          });
+        }
         return inviteLogic.classifyInviteAvailability({
           statusText: live.statusText,
           statusHtml: live.statusHtml,
@@ -936,9 +1008,30 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       }
       const list = mutualStore ? mutualStore.listMutual(selfNorm) : [];
       const cached = list.find((item) => item && item.username === norm) || null;
+      const cachedLooksOffline = Boolean(
+        !cached ||
+        cached.busyReason === 'offline' ||
+        /\boffline\b/i.test(cached.statusText || '')
+      );
+      if (cachedLooksOffline) {
+        const mqttRecovered = Boolean(
+          mqttOnlineRecently &&
+          (!cached || mqttLiveAt > 0 || regTs > (cached.updatedAt || 0))
+        );
+        if (!mqttRecovered) {
+          return { invitable: false, reason: 'offline', badge: 'OFFLINE' };
+        }
+        return inviteLogic.classifyInviteAvailability({
+          registryAvailability: regAvail
+        });
+      }
+      const cachedUpdatedRecently = Boolean(cached && cached.updatedAt > 0 && now - cached.updatedAt <= ONLINE_MQTT_WINDOW_MS);
+      if (!mqttOnlineRecently && !cachedUpdatedRecently) {
+        return { invitable: false, reason: 'offline', badge: 'OFFLINE' };
+      }
       return inviteLogic.classifyInviteAvailability({
-        statusText: cached ? cached.statusText : '',
-        registryAvailability: regAvail || (cached && cached.busyReason === 'league' ? 'tl' : cached && cached.busyReason === 'busy' ? 'busy' : '')
+        statusText: cached.statusText || '',
+        registryAvailability: regAvail || (cached.busyReason === 'league' ? 'tl' : cached.busyReason === 'busy' ? 'busy' : '')
       });
     }
 
@@ -969,6 +1062,10 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
         hasFoxer(uname) {
           return hasFoxer(uname);
         }
+      }).filter(function (friend) {
+        if (!friend || !friend.username) return false;
+        const st = getFriendInviteStatus(friend.username);
+        return !st || st.reason !== 'offline';
       });
     }
 
@@ -992,7 +1089,13 @@ h1.chat_tag[${logic.FOX_PAW_ATTR}="1"]::before,
       refreshMutualFriends(rootEl) {
         if (!mutualStore) return [];
         mutualStore.setSelfUsername(selfNorm);
-        return mutualStore.extractFromSocialDom(rootEl || (typeof document !== 'undefined' ? document : null), selfNorm);
+        const extracted = mutualStore.extractFromSocialDom(rootEl || (typeof document !== 'undefined' ? document : null), selfNorm);
+        const rev = typeof mutualStore.getRevision === 'function' ? mutualStore.getRevision() : 0;
+        if (rev !== lastNotifiedMutualRev) {
+          lastNotifiedMutualRev = rev;
+          notifyPresenceListeners();
+        }
+        return extracted;
       },
       getStatus() {
         return {

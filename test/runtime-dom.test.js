@@ -4339,3 +4339,186 @@ test('bundled mod tracks 40 Lines via local ctm.UpdateCounter across 30s+ withou
   assert.equal(hud.getAttribute('data-state'), 'ahead');
   assert.equal(valueEl.textContent, '0:45.000');
 });
+
+test('THE RACE hides offline friends from INVITE and updates live when friends connect into Quick Play', async () => {
+  let badgeSocket = null;
+  class LivePresenceWs {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.binaryType = 'arraybuffer';
+      setTimeout(() => {
+        if (this.readyState !== 0) return;
+        this.readyState = 1;
+        if (this.onopen) this.onopen({});
+      }, 2);
+    }
+    send(bytes) {
+      const parsed = parseMqttClientFrame(bytes);
+      if (parsed.type === 'CONNECT') {
+        setTimeout(() => {
+          if (this.readyState === 1 && this.onmessage) {
+            this.onmessage({ data: buildMqttConnackFrame().buffer });
+          }
+        }, 2);
+      } else if (parsed.type === 'SUBSCRIBE' && parsed.topic === 'twfoxtetrio/v1/foxers/+') {
+        badgeSocket = this;
+        setTimeout(() => {
+          if (this.readyState !== 1 || !this.onmessage) return;
+          const now = Date.now();
+          const frames = [
+            buildMqttPublishFrame('twfoxtetrio/v1/foxers/online_pal', JSON.stringify({ u: 'online_pal', v: '0.6.22', ts: now }), true)
+          ];
+          for (const frame of frames) {
+            this.onmessage({ data: frame.buffer });
+          }
+        }, 2);
+      }
+    }
+    emitInboundPublish(topic, obj) {
+      if (this.readyState === 1 && this.onmessage) {
+        const frame = buildMqttPublishFrame(topic, JSON.stringify(obj), true);
+        this.onmessage({ data: frame.buffer });
+      }
+    }
+    close() {
+      this.readyState = 3;
+      if (this.onclose) this.onclose({});
+    }
+  }
+
+  const now0 = Date.now();
+  const staleTs = now0 - 60 * 60 * 1000;
+  const env = createFakeDomEnvironment('https:', { WebSocket: LivePresenceWs });
+  const doc = env.context.document;
+
+  // Seed 30-day cached foxers & mutual friends (some offline/stale from an earlier session)
+  env.context.localStorage.setItem('twfoxtetrio_foxers_cache_v1', JSON.stringify([
+    { u: 'offline_pal', ts: staleTs, v: '0.6.21' },
+    { u: 'stale_online_pal', ts: staleTs, v: '0.6.21' },
+    { u: 'qp_friend', ts: staleTs, v: '0.6.21' },
+    { u: 'mqtt_qp_pal', ts: staleTs, v: '0.6.21' }
+  ]));
+  env.context.localStorage.setItem('twfoxtetrio_mutual_friends_v1', JSON.stringify({
+    twfoxcrack: {
+      offline_pal: { username: 'offline_pal', updatedAt: staleTs, statusText: 'Offline', invitable: false, busyReason: 'offline', avatarUrl: '' },
+      stale_online_pal: { username: 'stale_online_pal', updatedAt: staleTs, statusText: 'In Menus', invitable: true, busyReason: '', avatarUrl: '' },
+      qp_friend: { username: 'qp_friend', updatedAt: staleTs, statusText: 'Offline', invitable: false, busyReason: 'offline', avatarUrl: '' },
+      mqtt_qp_pal: { username: 'mqtt_qp_pal', updatedAt: staleTs, statusText: 'Offline', invitable: false, busyReason: 'offline', avatarUrl: '' },
+      online_pal: { username: 'online_pal', updatedAt: now0, statusText: 'Online', invitable: true, busyReason: '', avatarUrl: '' }
+    }
+  }));
+
+  const zMenu = env.elements.get('zenithmenu');
+  const deckBlock = doc.createElement('div');
+  deckBlock.setAttribute('id', 'zenith_deck_block');
+  const deckCards = doc.createElement('div');
+  deckCards.setAttribute('id', 'zenith_deck_cards');
+  const duoCard = doc.createElement('div');
+  duoCard.setAttribute('id', 'zenith-duo-card');
+  duoCard.className = 'zenith_card';
+  duoCard.setAttribute('data-card', 'duo');
+  deckCards.appendChild(duoCard);
+  deckBlock.appendChild(deckCards);
+  zMenu.appendChild(deckBlock);
+
+  function addSocialRow(username, statusText, { offline = false, btnHidden = false } = {}) {
+    const row = doc.createElement('div');
+    row.className = 'social_relationship' + (offline ? ' offline' : '');
+    const h1 = doc.createElement('h1');
+    const span = doc.createElement('span');
+    span.textContent = username;
+    h1.appendChild(span);
+    const p = doc.createElement('p');
+    p.textContent = statusText;
+    p.innerHTML = `<img src="/res/status/${offline ? 'offline' : 'online'}.png"> ${statusText}`;
+    const btn = doc.createElement('button');
+    btn.className = 'social_relationship_button_invite' + (btnHidden ? ' hidden' : '');
+    row.appendChild(h1);
+    row.appendChild(p);
+    row.appendChild(btn);
+    return { row, p, btn };
+  }
+
+  const socialRel = doc.createElement('div');
+  socialRel.setAttribute('id', 'social_relationships');
+  const qpRow = addSocialRow('qp_friend', 'Offline', { offline: true, btnHidden: true });
+  const mqttRow = addSocialRow('mqtt_qp_pal', 'Offline', { offline: true, btnHidden: true });
+  const offRow = addSocialRow('offline_pal', 'Offline', { offline: true, btnHidden: true });
+  const onlineRow = addSocialRow('online_pal', 'Online', { offline: false, btnHidden: false });
+  // Note: stale_online_pal is intentionally absent from DOM (simulating Online tab or unmounted row)
+  socialRel.appendChild(qpRow.row);
+  socialRel.appendChild(mqttRow.row);
+  socialRel.appendChild(offRow.row);
+  socialRel.appendChild(onlineRow.row);
+  env.body.appendChild(socialRel);
+
+  env.triggerDOMContentLoaded();
+  env.meUsername.textContent = 'TWFOXCRACK';
+  await new Promise((r) => setTimeout(r, 25));
+  env.tickIntervals();
+
+  try {
+    env.body.classList.add('inzenith');
+    env.menus.setAttribute('data-menu-type', 'zenith');
+    const zenRace = env.context.__TWFOX_INTERNAL__.zenRace;
+    const foxBadge = env.context.__TWFOX_INTERNAL__.foxPawBadge;
+    zenRace.refresh();
+
+    const raceCard = env.elements.get('twfoxtetrio-zenith-race-card');
+    raceCard.click();
+    await new Promise((r) => setTimeout(r, 25));
+    env.tickIntervals();
+
+    const getInviteUsers = () => {
+      const pEl = env.elements.get('twfoxtetrio-race-party');
+      return pEl.querySelectorAll('.twfox-race-btn')
+        .map((b) => b.getAttribute('data-race-invite'))
+        .filter(Boolean);
+    };
+
+    // Offline and stale friends must NOT appear in THE RACE invite row
+    assert.deepEqual(getInviteUsers(), ['online_pal']);
+
+    // 1. qp_friend connects into Quick Play -> DOM removes .offline and sets "Playing Quick Play",
+    //    even while official .social_relationship_button_invite stays .hidden!
+    qpRow.row.classList.remove('offline');
+    qpRow.p.textContent = 'Playing Quick Play';
+    qpRow.p.innerHTML = '<img src="/res/status/online.png"> Playing Quick Play';
+    await new Promise((r) => setTimeout(r, 75));
+
+    assert.equal(getInviteUsers().includes('qp_friend'), true, 'Friend entering Quick Play must appear in INVITE row');
+    const qpBtn = env.elements.get('twfoxtetrio-race-party')
+      .querySelectorAll('.twfox-race-btn')
+      .find((b) => b.getAttribute('data-race-invite') === 'qp_friend');
+    assert.ok(qpBtn);
+    assert.equal(qpBtn.disabled, false);
+    assert.equal(qpBtn.textContent, 'INVITE');
+
+    // 2. mqtt_qp_pal connects via MQTT before #social DOM even removes .offline -> updates live immediately!
+    const tLive = Date.now() + 100;
+    assert.ok(badgeSocket);
+    badgeSocket.emitInboundPublish('twfoxtetrio/v1/foxers/mqtt_qp_pal', {
+      u: 'mqtt_qp_pal',
+      v: '0.6.22',
+      ts: tLive
+    });
+    await new Promise((r) => setTimeout(r, 75));
+    assert.equal(getInviteUsers().includes('mqtt_qp_pal'), true, 'Friend reconnecting via MQTT must appear even if DOM lagged');
+    assert.equal(foxBadge.getFriendInviteStatus('offline_pal').reason, 'offline');
+    assert.equal(foxBadge.getFriendInviteStatus('stale_online_pal').reason, 'offline');
+    assert.equal(getInviteUsers().includes('offline_pal'), false);
+    assert.equal(getInviteUsers().includes('stale_online_pal'), false);
+
+    // 3. When qp_friend later goes offline in DOM -> disappears cleanly from INVITE row
+    qpRow.row.classList.add('offline');
+    qpRow.p.textContent = 'Offline';
+    qpRow.p.innerHTML = '<img src="/res/status/offline.png"> Offline';
+    await new Promise((r) => setTimeout(r, 75));
+    assert.equal(getInviteUsers().includes('qp_friend'), false, 'Friend going offline must vanish from INVITE row');
+  } finally {
+    if (env.context.__TWFOX_INTERNAL__.foxPawBadge) {
+      env.context.__TWFOX_INTERNAL__.foxPawBadge.destroy();
+    }
+  }
+});

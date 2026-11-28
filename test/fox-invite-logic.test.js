@@ -229,3 +229,63 @@ test('classifyInviteAvailability and extractFromSocialDom block Busy and In-TL f
   assert.equal(byName.tlchamp.busyReason, 'league');
   assert.equal(byName.tlchamp.avatarUrl, 'https://tetr.io/user-content/avatars/t1.jpg?rv=3');
 });
+
+test('extractFromSocialDom tracks Quick Play friends with hidden official invite btn and offline transitions', () => {
+  const mem = new Map();
+  const storage = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => { mem.set(k, String(v)); }
+  };
+  let qpRowOffline = true;
+  let qpStatusText = 'Offline';
+  let qpStatusHtml = '<img src="/res/status/offline.png"> Offline';
+
+  const row = {
+    classList: { contains: (cls) => cls === 'offline' && qpRowOffline },
+    getAttribute: () => '',
+    querySelector(sel) {
+      if (sel === 'h1') return { querySelector: () => ({ textContent: 'qp_buddy' }) };
+      if (sel === 'p') return { textContent: qpStatusText, innerHTML: qpStatusHtml };
+      if (sel === '.social_relationship_button_invite') {
+        // Official TETR.IO button stays hidden inside Quick Play!
+        return { classList: { contains: (cls) => cls === 'hidden' } };
+      }
+      return null;
+    }
+  };
+  const fakeDoc = {
+    getElementById: (id) => (id === 'social_relationships' ? { querySelectorAll: () => [row] } : null),
+    querySelectorAll: () => []
+  };
+
+  const store = inviteLogic.createMutualFriendStore({ storage, selfUsername: 'twfoxcrack' });
+  store.markMutual('qp_buddy', { statusText: 'Offline', invitable: false, busyReason: 'offline', nowMs: 1000 });
+  const revBefore = store.getRevision();
+
+  // Friend enters Quick Play -> row loses .offline and shows Playing Quick Play even with hidden official button
+  qpRowOffline = false;
+  qpStatusText = 'Playing Quick Play';
+  qpStatusHtml = '<img src="/res/status/online.png"> Playing Quick Play';
+  const onlineList = store.extractFromSocialDom(fakeDoc, 'twfoxcrack', 2000);
+  assert.equal(onlineList.length, 1);
+  assert.equal(onlineList[0].username, 'qp_buddy');
+  assert.equal(onlineList[0].invitable, true);
+  assert.equal(onlineList[0].busyReason, '');
+  assert.equal(onlineList[0].statusText, 'Playing Quick Play');
+  assert.equal(store.getRevision() > revBefore, true);
+
+  // Friend disconnects later -> marked cleanly offline once (subsequent scans stay idempotent)
+  qpRowOffline = true;
+  qpStatusText = 'Offline';
+  qpStatusHtml = '<img src="/res/status/offline.png"> Offline';
+  const revOnline = store.getRevision();
+  const afterOff = store.extractFromSocialDom(fakeDoc, 'twfoxcrack', 3000);
+  assert.equal(afterOff.length, 0);
+  assert.equal(store.getRevision(), revOnline + 1);
+  const stored = store.listMutual('twfoxcrack').find((x) => x.username === 'qp_buddy');
+  assert.equal(stored.busyReason, 'offline');
+  assert.equal(stored.invitable, false);
+
+  store.extractFromSocialDom(fakeDoc, 'twfoxcrack', 4000);
+  assert.equal(store.getRevision(), revOnline + 1);
+});

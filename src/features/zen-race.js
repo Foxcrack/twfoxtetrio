@@ -1702,7 +1702,15 @@ body.twfox-race-spectating #zenithmenu {
         const mutuals = foxBadge && typeof foxBadge.listOnlineMutualFoxers === 'function'
           ? foxBadge.listOnlineMutualFoxers()
           : [];
-        const visibleMutuals = (mutuals && players.length < raceLogic.MAX_RACE_PLAYERS) ? mutuals.slice(0, 6) : [];
+        const onlineMutuals = Array.isArray(mutuals)
+          ? mutuals.filter((m) => {
+              if (!m || !m.username) return false;
+              if (!foxBadge || typeof foxBadge.getFriendInviteStatus !== 'function') return true;
+              const st = foxBadge.getFriendInviteStatus(m.username);
+              return !st || st.reason !== 'offline';
+            })
+          : [];
+        const visibleMutuals = players.length < raceLogic.MAX_RACE_PLAYERS ? onlineMutuals.slice(0, 6) : [];
         const friendsListKey = visibleMutuals
           .map((m) => (foxInviteLogic ? foxInviteLogic.normalizeUsername(m.username) : String(m.username || '').toLowerCase()))
           .join(',');

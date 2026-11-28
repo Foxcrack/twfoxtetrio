@@ -157,3 +157,37 @@ test('presence payload and registry round-trip busy / in-TL availability cleanly
   assert.equal(registry.getAvailability('alice', now + 400), '');
   assert.equal(registry.getAvailability('bob', now + 70000), '');
 });
+
+test('createFoxerRegistry detects live reconnect packets for previously cached friends', () => {
+  const now = 1_750_000_000_000;
+  const staleTs = now - 60 * 60 * 1000;
+  const cachedJson = JSON.stringify([
+    { u: 'maekrix', ts: staleTs, v: '0.6.22' }
+  ]);
+  const reg = foxPawLogic.createFoxerRegistry({
+    ttlMs: foxPawLogic.DEFAULT_TTL_MS,
+    initialCache: cachedJson,
+    nowMs: now
+  });
+
+  assert.equal(reg.has('maekrix', now), true);
+  assert.equal(reg.getTimestamp('maekrix', now), staleTs);
+
+  // First live MQTT packet after startup cache (even with identical version/availability) counts as changed
+  const res = reg.applyMessage(
+    'twfoxtetrio/v1/foxers/maekrix',
+    foxPawLogic.buildPresencePayload('maekrix', '0.6.22', now),
+    now
+  );
+  assert.equal(res.changed, true);
+  assert.equal(reg.getTimestamp('maekrix', now), now);
+
+  // Subsequent heartbeat >15s later advances timestamp and reports changed
+  const laterRes = reg.applyMessage(
+    'twfoxtetrio/v1/foxers/maekrix',
+    foxPawLogic.buildPresencePayload('maekrix', '0.6.22', now + 20_000),
+    now + 20_000
+  );
+  assert.equal(laterRes.changed, true);
+  assert.equal(reg.getTimestamp('maekrix', now + 20_000), now + 20_000);
+});

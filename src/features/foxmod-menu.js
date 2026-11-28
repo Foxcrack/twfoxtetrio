@@ -5156,10 +5156,16 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
           if (foxBadge && typeof foxBadge.refreshMutualFriends === 'function') {
             foxBadge.refreshMutualFriends(document);
           }
-          const friends =
+          const friends = (
             foxInviteLogic && foxBadge && typeof foxBadge.listOnlineMutualFoxers === 'function'
               ? foxBadge.listOnlineMutualFoxers()
-              : [];
+              : []
+          ).filter(function (friend) {
+            if (!friend || !friend.username) return false;
+            if (!foxBadge || typeof foxBadge.getFriendInviteStatus !== 'function') return true;
+            const st = foxBadge.getFriendInviteStatus(friend.username);
+            return !st || st.reason !== 'offline';
+          });
 
           const players = (snap && snap.players) || [];
           const roomCode = (snap && snap.room && snap.room.roomCode) || '';
@@ -5201,7 +5207,7 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
                   }),
                   createEl('span', {
                     className: 'twfox-mutual-sub',
-                    text: friend.statusText || 'FOXMOD Mutual Friend'
+                    text: (friend.statusText && !/\boffline\b/i.test(friend.statusText)) ? friend.statusText : 'Online (FOXMOD)'
                   })
                 ]),
                 invBtn
@@ -6783,7 +6789,13 @@ body.twfox-in-multi-room .twfox-social-invite-btn {
               refreshMutualInviteUi();
             }
           });
-          socialObserver.observe(socialRels, { childList: true, subtree: true });
+          socialObserver.observe(socialRels, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['class', 'data-username']
+          });
         }
       }
 

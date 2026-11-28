@@ -194,7 +194,9 @@
       return removed;
     }
 
-    function upsert(username, ts, version, nowMs, availability) {
+    const RECONNECT_CHANGE_GAP_MS = 15 * 1000;
+
+    function upsert(username, ts, version, nowMs, availability, extraOpts) {
       const norm = normalizeUsername(username);
       if (!norm) return false;
       const now = Number.isFinite(nowMs) ? nowMs : Date.now();
@@ -207,17 +209,35 @@
       if (prev && prev.ts > stamp) {
         return false;
       }
+      const fromCache = Boolean(extraOpts && extraOpts.fromCache);
       const nextAvail = availability !== undefined ? normalizeAvailability(availability) : '';
       const next = {
         username: norm,
         ts: Math.floor(stamp),
         version: version ? String(version).slice(0, 24) : (prev ? prev.version : ''),
-        availability: nextAvail
+        availability: nextAvail,
+        fromCache
       };
       const isNew = !prev;
       entries.set(norm, next);
       if (entries.size > maxEntries) prune(now);
-      return isNew || (prev && (prev.version !== next.version || prev.availability !== next.availability));
+      if (fromCache) return isNew;
+      const becameLive = Boolean(prev && prev.fromCache);
+      const tsAdvanced = Boolean(prev && next.ts - prev.ts >= RECONNECT_CHANGE_GAP_MS);
+      return isNew || becameLive || tsAdvanced || (prev && (prev.version !== next.version || prev.availability !== next.availability));
+    }
+
+    function getTimestamp(username, nowMs) {
+      const norm = normalizeUsername(username);
+      if (!norm) return 0;
+      const rec = entries.get(norm);
+      if (!rec) return 0;
+      const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+      if (now - rec.ts > ttlMs) {
+        entries.delete(norm);
+        return 0;
+      }
+      return rec.ts || 0;
     }
 
     function getAvailability(username, nowMs) {
@@ -294,7 +314,7 @@
       let count = 0;
       for (const item of listData) {
         if (!item || typeof item !== 'object') continue;
-        if (upsert(item.u || item.username, item.ts, item.v || item.version, now)) {
+        if (upsert(item.u || item.username, item.ts, item.v || item.version, now, item.st, { fromCache: true })) {
           count++;
         }
       }
@@ -308,6 +328,7 @@
     return {
       upsert,
       getAvailability,
+      getTimestamp,
       remove,
       applyMessage,
       has,

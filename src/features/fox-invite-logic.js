@@ -228,6 +228,7 @@
     const storage = resolveStorage(opts.storage);
     let selfUsername = normalizeUsername(opts.selfUsername || '');
     let bySelf = Object.create(null);
+    let revision = 0;
 
     function load() {
       if (!storage) return;
@@ -262,10 +263,15 @@
     }
 
     function save() {
+      revision += 1;
       if (!storage) return;
       try {
         storage.setItem(storageKey, JSON.stringify(bySelf));
       } catch (_) {}
+    }
+
+    function getRevision() {
+      return revision;
     }
 
     function resolveOwner(overrideSelf) {
@@ -423,10 +429,20 @@
           isBusyClass
         });
 
-        if (!isOffline && (btnVisible || avail.reason === 'busy' || avail.reason === 'league')) {
+        const hasOnlineSignal = Boolean(
+          !isOffline &&
+          !/\boffline\b/i.test(statusText) &&
+          (btnVisible ||
+            avail.reason === 'busy' ||
+            avail.reason === 'league' ||
+            /\/status\/(online|away|busy)\.png/i.test(statusHtml) ||
+            Boolean(statusText))
+        );
+
+        if (hasOnlineSignal) {
           const bucket = ensureBucket(owner);
           const prev = bucket[uname];
-          const finalInvitable = Boolean(btnVisible && avail.invitable);
+          const finalInvitable = Boolean(avail.invitable);
           if (
             !prev ||
             prev.statusText !== statusText ||
@@ -445,11 +461,25 @@
             avatarUrl: avatarSrc || (prev ? (prev.avatarUrl || '') : '')
           };
           onlineMutual.push(bucket[uname]);
-        } else if (isOffline && bySelf[owner] && bySelf[owner][uname]) {
-          // Clear stale busy/in-league flag once friend goes offline cleanly
-          if (bySelf[owner][uname].busyReason !== 'offline') {
-            bySelf[owner][uname].busyReason = '';
-            bySelf[owner][uname].invitable = true;
+        } else if ((isOffline || /\boffline\b/i.test(statusText)) && bySelf[owner] && bySelf[owner][uname]) {
+          // Track offline transition accurately once so stale online/Quick Play UI clears cleanly
+          const prevOff = bySelf[owner][uname];
+          const nextOffStatus = statusText || 'Offline';
+          const offTs = Number.isFinite(nowMs) ? nowMs : Date.now();
+          if (
+            prevOff.busyReason !== 'offline' ||
+            prevOff.invitable !== false ||
+            prevOff.statusText !== nextOffStatus ||
+            (avatarSrc && prevOff.avatarUrl !== avatarSrc)
+          ) {
+            bySelf[owner][uname] = {
+              username: uname,
+              updatedAt: offTs,
+              statusText: nextOffStatus,
+              invitable: false,
+              busyReason: 'offline',
+              avatarUrl: avatarSrc || prevOff.avatarUrl || ''
+            };
             dirty = true;
           }
         }
@@ -479,7 +509,8 @@
       isMutual,
       listMutual,
       extractFromSocialDom,
-      ingestNotificationText
+      ingestNotificationText,
+      getRevision
     };
   }
 
